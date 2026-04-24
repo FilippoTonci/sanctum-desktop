@@ -40,9 +40,46 @@ body {
   opacity: 0.7;
 }
 
-.shell .status {
+.shell .status,
+.shell .splash {
   padding: 1rem 1.25rem;
   border: 1px solid rgba(127, 127, 127, 0.2);
   border-radius: 8px;
   background: rgba(127, 127, 127, 0.05);
+}
+
+.shell .splash {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.splash-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(127, 127, 127, 0.3);
+  border-top-color: #4f8cff;
+  border-radius: 50%;
+  animation: sanctum-spin 0.9s linear infinite;
+}
+
+.splash-spinner[aria-hidden='true'] {
+  display: none;
+}
+
+.splash-message {
+  margin: 0;
+}
+
+.splash-error-detail {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+@keyframes sanctum-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

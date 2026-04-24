@@ -1,8 +1,3 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-
-const STATUS_CHANNEL = 'sanctum:status-change'
-const STATUS_GET_CHANNEL = 'sanctum:get-status'
-
 export interface HealthResponse {
   readonly status: string
   readonly sanctum_commit?: string
@@ -27,19 +22,8 @@ export interface SanctumApi {
   onStatusChange(listener: (status: SanctumStatus) => void): () => void
 }
 
-const api: SanctumApi = {
-  async getStatus() {
-    return (await ipcRenderer.invoke(STATUS_GET_CHANNEL)) as SanctumStatus
-  },
-  onStatusChange(listener) {
-    const subscription = (_event: IpcRendererEvent, status: SanctumStatus): void => {
-      listener(status)
-    }
-    ipcRenderer.on(STATUS_CHANNEL, subscription)
-    return () => {
-      ipcRenderer.off(STATUS_CHANNEL, subscription)
-    }
-  },
+declare global {
+  interface Window {
+    readonly sanctum: SanctumApi
+  }
 }
-
-contextBridge.exposeInMainWorld('sanctum', api)
