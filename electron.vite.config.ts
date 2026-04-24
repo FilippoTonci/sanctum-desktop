@@ -9,7 +9,6 @@ export default defineConfig({
       outDir: 'out/main',
       lib: {
         entry: resolve(__dirname, 'src/main/index.ts'),
-        formats: ['cjs'],
       },
     },
   },
@@ -19,7 +18,6 @@ export default defineConfig({
       outDir: 'out/preload',
       lib: {
         entry: resolve(__dirname, 'src/preload/index.ts'),
-        formats: ['cjs'],
       },
     },
   },

@@ -1,4 +1,6 @@
-export function App(): JSX.Element {
+import type { ReactElement } from 'react'
+
+export function App(): ReactElement {
   return (
     <main className="shell">
       <header>
@@ -7,8 +9,8 @@ export function App(): JSX.Element {
       </header>
       <section className="status" aria-live="polite">
         <p>
-          Scaffold in place. The review surface, sidecar integration, and signed installers
-          arrive over Workstreams 3 through 6.
+          Scaffold in place. The review surface, sidecar integration, and signed installers arrive
+          over Workstreams 3 through 6.
         </p>
       </section>
     </main>

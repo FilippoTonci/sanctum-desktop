@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 
 test('app launches and renders the placeholder', async () => {
   const app = await electron.launch({
-    args: [resolve(__dirname, '../../out/main/index.cjs')],
+    args: [resolve(__dirname, '../../out/main/index.js')],
     env: { ...process.env, ELECTRON_DISABLE_SANDBOX_WARNING: '1' },
   })
 

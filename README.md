@@ -14,7 +14,7 @@
 
 <img src="https://raw.githubusercontent.com/FilippoTonci/sanctum/main/img/SanctumLogo.png" alt="Sanctum" width="280"/>
 
-### *The downloadable desktop app for Sanctum — local-first document anonymization.*
+### _The downloadable desktop app for Sanctum — local-first document anonymization._
 
 **Drag in a document. Review the detections. Export a clean copy. All on your machine.**
 
@@ -30,10 +30,10 @@ Sanctum Desktop is the end-user GUI for [Sanctum](https://github.com/FilippoTonc
 
 The Sanctum project is split into two repositories by design:
 
-| Repo | What it ships | Toolchain |
-|---|---|---|
-| [`sanctum`](https://github.com/FilippoTonci/sanctum) | The anonymization engine, CLI, HTTP API, document adapters | Python, pytest, mypy, ruff |
-| [`sanctum-desktop`](https://github.com/FilippoTonci/sanctum-desktop) *(this repo)* | The Electron desktop app — the thing users actually install | Node, TypeScript, Vite, Playwright |
+| Repo                                                                               | What it ships                                               | Toolchain                          |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------- |
+| [`sanctum`](https://github.com/FilippoTonci/sanctum)                               | The anonymization engine, CLI, HTTP API, document adapters  | Python, pytest, mypy, ruff         |
+| [`sanctum-desktop`](https://github.com/FilippoTonci/sanctum-desktop) _(this repo)_ | The Electron desktop app — the thing users actually install | Node, TypeScript, Vite, Playwright |
 
 Three reasons for the split:
 
@@ -48,22 +48,26 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 ## ✨ What This App Does
 
 ### 🖱️ Drag-and-Drop Review
+
 - **Drop a `.docx`** onto the window and the app spawns the Sanctum engine, analyses the file, and opens a review surface in seconds.
 - **Inline highlights** — every detected PII span is painted directly over the rendered document using the CSS Custom Highlight API. No modal dialogs, no separate "findings" tab.
 - **Keyboard-first navigation** — step through detections with `j` / `k`, `a` to accept, `r` to reject, `e` to edit the replacement, `m` to mark a missed span. Designed for professionals who review hundreds of detections per document.
 
 ### 🔒 Air-Gapped by Construction
+
 - **Loopback-only backend.** The Electron main process spawns the Python sidecar on `127.0.0.1`, generates a random bearer token, and pipes it over stdin. The token never touches disk, never appears in `ps auxf`.
 - **Zero network calls at runtime.** `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` are set in the sidecar's environment so a missing model fails fast instead of silently downloading.
 - **`webRequest` filter** blocks any network destination other than `127.0.0.1` — a belt for the airgap suspenders.
 - **Signed installers only.** No unsigned `.dmg` / `.msi` / `.AppImage` ever ships to users, even in pre-release channels.
 
 ### 📄 Fidelity-Preserving Renderer
+
 - Renders `.docx` files with [docx-preview](https://github.com/VolodymyrBaydalka/docxjs) — tables, images, headers, footers, lists, and tracked changes all render without reprocessing the file.
 - **The renderer is paint-only.** It never mutates the document. It captures decisions; the backend writes the output.
 - **Single document model.** The backend's per-run `TextSegment` offsets are the source of truth; the renderer's DOM is just a projection.
 
 ### 🧠 Powered by the Sanctum Engine
+
 - Dual-tier NER: **Standard** (spaCy `en_core_web_sm`, ~15 MB bundled) or **Professional** (GLiNER-medium v2.1, +0.17 macro-F1, fetched on-demand from a Sanctum-owned CDN with explicit user consent).
 - Five anonymization operators — `hips` (synthetic replacement), `replace`, `redact`, `mask`, `encrypt`, `pseudonymize` — selectable per detection.
 - Encrypted mapping store (ChaCha20-Poly1305 + Argon2id) for reversible pseudonymization, unlocked from the app's title bar.
@@ -161,16 +165,16 @@ Signed release builds run only from the tag-driven release workflow on the self-
 
 ## ⌨️ Keyboard Reference
 
-| Key | Action |
-|---|---|
-| `j` / `k` | Step to next / previous detection |
-| `a` | Accept the focused detection |
-| `r` | Reject the focused detection |
-| `e` | Edit the replacement text |
-| `m` | Mark a missed span (enter select-mode) |
-| `u` | Undo the last decision |
-| `Esc` | Close tooltip / cancel select-mode |
-| `Ctrl/Cmd + Enter` | Open the commit panel |
+| Key                | Action                                 |
+| ------------------ | -------------------------------------- |
+| `j` / `k`          | Step to next / previous detection      |
+| `a`                | Accept the focused detection           |
+| `r`                | Reject the focused detection           |
+| `e`                | Edit the replacement text              |
+| `m`                | Mark a missed span (enter select-mode) |
+| `u`                | Undo the last decision                 |
+| `Esc`              | Close tooltip / cancel select-mode     |
+| `Ctrl/Cmd + Enter` | Open the commit panel                  |
 
 All shortcuts are suspended while an input is focused.
 
@@ -180,7 +184,8 @@ All shortcuts are suspended while an input is focused.
 
 This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop-ui.md` in the `sanctum` repo).
 
-### WS1 — Backend contract hardening ✅ *(shipped in `sanctum`)*
+### WS1 — Backend contract hardening ✅ _(shipped in `sanctum`)_
+
 - [x] `/health` returns `sanctum_commit` + `openapi_digest`
 - [x] `schema/openapi.json` generated and committed; CI diff gate
 - [x] `sanctum serve --port 0` with `SANCTUM_READY` stdout signal
@@ -188,7 +193,8 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [x] SIGTERM cleanup audit with integration tests
 - [x] Contract compat harness in CI
 
-### WS2 — Desktop scaffold *(this repo — next)*
+### WS2 — Desktop scaffold _(this repo — next)_
+
 - [ ] Electron + Vite + React 19 + TypeScript scaffold via `electron-vite`
 - [ ] Sandbox + contextIsolation + no node integration
 - [ ] ESLint, Prettier, `tsc --noEmit`, pre-commit (husky + lint-staged)
@@ -197,6 +203,7 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [ ] Code-signing secret placeholders
 
 ### WS3 — Python sidecar integration
+
 - [ ] PyInstaller onedir build of the Sanctum backend
 - [ ] `spawnSidecar()` / `killSidecar()` lifecycle manager
 - [ ] Health polling + splash screen (cold start can exceed 30 s)
@@ -205,6 +212,7 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [ ] Graceful-shutdown hooks
 
 ### WS4 — `.docx` review surface
+
 - [ ] docx-preview integration with a `data-segment-id` emission patch (`patch-package`)
 - [ ] Segment-id ⇄ DOM Range mapping
 - [ ] CSS Custom Highlight API overlay (pending / accepted / rejected / focused)
@@ -215,6 +223,7 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [ ] Commit flow with attestation checkbox
 
 ### WS5 — Session workflow UI
+
 - [ ] Landing page, drop zone, recent sessions
 - [ ] Mapping-store unlock UX
 - [ ] Settings page → sidecar env on respawn
@@ -222,6 +231,7 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [ ] Session abandonment + resume
 
 ### WS6 — Polish, signing, release
+
 - [ ] i18n (English + French, human-translated)
 - [ ] Accessibility audit (WCAG AA, screen-reader labels, focus management)
 - [ ] Diagnostic bundle export (no automated upload)
@@ -231,7 +241,8 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [ ] Split auto-update channels (shell vs. models)
 - [ ] Tag-driven release workflow
 
-### Phase 3.5 — Deferred formats *(post-MVP)*
+### Phase 3.5 — Deferred formats _(post-MVP)_
+
 - [ ] `.pdf` review surface (PDF.js + text-layer overlay)
 - [ ] `.xlsx` review surface (SheetJS + custom cell grid)
 - [ ] `.pptx` review surface (server-rendered slide PNGs + overlay)
@@ -242,20 +253,20 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 
 ## 🧰 Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Shell | Electron (latest stable) |
-| Build | [`electron-vite`](https://electron-vite.org/) + `electron-builder` |
-| UI | React 19 + TypeScript |
-| State | Zustand |
-| Renderer | [`docx-preview`](https://github.com/VolodymyrBaydalka/docxjs) + CSS Custom Highlight API |
-| Floating UI | `@floating-ui/react` |
-| Schema validation | Zod (generated from OpenAPI) |
-| i18n | `react-i18next` |
-| Unit tests | Vitest |
-| E2E tests | `@playwright/test` with Electron launch |
-| Linters | ESLint (`@typescript-eslint`, `react-hooks`, `jsx-a11y`) + Prettier |
-| Backend | Python sidecar (packaged from [`sanctum`](https://github.com/FilippoTonci/sanctum) via PyInstaller onedir) |
+| Layer             | Technology                                                                                                 |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| Shell             | Electron (latest stable)                                                                                   |
+| Build             | [`electron-vite`](https://electron-vite.org/) + `electron-builder`                                         |
+| UI                | React 19 + TypeScript                                                                                      |
+| State             | Zustand                                                                                                    |
+| Renderer          | [`docx-preview`](https://github.com/VolodymyrBaydalka/docxjs) + CSS Custom Highlight API                   |
+| Floating UI       | `@floating-ui/react`                                                                                       |
+| Schema validation | Zod (generated from OpenAPI)                                                                               |
+| i18n              | `react-i18next`                                                                                            |
+| Unit tests        | Vitest                                                                                                     |
+| E2E tests         | `@playwright/test` with Electron launch                                                                    |
+| Linters           | ESLint (`@typescript-eslint`, `react-hooks`, `jsx-a11y`) + Prettier                                        |
+| Backend           | Python sidecar (packaged from [`sanctum`](https://github.com/FilippoTonci/sanctum) via PyInstaller onedir) |
 
 ---
 
@@ -317,6 +328,6 @@ The Sanctum backend is licensed separately under MIT; see [`sanctum/LICENSE`](ht
 
 **Built for the professionals whose livelihoods depend on confidentiality.**
 
-*Sanctum Desktop — Clean documents. Protected clients. One click.*
+_Sanctum Desktop — Clean documents. Protected clients. One click._
 
 </div>

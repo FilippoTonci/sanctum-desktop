@@ -11,7 +11,7 @@
     "type": "git",
     "url": "git+https://github.com/FilippoTonci/sanctum-desktop.git"
   },
-  "main": "out/main/index.cjs",
+  "main": "out/main/index.js",
   "private": true,
   "engines": {
     "node": ">=20.0.0"
