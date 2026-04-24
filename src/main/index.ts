@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, type WebContents } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
 import { join } from 'node:path'
 import { pollHealth } from './health'
 import { spawnSidecar, type SidecarHandle } from './sidecar'
@@ -104,4 +104,52 @@ void app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+/**
+ * Quit orchestration. Electron's `before-quit` listener is synchronous, so
+ * we `preventDefault`, run the async sidecar shutdown ourselves, then
+ * `app.quit()` re-enters this handler with `quitting=true` and the default
+ * path runs. If SIGTERM → SIGKILL still leaves the sidecar alive, prompt
+ * the user: Force Quit hard-exits the app (orphaning the Python process);
+ * Cancel leaves the app running so the user can save work or file a bug.
+ */
+let quitting = false
+
+app.on('before-quit', (event) => {
+  if (quitting) return
+  if (sidecar === null) return
+
+  event.preventDefault()
+  quitting = true
+
+  const handle = sidecar
+  sidecar = null
+
+  void (async () => {
+    try {
+      await handle.kill()
+      app.quit()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      const result = await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Sanctum backend did not shut down',
+        message: 'The Sanctum backend did not exit after SIGTERM → SIGKILL.',
+        detail:
+          'Force Quit will exit Sanctum Desktop anyway. The Python process may remain ' +
+          'in your process list until the OS cleans it up.\n\n' +
+          `Reason: ${message}`,
+        buttons: ['Force Quit', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+
+      if (result.response === 0) {
+        app.exit(1)
+      } else {
+        quitting = false
+      }
+    }
+  })()
 })
