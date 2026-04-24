@@ -1,0 +1,37 @@
+appId: com.sanctum.desktop
+productName: Sanctum Desktop
+copyright: Copyright © 2026 Filippo Tonci
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.{md,map}'
+# WS3: extraResources will point at the PyInstaller onedir output of the
+# Python sidecar, one per platform architecture.
+# extraResources:
+#   - from: sidecar-build/${platform}-${arch}/
+#     to: sidecar/
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  # WS6: entitlements + notarization wired here.
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # WS6: Azure Trusted Signing or Sectigo/DigiCert EV + YubiKey wired here.
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Office
+  # WS6: GPG signing wired here.
+publish:
+  provider: github
+  releaseType: draft
