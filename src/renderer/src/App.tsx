@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
-import { clientFromCredentials } from './api/sessions'
+import { clientFromCredentials, type SessionsClient } from './api/sessions'
+import { ApiError } from './api/types'
 import { CommitPanel } from './components/CommitPanel'
 import { DetectionSidebar } from './components/DetectionSidebar'
 import { DetectionTooltip } from './components/DetectionTooltip'
@@ -9,18 +10,29 @@ import { RecentSessions } from './components/RecentSessions'
 import { SelectModeBanner } from './components/SelectModeBanner'
 import { Splash } from './components/Splash'
 import { seedFakeDetections } from './review/fake-detections'
+import { sessionToDetections } from './review/from-session'
 import { useReviewKeyboard } from './review/keyboard'
 import { useReviewStore } from './review/store'
+import { OPERATOR_NAMES, type OperatorName } from './review/types'
 import type { SanctumStatus } from './sanctum'
+
+type AnalysisState =
+  | { kind: 'fake' }
+  | { kind: 'pending' }
+  | { kind: 'ready' }
+  | { kind: 'error'; message: string }
 
 export function App(): ReactElement {
   const [status, setStatus] = useState<SanctumStatus>({ state: 'idle' })
   const [doc, setDoc] = useState<File | null>(null)
   const [docRoot, setDocRoot] = useState<HTMLElement | null>(null)
+  const [analysis, setAnalysis] = useState<AnalysisState>({ kind: 'fake' })
 
   const detections = useReviewStore((s) => s.detections)
   const focusedId = useReviewStore((s) => s.focusedId)
   const setStoreDetections = useReviewStore((s) => s.setDetections)
+  const setSessionId = useReviewStore((s) => s.setSessionId)
+  const setDefaultOperator = useReviewStore((s) => s.setDefaultOperator)
   const clearStore = useReviewStore((s) => s.clear)
 
   useEffect(() => {
@@ -58,10 +70,16 @@ export function App(): ReactElement {
 
   useReviewKeyboard(reviewMode, docRoot)
 
+  const sessionsClient = useMemo(() => {
+    if (status.state !== 'ready') return null
+    return clientFromCredentials({ baseUrl: status.baseUrl, token: status.token })
+  }, [status])
+
   const handleFile = useCallback(
     (file: File) => {
       setDoc(file)
       clearStore()
+      // Mode is decided in the effect below once `doc` settles.
     },
     [clearStore],
   )
@@ -69,27 +87,68 @@ export function App(): ReactElement {
   const handleClose = useCallback(() => {
     setDoc(null)
     setDocRoot(null)
+    setAnalysis({ kind: 'fake' })
     clearStore()
   }, [clearStore])
 
   const handleRendered = useCallback(
     (root: HTMLElement) => {
       setDocRoot(root)
-      setStoreDetections(seedFakeDetections(root))
+      // The seedFakeDetections fallback only fires when we're not
+      // talking to a real backend. Real-mode detections arrive via the
+      // POST round-trip the effect below kicks off.
+      if (analysis.kind === 'fake') {
+        setStoreDetections(seedFakeDetections(root))
+      }
     },
-    [setStoreDetections],
+    [analysis.kind, setStoreDetections],
   )
 
-  const sessionsClient = useMemo(() => {
-    if (status.state !== 'ready') return null
-    return clientFromCredentials({ baseUrl: status.baseUrl, token: status.token })
-  }, [status])
+  // Drive the create-session round-trip whenever the dropped file
+  // changes AND we have a usable client + on-disk path. Fires exactly
+  // once per file because the cleanup function aborts the in-flight
+  // POST if `doc` is replaced before it returns.
+  useEffect(() => {
+    if (doc === null) return undefined
+    const path = window.sanctum?.getFilePath(doc) ?? ''
+    if (sessionsClient === null || path === '') {
+      // Fake-seeder fallback: standalone browser, sidecar skipped, or
+      // a renderer-synthesised File without an on-disk path.
+      setAnalysis({ kind: 'fake' })
+      return undefined
+    }
+
+    setAnalysis({ kind: 'pending' })
+    const ctrl = new AbortController()
+    void runAnalysis({
+      client: sessionsClient,
+      path,
+      signal: ctrl.signal,
+      onSuccess: (response) => {
+        setSessionId(response.id)
+        if (isOperatorName(response.default_operator)) {
+          setDefaultOperator(response.default_operator)
+        }
+        setStoreDetections(sessionToDetections(response))
+        setAnalysis({ kind: 'ready' })
+      },
+      onError: (message) => {
+        setAnalysis({ kind: 'error', message })
+      },
+    })
+    return () => {
+      ctrl.abort()
+    }
+  }, [doc, sessionsClient, setSessionId, setDefaultOperator, setStoreDetections])
 
   const handleResume = useCallback((sessionId: string) => {
-    // Slice 2 wires this to a GET /review-sessions/{id} + setDetections.
-    // For now the click is intentionally a no-op so the list can ship
-    // first — the row's hover state and counts are useful on their own.
-    console.info('[sanctum] resume requested for session', sessionId)
+    // Slice 2 ships create-on-drop only. Resume requires the desktop to
+    // re-acquire the original input bytes — a follow-up that needs
+    // either a backend `GET /review-sessions/{id}/input` endpoint or a
+    // desktop-side input cache. Left as a no-op so the list stays
+    // useful (timestamps, counts) without misleading the user about
+    // what the click does.
+    console.info('[sanctum] resume not yet wired for session', sessionId)
   }, [])
 
   return (
@@ -112,6 +171,7 @@ export function App(): ReactElement {
           <DetectionTooltip anchorRoot={docRoot} />
           <SelectModeBanner />
           <CommitPanel />
+          <AnalysisBanner state={analysis} />
         </div>
       ) : (
         <div className="landing">
@@ -121,4 +181,51 @@ export function App(): ReactElement {
       )}
     </main>
   )
+}
+
+interface RunAnalysisArgs {
+  readonly client: SessionsClient
+  readonly path: string
+  readonly signal: AbortSignal
+  readonly onSuccess: (response: Awaited<ReturnType<SessionsClient['createSession']>>) => void
+  readonly onError: (message: string) => void
+}
+
+async function runAnalysis(args: RunAnalysisArgs): Promise<void> {
+  try {
+    const response = await args.client.createSession(
+      { input_path: args.path, default_operator: 'hips' },
+      args.signal,
+    )
+    if (args.signal.aborted) return
+    args.onSuccess(response)
+  } catch (err) {
+    if (args.signal.aborted) return
+    const message =
+      err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err)
+    args.onError(message)
+  }
+}
+
+function AnalysisBanner({ state }: { readonly state: AnalysisState }): ReactElement | null {
+  if (state.kind === 'pending') {
+    return (
+      <div className="analysis-banner analysis-banner-pending" role="status">
+        <span className="splash-spinner" aria-hidden="true" />
+        Analyzing document…
+      </div>
+    )
+  }
+  if (state.kind === 'error') {
+    return (
+      <div className="analysis-banner analysis-banner-error" role="alert">
+        <strong>Analysis failed.</strong> {state.message}
+      </div>
+    )
+  }
+  return null
+}
+
+function isOperatorName(value: string): value is OperatorName {
+  return (OPERATOR_NAMES as readonly string[]).includes(value)
 }

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 
 const STATUS_CHANNEL = 'sanctum:status-change'
 const STATUS_GET_CHANNEL = 'sanctum:get-status'
@@ -25,6 +25,16 @@ export type SanctumStatus =
 export interface SanctumApi {
   getStatus(): Promise<SanctumStatus>
   onStatusChange(listener: (status: SanctumStatus) => void): () => void
+  /**
+   * Resolve a File from a drop / file-input event to its absolute path
+   * on disk. Returns the empty string when the path is unavailable —
+   * Electron's `webUtils.getPathForFile` is not guaranteed to find one
+   * for files synthesised in renderer code (e.g. test fixtures built
+   * via `new File([...], name)`). Backend `POST /review-sessions`
+   * requires a server-readable absolute path, so a missing path means
+   * the renderer must fall back to its standalone-mode behaviour.
+   */
+  getFilePath(file: File): string
 }
 
 const api: SanctumApi = {
@@ -39,6 +49,9 @@ const api: SanctumApi = {
     return () => {
       ipcRenderer.off(STATUS_CHANNEL, subscription)
     }
+  },
+  getFilePath(file) {
+    return webUtils.getPathForFile(file)
   },
 }
 

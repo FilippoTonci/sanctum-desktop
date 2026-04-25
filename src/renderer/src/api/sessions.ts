@@ -18,10 +18,21 @@
  * `await` is correct, and the splash + spinner UI handles it.
  */
 
-import { ApiError, type ApiErrorBody, type ReviewSessionListResponse } from './types'
+import {
+  ApiError,
+  type ApiErrorBody,
+  type CreateReviewSessionRequest,
+  type ReviewSessionListResponse,
+  type ReviewSessionResponse,
+} from './types'
 
 export interface SessionsClient {
   listSessions(signal?: AbortSignal): Promise<ReviewSessionListResponse>
+  createSession(
+    body: CreateReviewSessionRequest,
+    signal?: AbortSignal,
+  ): Promise<ReviewSessionResponse>
+  getSession(id: string, signal?: AbortSignal): Promise<ReviewSessionResponse>
 }
 
 interface ClientOptions {
@@ -68,6 +79,25 @@ export function createSessionsClient(opts: ClientOptions): SessionsClient {
         signal,
       })
       return (await handle(response)) as ReviewSessionListResponse
+    },
+
+    async createSession(body, signal) {
+      const response = await fetchImpl(url('/review-sessions'), {
+        method: 'POST',
+        headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal,
+      })
+      return (await handle(response)) as ReviewSessionResponse
+    },
+
+    async getSession(id, signal) {
+      const response = await fetchImpl(url(`/review-sessions/${encodeURIComponent(id)}`), {
+        method: 'GET',
+        headers: headers(),
+        signal,
+      })
+      return (await handle(response)) as ReviewSessionResponse
     },
   }
 }

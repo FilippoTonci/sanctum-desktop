@@ -117,6 +117,98 @@ describe('createSessionsClient.listSessions', () => {
   })
 })
 
+describe('createSessionsClient.createSession', () => {
+  it('POSTs the request body as JSON with the bearer token', async () => {
+    const fetchImpl = vi.fn((input: Request | string | URL, init?: RequestInit) => {
+      expect(urlOf(input)).toBe('http://127.0.0.1:9000/review-sessions')
+      expect(init?.method).toBe('POST')
+      const headers = init?.headers as Record<string, string>
+      expect(headers.Authorization).toBe('Bearer t')
+      expect(headers['Content-Type']).toBe('application/json')
+      const rawBody = init?.body
+      expect(typeof rawBody).toBe('string')
+      expect(JSON.parse(rawBody as string)).toEqual({
+        input_path: '/tmp/x.docx',
+        default_operator: 'hips',
+      })
+      return Promise.resolve(
+        jsonResponse(201, {
+          id: 'sess-1',
+          source_path: '/tmp/x.docx',
+          format: 'docx',
+          default_operator: 'hips',
+          default_operator_params: {},
+          segments: [],
+          proposals: [],
+          decisions: [],
+          status: 'open',
+          created_at: '2026-04-25T12:00:00Z',
+          committed_at: null,
+          previews: {},
+        }),
+      )
+    })
+    const client = createSessionsClient({
+      baseUrl: 'http://127.0.0.1:9000',
+      token: 't',
+      fetchImpl,
+    })
+    const out = await client.createSession({
+      input_path: '/tmp/x.docx',
+      default_operator: 'hips',
+    })
+    expect(out.id).toBe('sess-1')
+  })
+
+  it('throws ApiError on a 400 with a parsed validation body', async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(jsonResponse(400, { error: 'input_path: file does not exist' })),
+    )
+    const client = createSessionsClient({
+      baseUrl: 'http://127.0.0.1:9000',
+      token: 't',
+      fetchImpl,
+    })
+    await expect(
+      client.createSession({ input_path: '/missing', default_operator: 'hips' }),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: 'input_path: file does not exist',
+    })
+  })
+})
+
+describe('createSessionsClient.getSession', () => {
+  it('GETs /review-sessions/{id} and url-encodes the id', async () => {
+    const fetchImpl = vi.fn((input: Request | string | URL) => {
+      expect(urlOf(input)).toBe('http://127.0.0.1:9000/review-sessions/sess%2Fweird%20id')
+      return Promise.resolve(
+        jsonResponse(200, {
+          id: 'sess/weird id',
+          source_path: '/tmp/x.docx',
+          format: 'docx',
+          default_operator: 'hips',
+          default_operator_params: {},
+          segments: [],
+          proposals: [],
+          decisions: [],
+          status: 'open',
+          created_at: '2026-04-25T12:00:00Z',
+          committed_at: null,
+          previews: {},
+        }),
+      )
+    })
+    const client = createSessionsClient({
+      baseUrl: 'http://127.0.0.1:9000',
+      token: 't',
+      fetchImpl,
+    })
+    const out = await client.getSession('sess/weird id')
+    expect(out.id).toBe('sess/weird id')
+  })
+})
+
 describe('clientFromCredentials', () => {
   it('returns null for null credentials', () => {
     expect(clientFromCredentials(null)).toBeNull()

@@ -1,17 +1,14 @@
 /**
  * Renderer-side detection model. The shape is the projection of
- * `ReviewProposal` (sanctum/sanctum/core/models.py) onto the UI: the
- * proposal's `segment_anchor` becomes `segmentId`; `original` is paired
- * with `start`/`end` offsets within the segment text so the highlight
- * overlay (slice 4) can paint precise spans rather than whole runs;
- * the reviewer's verdict is tracked locally as `status`.
+ * `ReviewProposal` + `UserAddedDecision` (sanctum/sanctum/core/models.py)
+ * onto the UI: `segment_anchor` becomes `segmentId`; `original` becomes
+ * `text`; backend `start` / `end` offsets (added in WS1.5) come through
+ * verbatim so the highlight overlay can paint precise spans without
+ * `str.find` ambiguity; the reviewer's verdict is tracked as `status`.
  *
- * `start` and `end` are not on `ReviewProposal` today — the backend will
- * add them when the review-session API lands (Phase 1.5 WS2). Until then
- * the renderer derives them by `indexOf(original)` inside the segment's
- * textContent. That fallback is acceptable while detections are stubbed
- * (slice 5 fake data); slice 8 / WS5 wires the real session API and
- * the offsets come from there.
+ * Built from a session response by `review/from-session.ts` in the WS5
+ * wire-up; built from regex matches by `review/fake-detections.ts` in
+ * the standalone-browser fallback.
  */
 export type DetectionStatus = 'pending' | 'accepted' | 'rejected'
 

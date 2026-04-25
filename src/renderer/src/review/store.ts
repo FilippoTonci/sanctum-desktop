@@ -56,8 +56,11 @@ export interface ReviewState {
   readonly selectMode: boolean
   readonly defaultOperator: OperatorName
   readonly commitPanelOpen: boolean
+  /** Backend session id once a real `/review-sessions` round-trip lands. */
+  readonly sessionId: string | null
 
   setDetections: (detections: readonly Detection[]) => void
+  setSessionId: (id: string | null) => void
   clear: () => void
   setStatus: (id: string, status: DetectionStatus) => void
   setFocused: (id: string | null) => void
@@ -88,6 +91,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   defaultOperator: 'hips',
   commitPanelOpen: false,
   editingReplacementId: null,
+  sessionId: null,
 
   setDetections: (detections) => {
     set({
@@ -100,6 +104,10 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     })
   },
 
+  setSessionId: (id) => {
+    set({ sessionId: id })
+  },
+
   clear: () => {
     set({
       detections: [],
@@ -108,6 +116,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       selectMode: false,
       commitPanelOpen: false,
       editingReplacementId: null,
+      sessionId: null,
     })
   },
 

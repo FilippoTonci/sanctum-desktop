@@ -229,6 +229,36 @@ body {
   color: #888;
 }
 
+.analysis-banner {
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 40;
+  padding: 0.55rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.analysis-banner-pending {
+  background: #4f8cff;
+  color: white;
+}
+
+.analysis-banner-error {
+  background: rgba(197, 48, 48, 0.95);
+  color: white;
+  max-width: 480px;
+}
+
+.analysis-banner strong {
+  font-weight: 600;
+  margin-right: 0.25rem;
+}
+
 .drop-zone {
   border: 2px dashed rgba(127, 127, 127, 0.4);
   border-radius: 12px;

@@ -20,6 +20,11 @@ export type SanctumStatus =
 export interface SanctumApi {
   getStatus(): Promise<SanctumStatus>
   onStatusChange(listener: (status: SanctumStatus) => void): () => void
+  /**
+   * Absolute filesystem path for a dropped File, or '' when unavailable
+   * (renderer-synthesised test files, browsers without webUtils, etc.).
+   */
+  getFilePath(file: File): string
 }
 
 declare global {
