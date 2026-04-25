@@ -209,6 +209,80 @@ describe('createSessionsClient.getSession', () => {
   })
 })
 
+describe('createSessionsClient.commitSession', () => {
+  it('POSTs the commit body and returns the typed response', async () => {
+    const fetchImpl = vi.fn((input: Request | string | URL, init?: RequestInit) => {
+      expect(urlOf(input)).toBe('http://127.0.0.1:9000/review-sessions/sess-1/commit')
+      expect(init?.method).toBe('POST')
+      const rawBody = init?.body
+      expect(typeof rawBody).toBe('string')
+      expect(JSON.parse(rawBody as string)).toEqual({
+        output_path: '/tmp/out.docx',
+        attested: true,
+      })
+      return Promise.resolve(
+        jsonResponse(200, {
+          session_id: 'sess-1',
+          output_path: '/tmp/out.docx',
+          committed_at: '2026-04-25T12:00:00Z',
+        }),
+      )
+    })
+    const client = createSessionsClient({
+      baseUrl: 'http://127.0.0.1:9000',
+      token: 't',
+      fetchImpl,
+    })
+    const out = await client.commitSession('sess-1', {
+      output_path: '/tmp/out.docx',
+      attested: true,
+    })
+    expect(out.committed_at).toBe('2026-04-25T12:00:00Z')
+  })
+
+  it('throws ApiError on a 400 (e.g. attested=false)', async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(jsonResponse(400, { error: 'attested: must be true' })),
+    )
+    const client = createSessionsClient({
+      baseUrl: 'http://127.0.0.1:9000',
+      token: 't',
+      fetchImpl,
+    })
+    await expect(
+      client.commitSession('sess-1', { output_path: '/tmp/out.docx', attested: false }),
+    ).rejects.toMatchObject({ status: 400, message: 'attested: must be true' })
+  })
+})
+
+describe('createSessionsClient.abandonSession', () => {
+  it('DELETEs /review-sessions/{id} and returns void on 204', async () => {
+    const fetchImpl = vi.fn((input: Request | string | URL, init?: RequestInit) => {
+      expect(urlOf(input)).toBe('http://127.0.0.1:9000/review-sessions/sess-1')
+      expect(init?.method).toBe('DELETE')
+      return Promise.resolve(new Response(null, { status: 204 }))
+    })
+    const client = createSessionsClient({
+      baseUrl: 'http://127.0.0.1:9000',
+      token: 't',
+      fetchImpl,
+    })
+    await expect(client.abandonSession('sess-1')).resolves.toBeUndefined()
+  })
+
+  it('throws ApiError on a 409 (already committed/abandoned)', async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(jsonResponse(409, { error: 'session is committed; cannot abandon' })),
+    )
+    const client = createSessionsClient({
+      baseUrl: 'http://127.0.0.1:9000',
+      token: 't',
+      fetchImpl,
+    })
+    await expect(client.abandonSession('sess-1')).rejects.toMatchObject({ status: 409 })
+  })
+})
+
 describe('clientFromCredentials', () => {
   it('returns null for null credentials', () => {
     expect(clientFromCredentials(null)).toBeNull()

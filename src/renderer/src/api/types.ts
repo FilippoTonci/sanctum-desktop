@@ -106,6 +106,19 @@ export interface DecisionWithPreviewResponse {
   readonly preview: string
 }
 
+export interface CommitReviewSessionRequest {
+  /** Server-readable absolute path the anonymized document gets written to. */
+  readonly output_path: string
+  /** Hard gate — the API refuses to commit unless the caller asserts true. */
+  readonly attested: boolean
+}
+
+export interface CommitReviewSessionResponse {
+  readonly session_id: string
+  readonly output_path: string
+  readonly committed_at: string
+}
+
 export interface ReviewSessionResponse {
   readonly id: string
   readonly source_path: string

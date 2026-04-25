@@ -28,6 +28,8 @@ function fakeClient(overrides: Partial<SessionsClient> = {}): SessionsClient {
     patchDecision: noop,
     addUserAdded: noop,
     deleteUserAdded: noop,
+    commitSession: noop,
+    abandonSession: noop,
     ...overrides,
   }
 }

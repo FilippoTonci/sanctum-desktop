@@ -72,6 +72,16 @@ export interface ReviewState {
   setLastSyncError: (message: string | null) => void
 
   /**
+   * Set when the session has been successfully committed via
+   * `POST /review-sessions/{id}/commit`. The CommitPanel switches to a
+   * success state showing the output path; the abandon-on-close path
+   * skips its DELETE because the backend already torn the session
+   * down at commit time.
+   */
+  readonly commitResult: { readonly outputPath: string; readonly committedAt: string } | null
+  setCommitResult: (result: { outputPath: string; committedAt: string } | null) => void
+
+  /**
    * Per-detection-id preview text — what the operator would replace
    * the detection with. Computed server-side and shipped on every
    * session GET and every decision-touching PATCH/POST. Keys are the
@@ -114,6 +124,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   sessionId: null,
   lastSyncError: null,
   previews: {},
+  commitResult: null,
 
   setDetections: (detections) => {
     set({
@@ -155,6 +166,10 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     set({ lastSyncError: message })
   },
 
+  setCommitResult: (result) => {
+    set({ commitResult: result })
+  },
+
   setPreviews: (map) => {
     set({ previews: { ...map } })
   },
@@ -185,6 +200,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       sessionId: null,
       lastSyncError: null,
       previews: {},
+      commitResult: null,
     })
   },
 

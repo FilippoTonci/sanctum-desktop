@@ -99,11 +99,26 @@ export function App(): ReactElement {
   )
 
   const handleClose = useCallback(() => {
+    // If the session is open and the user closes without committing,
+    // tell the backend to drop it — keeps the on-disk session store
+    // tidy and prevents stale entries piling up in the Recent Sessions
+    // list. We only DELETE when the session hasn't already been
+    // committed (commit deletes the session dir on its own).
+    const state = useReviewStore.getState()
+    if (sessionsClient !== null && state.sessionId !== null && state.commitResult === null) {
+      const sid = state.sessionId
+      void sessionsClient.abandonSession(sid).catch(() => {
+        // Don't block local close on a failed DELETE — the user wants
+        // out and we already cleared the local view. Surface via the
+        // sync-error toast so it isn't silently swallowed.
+        useReviewStore.getState().setLastSyncError(`abandon: failed to delete session ${sid}`)
+      })
+    }
     setDoc(null)
     setDocRoot(null)
     setAnalysis({ kind: 'fake' })
     clearStore()
-  }, [clearStore])
+  }, [clearStore, sessionsClient])
 
   const handleRendered = useCallback(
     (root: HTMLElement) => {
@@ -187,7 +202,7 @@ export function App(): ReactElement {
             <DetectionTooltip anchorRoot={docRoot} />
             <PreviewOverlay anchorRoot={docRoot} />
             <SelectModeBanner />
-            <CommitPanel />
+            <CommitPanel client={sessionsClient} sourceFileName={doc.name} onDone={handleClose} />
             <AnalysisBanner state={analysis} />
             <SyncErrorToast />
           </div>

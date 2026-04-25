@@ -17,6 +17,16 @@ export type SanctumStatus =
     }
   | { readonly state: 'error'; readonly message: string }
 
+export interface SaveDialogOptions {
+  readonly defaultPath?: string
+  readonly title?: string
+}
+
+export interface SaveDialogResult {
+  readonly canceled: boolean
+  readonly filePath: string | null
+}
+
 export interface SanctumApi {
   getStatus(): Promise<SanctumStatus>
   onStatusChange(listener: (status: SanctumStatus) => void): () => void
@@ -25,6 +35,8 @@ export interface SanctumApi {
    * (renderer-synthesised test files, browsers without webUtils, etc.).
    */
   getFilePath(file: File): string
+  showSaveDialog(options: SaveDialogOptions): Promise<SaveDialogResult>
+  revealInFolder(path: string): Promise<void>
 }
 
 declare global {

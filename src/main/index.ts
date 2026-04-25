@@ -7,6 +7,18 @@ import { StatusBus, toPublicStatus } from './status'
 const APP_URL_ALLOWLIST = new Set<string>(['https://github.com/FilippoTonci/sanctum'])
 const STATUS_CHANNEL = 'sanctum:status-change'
 const STATUS_GET_CHANNEL = 'sanctum:get-status'
+const SAVE_DIALOG_CHANNEL = 'sanctum:show-save-dialog'
+const REVEAL_IN_FOLDER_CHANNEL = 'sanctum:reveal-in-folder'
+
+interface SaveDialogRequest {
+  readonly defaultPath?: string
+  readonly title?: string
+}
+
+interface SaveDialogResult {
+  readonly canceled: boolean
+  readonly filePath: string | null
+}
 
 const statusBus = new StatusBus()
 let sidecar: SidecarHandle | null = null
@@ -87,6 +99,39 @@ async function startSidecar(): Promise<void> {
 }
 
 ipcMain.handle(STATUS_GET_CHANNEL, () => toPublicStatus(statusBus.status))
+
+ipcMain.handle(
+  SAVE_DIALOG_CHANNEL,
+  async (event, request: SaveDialogRequest): Promise<SaveDialogResult> => {
+    // Anchor the dialog on the BrowserWindow that issued the request so
+    // it modal-stacks over the right surface (multi-window is not in
+    // scope today, but the call site is the same).
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result =
+      win === null
+        ? await dialog.showSaveDialog({
+            defaultPath: request.defaultPath,
+            title: request.title,
+          })
+        : await dialog.showSaveDialog(win, {
+            defaultPath: request.defaultPath,
+            title: request.title,
+          })
+    return {
+      canceled: result.canceled,
+      // Electron types `filePath` as a non-optional string but populates
+      // it with the empty string on cancel; normalise to null so the
+      // renderer sees one shape.
+      filePath: result.canceled || result.filePath === '' ? null : result.filePath,
+    }
+  },
+)
+
+ipcMain.handle(REVEAL_IN_FOLDER_CHANNEL, (_event, path: string) => {
+  // shell.showItemInFolder is sync and returns void; expose it as a
+  // promise-returning IPC for symmetry with the rest of the surface.
+  shell.showItemInFolder(path)
+})
 
 void app.whenReady().then(() => {
   createWindow()

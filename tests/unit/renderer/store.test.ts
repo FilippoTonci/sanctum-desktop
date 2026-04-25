@@ -248,4 +248,24 @@ describe('useReviewStore', () => {
     useReviewStore.getState().clear()
     expect(useReviewStore.getState().previews).toEqual({})
   })
+
+  it('setCommitResult records + clears the post-commit slot', () => {
+    useReviewStore
+      .getState()
+      .setCommitResult({ outputPath: '/tmp/out.docx', committedAt: '2026-04-25T12:00:00Z' })
+    expect(useReviewStore.getState().commitResult).toEqual({
+      outputPath: '/tmp/out.docx',
+      committedAt: '2026-04-25T12:00:00Z',
+    })
+    useReviewStore.getState().setCommitResult(null)
+    expect(useReviewStore.getState().commitResult).toBeNull()
+  })
+
+  it('clear() empties commitResult', () => {
+    useReviewStore
+      .getState()
+      .setCommitResult({ outputPath: '/tmp/out.docx', committedAt: '2026-04-25T12:00:00Z' })
+    useReviewStore.getState().clear()
+    expect(useReviewStore.getState().commitResult).toBeNull()
+  })
 })

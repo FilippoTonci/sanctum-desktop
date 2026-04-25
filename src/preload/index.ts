@@ -2,6 +2,18 @@ import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'ele
 
 const STATUS_CHANNEL = 'sanctum:status-change'
 const STATUS_GET_CHANNEL = 'sanctum:get-status'
+const SAVE_DIALOG_CHANNEL = 'sanctum:show-save-dialog'
+const REVEAL_IN_FOLDER_CHANNEL = 'sanctum:reveal-in-folder'
+
+export interface SaveDialogOptions {
+  readonly defaultPath?: string
+  readonly title?: string
+}
+
+export interface SaveDialogResult {
+  readonly canceled: boolean
+  readonly filePath: string | null
+}
 
 export interface HealthResponse {
   readonly status: string
@@ -35,6 +47,17 @@ export interface SanctumApi {
    * the renderer must fall back to its standalone-mode behaviour.
    */
   getFilePath(file: File): string
+  /**
+   * Open the OS save-as dialog and return the user's chosen path
+   * (or canceled=true). Used by the commit panel to pick where the
+   * anonymized output should land.
+   */
+  showSaveDialog(options: SaveDialogOptions): Promise<SaveDialogResult>
+  /**
+   * Open the OS file manager focused on the given file. Used by the
+   * post-commit success state to let the reviewer find the output.
+   */
+  revealInFolder(path: string): Promise<void>
 }
 
 const api: SanctumApi = {
@@ -52,6 +75,12 @@ const api: SanctumApi = {
   },
   getFilePath(file) {
     return webUtils.getPathForFile(file)
+  },
+  async showSaveDialog(options) {
+    return (await ipcRenderer.invoke(SAVE_DIALOG_CHANNEL, options)) as SaveDialogResult
+  },
+  async revealInFolder(path) {
+    await ipcRenderer.invoke(REVEAL_IN_FOLDER_CHANNEL, path)
   },
 }
 

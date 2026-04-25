@@ -22,6 +22,8 @@ import {
   ApiError,
   type AddUserAddedDecisionRequest,
   type ApiErrorBody,
+  type CommitReviewSessionRequest,
+  type CommitReviewSessionResponse,
   type CreateReviewSessionRequest,
   type DecisionWithPreviewResponse,
   type PatchProposalDecisionRequest,
@@ -48,6 +50,12 @@ export interface SessionsClient {
     signal?: AbortSignal,
   ): Promise<DecisionWithPreviewResponse>
   deleteUserAdded(sessionId: string, uaId: string, signal?: AbortSignal): Promise<void>
+  commitSession(
+    sessionId: string,
+    body: CommitReviewSessionRequest,
+    signal?: AbortSignal,
+  ): Promise<CommitReviewSessionResponse>
+  abandonSession(sessionId: string, signal?: AbortSignal): Promise<void>
 }
 
 interface ClientOptions {
@@ -156,6 +164,30 @@ export function createSessionsClient(opts: ClientOptions): SessionsClient {
       )
       if (!response.ok) {
         // 204 returns ok=true; only fail-paths reach here.
+        await handle(response)
+      }
+    },
+
+    async commitSession(sessionId, body, signal) {
+      const response = await fetchImpl(
+        url(`/review-sessions/${encodeURIComponent(sessionId)}/commit`),
+        {
+          method: 'POST',
+          headers: { ...headers(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal,
+        },
+      )
+      return (await handle(response)) as CommitReviewSessionResponse
+    },
+
+    async abandonSession(sessionId, signal) {
+      const response = await fetchImpl(url(`/review-sessions/${encodeURIComponent(sessionId)}`), {
+        method: 'DELETE',
+        headers: headers(),
+        signal,
+      })
+      if (!response.ok) {
         await handle(response)
       }
     },
