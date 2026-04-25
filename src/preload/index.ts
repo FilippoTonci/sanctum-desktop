@@ -4,6 +4,7 @@ const STATUS_CHANNEL = 'sanctum:status-change'
 const STATUS_GET_CHANNEL = 'sanctum:get-status'
 const SAVE_DIALOG_CHANNEL = 'sanctum:show-save-dialog'
 const REVEAL_IN_FOLDER_CHANNEL = 'sanctum:reveal-in-folder'
+const MAPPING_STORE_PATH_CHANNEL = 'sanctum:get-mapping-store-path'
 
 export interface SaveDialogOptions {
   readonly defaultPath?: string
@@ -58,6 +59,13 @@ export interface SanctumApi {
    * post-commit success state to let the reviewer find the output.
    */
   revealInFolder(path: string): Promise<void>
+  /**
+   * Default on-disk location of the encrypted pseudonymize mapping
+   * store. Settings (WS5-7) will let the user override this; until
+   * then it's the well-known per-user path so the unlock UX doesn't
+   * have to ask the user to type a filesystem path.
+   */
+  getMappingStorePath(): Promise<string>
 }
 
 const api: SanctumApi = {
@@ -81,6 +89,9 @@ const api: SanctumApi = {
   },
   async revealInFolder(path) {
     await ipcRenderer.invoke(REVEAL_IN_FOLDER_CHANNEL, path)
+  },
+  async getMappingStorePath() {
+    return (await ipcRenderer.invoke(MAPPING_STORE_PATH_CHANNEL)) as string
   },
 }
 

@@ -37,6 +37,7 @@ export interface SanctumApi {
   getFilePath(file: File): string
   showSaveDialog(options: SaveDialogOptions): Promise<SaveDialogResult>
   revealInFolder(path: string): Promise<void>
+  getMappingStorePath(): Promise<string>
 }
 
 declare global {

@@ -29,10 +29,99 @@ body {
   padding: 4rem 2rem;
 }
 
+.shell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
 .shell h1 {
   font-size: 2rem;
   font-weight: 600;
   margin: 0 0 0.5rem;
+}
+
+.mapping-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  background: rgba(127, 127, 127, 0.05);
+}
+
+.mapping-chip-unlocked {
+  border-color: rgba(45, 138, 63, 0.5);
+  background: rgba(45, 138, 63, 0.08);
+  color: #1f6a2c;
+}
+
+.mapping-chip-locked {
+  border-color: rgba(184, 124, 0, 0.5);
+  background: rgba(184, 124, 0, 0.08);
+  color: #8a5a00;
+}
+
+.mapping-chip-icon {
+  font-size: 0.95rem;
+}
+
+.mapping-chip-label {
+  white-space: nowrap;
+}
+
+.mapping-chip-action {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  padding: 0.15rem 0.55rem;
+  border-radius: 5px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  margin-left: 0.25rem;
+}
+
+.mapping-chip-action:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.unlock-modal {
+  max-width: 460px;
+}
+
+.unlock-modal-detail {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.unlock-modal-path {
+  display: inline-block;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.unlock-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.unlock-modal-field input {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 5px;
+  font-size: 0.95rem;
+  font-family: inherit;
 }
 
 .shell .tagline {

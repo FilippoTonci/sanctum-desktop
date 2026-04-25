@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pollHealth } from './health'
 import { spawnSidecar, type SidecarHandle } from './sidecar'
@@ -9,6 +10,7 @@ const STATUS_CHANNEL = 'sanctum:status-change'
 const STATUS_GET_CHANNEL = 'sanctum:get-status'
 const SAVE_DIALOG_CHANNEL = 'sanctum:show-save-dialog'
 const REVEAL_IN_FOLDER_CHANNEL = 'sanctum:reveal-in-folder'
+const MAPPING_STORE_PATH_CHANNEL = 'sanctum:get-mapping-store-path'
 
 interface SaveDialogRequest {
   readonly defaultPath?: string
@@ -131,6 +133,14 @@ ipcMain.handle(REVEAL_IN_FOLDER_CHANNEL, (_event, path: string) => {
   // shell.showItemInFolder is sync and returns void; expose it as a
   // promise-returning IPC for symmetry with the rest of the surface.
   shell.showItemInFolder(path)
+})
+
+ipcMain.handle(MAPPING_STORE_PATH_CHANNEL, (): string => {
+  // Default location matches the backend's CLI default. WS5-7 (settings)
+  // will let the user override this via env / config; for now it's
+  // hard-wired so the mapping-unlock UX doesn't have to ask the user
+  // to type the path.
+  return join(homedir(), '.sanctum', 'mapping-store.bin')
 })
 
 void app.whenReady().then(() => {

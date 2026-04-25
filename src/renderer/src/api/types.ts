@@ -119,6 +119,21 @@ export interface CommitReviewSessionResponse {
   readonly committed_at: string
 }
 
+export interface UnlockMappingRequest {
+  readonly store_path: string
+  readonly passphrase: string
+}
+
+export interface UnlockMappingResponse {
+  readonly unlocked: true
+  readonly store_path: string
+}
+
+export interface LockMappingResponse {
+  readonly unlocked: false
+  readonly store_path: string | null
+}
+
 export interface ReviewSessionResponse {
   readonly id: string
   readonly source_path: string

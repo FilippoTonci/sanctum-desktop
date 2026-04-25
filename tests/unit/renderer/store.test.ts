@@ -268,4 +268,23 @@ describe('useReviewStore', () => {
     useReviewStore.getState().clear()
     expect(useReviewStore.getState().commitResult).toBeNull()
   })
+
+  it('setMappingStoreUnlocked tracks the lock state across true/false/null', () => {
+    expect(useReviewStore.getState().mappingStoreUnlocked).toBeNull()
+    useReviewStore.getState().setMappingStoreUnlocked(true)
+    expect(useReviewStore.getState().mappingStoreUnlocked).toBe(true)
+    useReviewStore.getState().setMappingStoreUnlocked(false)
+    expect(useReviewStore.getState().mappingStoreUnlocked).toBe(false)
+    useReviewStore.getState().setMappingStoreUnlocked(null)
+    expect(useReviewStore.getState().mappingStoreUnlocked).toBeNull()
+  })
+
+  it('clear() does not clobber the mapping-store lock state', () => {
+    // The lock state is user-scoped; clearing per-document state must
+    // not flip it back to "unknown" or the user would see the
+    // pseudonymize option freeze every time they close a document.
+    useReviewStore.getState().setMappingStoreUnlocked(true)
+    useReviewStore.getState().clear()
+    expect(useReviewStore.getState().mappingStoreUnlocked).toBe(true)
+  })
 })

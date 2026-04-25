@@ -16,6 +16,7 @@ export function DetectionTooltip({ anchorRoot }: DetectionTooltipProps): ReactEl
   const defaultOperator = useReviewStore((s) => s.defaultOperator)
   const editingReplacementId = useReviewStore((s) => s.editingReplacementId)
   const startEditingReplacement = useReviewStore((s) => s.startEditingReplacement)
+  const mappingUnlocked = useReviewStore((s) => s.mappingStoreUnlocked)
   const actions = useReviewActions()
 
   const [draftReplacement, setDraftReplacement] = useState('')
@@ -89,16 +90,24 @@ export function DetectionTooltip({ anchorRoot }: DetectionTooltipProps): ReactEl
             actions.setOperator(focused.id, e.currentTarget.value as OperatorName)
           }}
         >
-          {OPERATOR_NAMES.map((op) => (
-            <option key={op} value={op}>
-              {op}
-              {op === defaultOperator && focused.operator === undefined ? ' (default)' : ''}
-            </option>
-          ))}
+          {OPERATOR_NAMES.map((op) => {
+            const pseudonymizeLocked = op === 'pseudonymize' && mappingUnlocked !== true
+            return (
+              <option key={op} value={op} disabled={pseudonymizeLocked}>
+                {op}
+                {op === defaultOperator && focused.operator === undefined ? ' (default)' : ''}
+                {pseudonymizeLocked ? ' — mapping store locked' : ''}
+              </option>
+            )
+          })}
         </select>
         {focused.customReplacement !== undefined ? (
           <span className="detection-tooltip-operator-hint">
             Bypassed by custom replacement below.
+          </span>
+        ) : focused.operator === 'pseudonymize' && mappingUnlocked !== true ? (
+          <span className="detection-tooltip-operator-hint">
+            Unlock the mapping store before committing.
           </span>
         ) : null}
       </label>

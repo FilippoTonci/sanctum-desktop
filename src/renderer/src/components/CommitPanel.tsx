@@ -36,6 +36,7 @@ export function CommitPanel({
   const sessionId = useReviewStore((s) => s.sessionId)
   const commitResult = useReviewStore((s) => s.commitResult)
   const setCommitResult = useReviewStore((s) => s.setCommitResult)
+  const mappingUnlocked = useReviewStore((s) => s.mappingStoreUnlocked)
 
   const [attested, setAttested] = useState(false)
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: 'form' })
@@ -171,12 +172,21 @@ export function CommitPanel({
               setDefaultOperator(e.currentTarget.value as OperatorName)
             }}
           >
-            {OPERATOR_NAMES.map((op) => (
-              <option key={op} value={op}>
-                {op}
-              </option>
-            ))}
+            {OPERATOR_NAMES.map((op) => {
+              const pseudonymizeLocked = op === 'pseudonymize' && mappingUnlocked !== true
+              return (
+                <option key={op} value={op} disabled={pseudonymizeLocked}>
+                  {op}
+                  {pseudonymizeLocked ? ' — mapping store locked' : ''}
+                </option>
+              )
+            })}
           </select>
+          {defaultOperator === 'pseudonymize' && mappingUnlocked !== true ? (
+            <span className="detection-tooltip-operator-hint">
+              Unlock the mapping store before committing.
+            </span>
+          ) : null}
         </label>
 
         {pendingCount > 0 ? (

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
+import { mappingClientFromCredentials } from './api/mapping'
 import { clientFromCredentials, type SessionsClient } from './api/sessions'
 import { ApiError } from './api/types'
 import { CommitPanel } from './components/CommitPanel'
@@ -6,6 +7,7 @@ import { DetectionSidebar } from './components/DetectionSidebar'
 import { DetectionTooltip } from './components/DetectionTooltip'
 import { DocxView } from './components/DocxView'
 import { DropZone } from './components/DropZone'
+import { MappingStoreChip } from './components/MappingStoreChip'
 import { PreviewOverlay } from './components/PreviewOverlay'
 import { RecentSessions } from './components/RecentSessions'
 import { SelectModeBanner } from './components/SelectModeBanner'
@@ -37,6 +39,7 @@ export function App(): ReactElement {
   const setSessionId = useReviewStore((s) => s.setSessionId)
   const setDefaultOperator = useReviewStore((s) => s.setDefaultOperator)
   const setPreviews = useReviewStore((s) => s.setPreviews)
+  const setMappingStoreUnlocked = useReviewStore((s) => s.setMappingStoreUnlocked)
   const clearStore = useReviewStore((s) => s.clear)
 
   useEffect(() => {
@@ -76,6 +79,19 @@ export function App(): ReactElement {
     if (status.state !== 'ready') return null
     return clientFromCredentials({ baseUrl: status.baseUrl, token: status.token })
   }, [status])
+
+  const mappingClient = useMemo(() => {
+    if (status.state !== 'ready') return null
+    return mappingClientFromCredentials({ baseUrl: status.baseUrl, token: status.token })
+  }, [status])
+
+  // Mirror the /health-reported lock state into the store on every
+  // status change. unlock/lock round-trips will overwrite locally;
+  // a fresh /health poll (e.g. on sidecar respawn) re-syncs.
+  useEffect(() => {
+    if (status.state !== 'ready') return
+    setMappingStoreUnlocked(status.health.mapping_store_unlocked ?? null)
+  }, [status, setMappingStoreUnlocked])
 
   // Keyboard handler reaches actions through the same factory the
   // ReviewActionsProvider uses below — kept in sync via a shared
@@ -183,9 +199,12 @@ export function App(): ReactElement {
 
   return (
     <main className={`shell${reviewMode ? ' shell-review' : ''}`}>
-      <header>
-        <h1>Sanctum Desktop</h1>
-        <p className="tagline">Local-first document anonymization — coming soon.</p>
+      <header className="shell-header">
+        <div>
+          <h1>Sanctum Desktop</h1>
+          <p className="tagline">Local-first document anonymization — coming soon.</p>
+        </div>
+        <MappingStoreChip client={mappingClient} />
       </header>
       {showBackendStatus ? <Splash status={status} /> : null}
       {reviewMode ? (

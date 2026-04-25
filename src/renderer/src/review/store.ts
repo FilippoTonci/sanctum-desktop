@@ -82,6 +82,18 @@ export interface ReviewState {
   setCommitResult: (result: { outputPath: string; committedAt: string } | null) => void
 
   /**
+   * Mapping-store lock state, mirrored from /health and updated locally
+   * after successful unlock/lock round-trips. `null` means we haven't
+   * polled /health yet (status still 'idle' / 'starting'). Components
+   * that gate on the lock state (e.g. the pseudonymize operator option
+   * in the tooltip + commit panel) treat null as "unknown — assume
+   * locked" so the user doesn't pick an operator that will fail at
+   * commit time.
+   */
+  readonly mappingStoreUnlocked: boolean | null
+  setMappingStoreUnlocked: (unlocked: boolean | null) => void
+
+  /**
    * Per-detection-id preview text — what the operator would replace
    * the detection with. Computed server-side and shipped on every
    * session GET and every decision-touching PATCH/POST. Keys are the
@@ -125,6 +137,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   lastSyncError: null,
   previews: {},
   commitResult: null,
+  mappingStoreUnlocked: null,
 
   setDetections: (detections) => {
     set({
@@ -168,6 +181,10 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
   setCommitResult: (result) => {
     set({ commitResult: result })
+  },
+
+  setMappingStoreUnlocked: (unlocked) => {
+    set({ mappingStoreUnlocked: unlocked })
   },
 
   setPreviews: (map) => {
