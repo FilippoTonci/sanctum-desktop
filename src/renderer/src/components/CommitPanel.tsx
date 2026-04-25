@@ -1,8 +1,8 @@
 import { useMemo, useState, type ReactElement } from 'react'
 import type { SessionsClient } from '../api/sessions'
-import { ApiError } from '../api/types'
 import { useReviewStore } from '../review/store'
 import { OPERATOR_NAMES, type OperatorName } from '../review/types'
+import { TypedError } from './TypedError'
 
 const ATTESTATION =
   'I have reviewed every PII detection in this document and confirm the verdicts above.'
@@ -20,7 +20,7 @@ interface CommitPanelProps {
   readonly onDone: () => void
 }
 
-type SubmitState = { kind: 'form' } | { kind: 'submitting' } | { kind: 'error'; message: string }
+type SubmitState = { kind: 'form' } | { kind: 'submitting' } | { kind: 'error'; error: unknown }
 
 export function CommitPanel({
   client,
@@ -76,7 +76,7 @@ export function CommitPanel({
       if (dialog === undefined) {
         setSubmitState({
           kind: 'error',
-          message: 'Save dialog unavailable in this build',
+          error: new Error('Save dialog unavailable in this build'),
         })
         return
       }
@@ -95,9 +95,7 @@ export function CommitPanel({
         setSubmitState({ kind: 'form' })
         setAttested(false)
       } catch (err) {
-        const message =
-          err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err)
-        setSubmitState({ kind: 'error', message })
+        setSubmitState({ kind: 'error', error: err })
       }
     })()
   }
@@ -196,9 +194,12 @@ export function CommitPanel({
         ) : null}
 
         {submitState.kind === 'error' ? (
-          <p className="commit-panel-blocker" role="alert">
-            <strong>Commit failed.</strong> {submitState.message}
-          </p>
+          <TypedError
+            error={submitState.error}
+            onDismiss={() => {
+              setSubmitState({ kind: 'form' })
+            }}
+          />
         ) : null}
 
         <label className="commit-panel-attest">

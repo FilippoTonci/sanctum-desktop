@@ -67,9 +67,13 @@ export interface ReviewState {
   removeDetection: (id: string) => void
   clear: () => void
 
-  /** Last error from the backend-sync layer; null when clear. */
-  readonly lastSyncError: string | null
-  setLastSyncError: (message: string | null) => void
+  /**
+   * Last error from the backend-sync layer; null when clear. Carries
+   * both the message and the HTTP status (if known) so the SyncErrorToast
+   * can render a typed surface — see `components/TypedError.tsx`.
+   */
+  readonly lastSyncError: { readonly status: number | null; readonly message: string } | null
+  setLastSyncError: (error: { status: number | null; message: string } | string | null) => void
 
   /**
    * Set when the session has been successfully committed via
@@ -175,8 +179,16 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     }))
   },
 
-  setLastSyncError: (message) => {
-    set({ lastSyncError: message })
+  setLastSyncError: (error) => {
+    if (error === null) {
+      set({ lastSyncError: null })
+      return
+    }
+    if (typeof error === 'string') {
+      set({ lastSyncError: { status: null, message: error } })
+      return
+    }
+    set({ lastSyncError: error })
   },
 
   setCommitResult: (result) => {

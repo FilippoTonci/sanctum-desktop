@@ -95,9 +95,10 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
   const isUserAdded = (id: string): boolean => id.startsWith('user:')
 
   const reportError = (action: string, err: unknown): void => {
+    const status = err instanceof ApiError ? err.status : null
     const message =
       err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err)
-    useReviewStore.getState().setLastSyncError(`${action}: ${message}`)
+    useReviewStore.getState().setLastSyncError({ status, message: `${action}: ${message}` })
   }
 
   const patchProposal = (

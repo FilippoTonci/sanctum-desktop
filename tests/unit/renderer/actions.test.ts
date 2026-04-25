@@ -79,7 +79,8 @@ describe('syncedActions.accept', () => {
     await flushMicrotasks()
 
     expect(useReviewStore.getState().detections[0]?.status).toBe('pending')
-    expect(useReviewStore.getState().lastSyncError).toContain('sidecar unreachable')
+    expect(useReviewStore.getState().lastSyncError?.message).toContain('sidecar unreachable')
+    expect(useReviewStore.getState().lastSyncError?.status).toBe(503)
   })
 
   it('skips the PATCH for user-added detections (always-accepted on backend)', async () => {
@@ -154,7 +155,7 @@ describe('syncedActions.reject', () => {
     await flushMicrotasks()
 
     expect(useReviewStore.getState().detections[0]?.status).toBe('pending')
-    expect(useReviewStore.getState().lastSyncError).toContain('boom')
+    expect(useReviewStore.getState().lastSyncError?.message).toContain('boom')
   })
 })
 
@@ -257,7 +258,8 @@ describe('syncedActions.addMissed', () => {
 
     expect(useReviewStore.getState().selectMode).toBe(false)
     expect(useReviewStore.getState().detections).toHaveLength(0)
-    expect(useReviewStore.getState().lastSyncError).toContain('session committed')
+    expect(useReviewStore.getState().lastSyncError?.message).toContain('session committed')
+    expect(useReviewStore.getState().lastSyncError?.status).toBe(409)
   })
 })
 

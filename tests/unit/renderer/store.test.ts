@@ -225,9 +225,20 @@ describe('useReviewStore', () => {
 
   it('setLastSyncError stores and clears the error slot', () => {
     useReviewStore.getState().setLastSyncError('something broke')
-    expect(useReviewStore.getState().lastSyncError).toBe('something broke')
+    expect(useReviewStore.getState().lastSyncError).toEqual({
+      status: null,
+      message: 'something broke',
+    })
     useReviewStore.getState().setLastSyncError(null)
     expect(useReviewStore.getState().lastSyncError).toBeNull()
+  })
+
+  it('setLastSyncError preserves an HTTP status when given a typed error', () => {
+    useReviewStore.getState().setLastSyncError({ status: 503, message: 'sidecar down' })
+    expect(useReviewStore.getState().lastSyncError).toEqual({
+      status: 503,
+      message: 'sidecar down',
+    })
   })
 
   it('setPreviews replaces the whole map; setPreview merges one entry', () => {

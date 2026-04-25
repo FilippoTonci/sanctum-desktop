@@ -13,6 +13,7 @@ import { RecentSessions } from './components/RecentSessions'
 import { SelectModeBanner } from './components/SelectModeBanner'
 import { SettingsModal } from './components/SettingsModal'
 import { Splash } from './components/Splash'
+import { TypedError } from './components/TypedError'
 import { seedFakeDetections } from './review/fake-detections'
 import { previewsForStore, sessionToDetections } from './review/from-session'
 import { useReviewKeyboard } from './review/keyboard'
@@ -26,7 +27,7 @@ type AnalysisState =
   | { kind: 'fake' }
   | { kind: 'pending' }
   | { kind: 'ready' }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; error: unknown }
 
 export function App(): ReactElement {
   const [status, setStatus] = useState<SanctumStatus>({ state: 'idle' })
@@ -180,8 +181,8 @@ export function App(): ReactElement {
         setPreviews(previewsForStore(response))
         setAnalysis({ kind: 'ready' })
       },
-      onError: (message) => {
-        setAnalysis({ kind: 'error', message })
+      onError: (err) => {
+        setAnalysis({ kind: 'error', error: err })
       },
     })
     return () => {
@@ -265,7 +266,7 @@ interface RunAnalysisArgs {
   readonly path: string
   readonly signal: AbortSignal
   readonly onSuccess: (response: Awaited<ReturnType<SessionsClient['createSession']>>) => void
-  readonly onError: (message: string) => void
+  readonly onError: (err: unknown) => void
 }
 
 async function runAnalysis(args: RunAnalysisArgs): Promise<void> {
@@ -278,9 +279,7 @@ async function runAnalysis(args: RunAnalysisArgs): Promise<void> {
     args.onSuccess(response)
   } catch (err) {
     if (args.signal.aborted) return
-    const message =
-      err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err)
-    args.onError(message)
+    args.onError(err)
   }
 }
 
@@ -295,8 +294,8 @@ function AnalysisBanner({ state }: { readonly state: AnalysisState }): ReactElem
   }
   if (state.kind === 'error') {
     return (
-      <div className="analysis-banner analysis-banner-error" role="alert">
-        <strong>Analysis failed.</strong> {state.message}
+      <div className="analysis-banner-host">
+        <TypedError error={state.error} />
       </div>
     )
   }
@@ -311,18 +310,22 @@ function SyncErrorToast(): ReactElement | null {
   const lastSyncError = useReviewStore((s) => s.lastSyncError)
   const setLastSyncError = useReviewStore((s) => s.setLastSyncError)
   if (lastSyncError === null) return null
+  // Reconstruct an ApiError-shaped object so TypedError can route on
+  // the status code. The store doesn't preserve the class identity
+  // (it serialises to a plain object), so we use the same .status +
+  // .message pair from the error class signature.
+  const fauxError =
+    lastSyncError.status !== null
+      ? new ApiError(lastSyncError.status, null, lastSyncError.message)
+      : new Error(lastSyncError.message)
   return (
-    <div className="sync-error-toast" role="alert">
-      <span>Backend sync error: {lastSyncError}</span>
-      <button
-        type="button"
-        className="sync-error-toast-dismiss"
-        onClick={() => {
+    <div className="sync-error-toast-host">
+      <TypedError
+        error={fauxError}
+        onDismiss={() => {
           setLastSyncError(null)
         }}
-      >
-        Dismiss
-      </button>
+      />
     </div>
   )
 }

@@ -427,6 +427,89 @@ body {
   background: rgba(255, 255, 255, 0.15);
 }
 
+.typed-error {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  background: rgba(197, 48, 48, 0.12);
+  color: #8a1f1f;
+  border: 1px solid rgba(197, 48, 48, 0.3);
+  font-size: 0.9rem;
+  max-width: 540px;
+}
+
+.typed-error[data-status='503'] {
+  background: rgba(184, 124, 0, 0.15);
+  color: #6f4900;
+  border-color: rgba(184, 124, 0, 0.4);
+}
+
+.typed-error[data-status='409'] {
+  background: rgba(120, 60, 200, 0.12);
+  color: #4f2d8a;
+  border-color: rgba(120, 60, 200, 0.3);
+}
+
+.typed-error-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.typed-error-title {
+  font-weight: 600;
+}
+
+.typed-error-message {
+  font-size: 0.85rem;
+  word-break: break-word;
+}
+
+.typed-error-hint {
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+.typed-error-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.typed-error-retry,
+.typed-error-dismiss {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  padding: 0.25rem 0.7rem;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.typed-error-retry:hover,
+.typed-error-dismiss:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.sync-error-toast-host {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 45;
+}
+
+.analysis-banner-host {
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 40;
+}
+
 .preview-bubble {
   position: absolute;
   z-index: 25;
