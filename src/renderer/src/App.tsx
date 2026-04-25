@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
+import { clientFromCredentials } from './api/sessions'
 import { CommitPanel } from './components/CommitPanel'
 import { DetectionSidebar } from './components/DetectionSidebar'
 import { DetectionTooltip } from './components/DetectionTooltip'
 import { DocxView } from './components/DocxView'
 import { DropZone } from './components/DropZone'
+import { RecentSessions } from './components/RecentSessions'
 import { SelectModeBanner } from './components/SelectModeBanner'
 import { Splash } from './components/Splash'
 import { seedFakeDetections } from './review/fake-detections'
@@ -78,6 +80,18 @@ export function App(): ReactElement {
     [setStoreDetections],
   )
 
+  const sessionsClient = useMemo(() => {
+    if (status.state !== 'ready') return null
+    return clientFromCredentials({ baseUrl: status.baseUrl, token: status.token })
+  }, [status])
+
+  const handleResume = useCallback((sessionId: string) => {
+    // Slice 2 wires this to a GET /review-sessions/{id} + setDetections.
+    // For now the click is intentionally a no-op so the list can ship
+    // first — the row's hover state and counts are useful on their own.
+    console.info('[sanctum] resume requested for session', sessionId)
+  }, [])
+
   return (
     <main className={`shell${reviewMode ? ' shell-review' : ''}`}>
       <header>
@@ -100,7 +114,10 @@ export function App(): ReactElement {
           <CommitPanel />
         </div>
       ) : (
-        <DropZone onFile={handleFile} />
+        <div className="landing">
+          <RecentSessions client={sessionsClient} onResume={handleResume} />
+          <DropZone onFile={handleFile} />
+        </div>
       )}
     </main>
   )

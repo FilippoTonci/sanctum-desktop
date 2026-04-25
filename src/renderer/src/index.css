@@ -89,6 +89,146 @@ body {
   padding: 1.5rem 2rem 4rem;
 }
 
+.landing {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.recent-sessions {
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.04);
+  padding: 1rem;
+}
+
+.recent-sessions-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.recent-sessions-header h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.recent-sessions-count {
+  font-size: 0.85rem;
+  opacity: 0.65;
+}
+
+.recent-sessions-status,
+.recent-sessions-empty {
+  margin: 0;
+  padding: 0.75rem 0;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.recent-sessions-error {
+  color: #c53030;
+  opacity: 1;
+}
+
+.recent-sessions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.recent-sessions-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+  text-align: left;
+  background: white;
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+@media (prefers-color-scheme: dark) {
+  .recent-sessions-item {
+    background: rgba(127, 127, 127, 0.08);
+  }
+}
+
+.recent-sessions-item:hover {
+  border-color: #4f8cff;
+}
+
+.recent-sessions-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.recent-sessions-item-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-sessions-item-status {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+}
+
+.recent-sessions-item-status-open {
+  background: rgba(79, 140, 255, 0.15);
+  color: #2658c8;
+}
+
+.recent-sessions-item-status-committed {
+  background: rgba(45, 138, 63, 0.15);
+  color: #1f6a2c;
+}
+
+.recent-sessions-item-status-abandoned {
+  background: rgba(127, 127, 127, 0.15);
+  color: #666;
+}
+
+.recent-sessions-item-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+
+.recent-sessions-item-counts {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.recent-sessions-item-pending {
+  color: #b87c00;
+}
+
+.recent-sessions-item-accepted {
+  color: #2d8a3f;
+}
+
+.recent-sessions-item-rejected {
+  color: #888;
+}
+
 .drop-zone {
   border: 2px dashed rgba(127, 127, 127, 0.4);
   border-radius: 12px;
