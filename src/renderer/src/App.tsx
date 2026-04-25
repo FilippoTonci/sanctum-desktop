@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { DetectionSidebar } from './components/DetectionSidebar'
+import { DetectionTooltip } from './components/DetectionTooltip'
 import { DocxView } from './components/DocxView'
 import { DropZone } from './components/DropZone'
 import { Splash } from './components/Splash'
 import { seedFakeDetections } from './review/fake-detections'
-import type { Detection } from './review/types'
+import { useReviewStore } from './review/store'
 import type { SanctumStatus } from './sanctum'
 
 export function App(): ReactElement {
   const [status, setStatus] = useState<SanctumStatus>({ state: 'idle' })
   const [doc, setDoc] = useState<File | null>(null)
-  const [detections, setDetections] = useState<readonly Detection[]>([])
-  const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [docRoot, setDocRoot] = useState<HTMLElement | null>(null)
+
+  const detections = useReviewStore((s) => s.detections)
+  const focusedId = useReviewStore((s) => s.focusedId)
+  const setStoreDetections = useReviewStore((s) => s.setDetections)
+  const clearStore = useReviewStore((s) => s.clear)
 
   useEffect(() => {
     let active = true
@@ -45,23 +51,27 @@ export function App(): ReactElement {
   const reviewMode = doc !== null
   const showBackendStatus = status.state !== 'ready'
 
-  const handleFile = useCallback((file: File) => {
-    setDoc(file)
-    setDetections([])
-    setFocusedId(null)
-  }, [])
+  const handleFile = useCallback(
+    (file: File) => {
+      setDoc(file)
+      clearStore()
+    },
+    [clearStore],
+  )
 
   const handleClose = useCallback(() => {
     setDoc(null)
-    setDetections([])
-    setFocusedId(null)
-  }, [])
+    setDocRoot(null)
+    clearStore()
+  }, [clearStore])
 
-  const handleRendered = useCallback((root: HTMLElement) => {
-    const seeded = seedFakeDetections(root)
-    setDetections(seeded)
-    setFocusedId(seeded[0]?.id ?? null)
-  }, [])
+  const handleRendered = useCallback(
+    (root: HTMLElement) => {
+      setDocRoot(root)
+      setStoreDetections(seedFakeDetections(root))
+    },
+    [setStoreDetections],
+  )
 
   return (
     <main className={`shell${reviewMode ? ' shell-review' : ''}`}>
@@ -71,13 +81,17 @@ export function App(): ReactElement {
       </header>
       {showBackendStatus ? <Splash status={status} /> : null}
       {reviewMode ? (
-        <DocxView
-          file={doc}
-          onClose={handleClose}
-          detections={detections}
-          focusedId={focusedId}
-          onRendered={handleRendered}
-        />
+        <div className="review-layout">
+          <DocxView
+            file={doc}
+            onClose={handleClose}
+            detections={detections}
+            focusedId={focusedId}
+            onRendered={handleRendered}
+          />
+          <DetectionSidebar />
+          <DetectionTooltip anchorRoot={docRoot} />
+        </div>
       ) : (
         <DropZone onFile={handleFile} />
       )}
