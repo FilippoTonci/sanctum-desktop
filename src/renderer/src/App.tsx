@@ -11,6 +11,7 @@ import { MappingStoreChip } from './components/MappingStoreChip'
 import { PreviewOverlay } from './components/PreviewOverlay'
 import { RecentSessions } from './components/RecentSessions'
 import { SelectModeBanner } from './components/SelectModeBanner'
+import { SettingsModal } from './components/SettingsModal'
 import { Splash } from './components/Splash'
 import { seedFakeDetections } from './review/fake-detections'
 import { previewsForStore, sessionToDetections } from './review/from-session'
@@ -32,6 +33,7 @@ export function App(): ReactElement {
   const [doc, setDoc] = useState<File | null>(null)
   const [docRoot, setDocRoot] = useState<HTMLElement | null>(null)
   const [analysis, setAnalysis] = useState<AnalysisState>({ kind: 'fake' })
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const detections = useReviewStore((s) => s.detections)
   const focusedId = useReviewStore((s) => s.focusedId)
@@ -204,8 +206,30 @@ export function App(): ReactElement {
           <h1>Sanctum Desktop</h1>
           <p className="tagline">Local-first document anonymization — coming soon.</p>
         </div>
-        <MappingStoreChip client={mappingClient} />
+        <div className="shell-header-controls">
+          <MappingStoreChip client={mappingClient} />
+          {window.sanctum?.getSettings !== undefined ? (
+            <button
+              type="button"
+              className="shell-settings-button"
+              onClick={() => {
+                setSettingsOpen(true)
+              }}
+              title="Settings"
+              aria-label="Settings"
+            >
+              ⚙️
+            </button>
+          ) : null}
+        </div>
       </header>
+      {settingsOpen ? (
+        <SettingsModal
+          onClose={() => {
+            setSettingsOpen(false)
+          }}
+        />
+      ) : null}
       {showBackendStatus ? <Splash status={status} /> : null}
       {reviewMode ? (
         <ReviewActionsProvider client={sessionsClient} sessionId={sessionId}>

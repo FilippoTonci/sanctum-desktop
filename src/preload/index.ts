@@ -5,6 +5,16 @@ const STATUS_GET_CHANNEL = 'sanctum:get-status'
 const SAVE_DIALOG_CHANNEL = 'sanctum:show-save-dialog'
 const REVEAL_IN_FOLDER_CHANNEL = 'sanctum:reveal-in-folder'
 const MAPPING_STORE_PATH_CHANNEL = 'sanctum:get-mapping-store-path'
+const SETTINGS_GET_CHANNEL = 'sanctum:get-settings'
+const SETTINGS_UPDATE_CHANNEL = 'sanctum:update-settings'
+
+export type NerBackend = 'spacy' | 'gliner'
+
+export interface AppSettings {
+  readonly nerBackend: NerBackend
+  readonly scoreThreshold: number
+  readonly defaultOperator: string
+}
 
 export interface SaveDialogOptions {
   readonly defaultPath?: string
@@ -66,6 +76,17 @@ export interface SanctumApi {
    * have to ask the user to type a filesystem path.
    */
   getMappingStorePath(): Promise<string>
+  /**
+   * Read the current app settings (NLP tier, score threshold, default
+   * operator). Returns null only when the main process hasn't finished
+   * its app-ready boot — practically never seen by the renderer.
+   */
+  getSettings(): Promise<AppSettings | null>
+  /**
+   * Persist a settings patch and trigger a sidecar respawn so the new
+   * env lands on the Python process. Returns the merged settings.
+   */
+  updateSettings(patch: Partial<AppSettings>): Promise<AppSettings | null>
 }
 
 const api: SanctumApi = {
@@ -92,6 +113,12 @@ const api: SanctumApi = {
   },
   async getMappingStorePath() {
     return (await ipcRenderer.invoke(MAPPING_STORE_PATH_CHANNEL)) as string
+  },
+  async getSettings() {
+    return (await ipcRenderer.invoke(SETTINGS_GET_CHANNEL)) as AppSettings | null
+  },
+  async updateSettings(patch) {
+    return (await ipcRenderer.invoke(SETTINGS_UPDATE_CHANNEL, patch)) as AppSettings | null
   },
 }
 

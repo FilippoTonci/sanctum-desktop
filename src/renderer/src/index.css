@@ -124,6 +124,54 @@ body {
   font-family: inherit;
 }
 
+.shell-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.shell-settings-button {
+  background: transparent;
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  border-radius: 999px;
+  width: 2.25rem;
+  height: 2.25rem;
+  font-size: 1rem;
+  cursor: pointer;
+  color: inherit;
+}
+
+.shell-settings-button:hover {
+  border-color: #4f8cff;
+  background: rgba(79, 140, 255, 0.08);
+}
+
+.settings-modal {
+  max-width: 520px;
+}
+
+.settings-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.settings-modal-field select,
+.settings-modal-field input {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 5px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.settings-modal-hint {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
 .shell .tagline {
   margin: 0 0 2rem;
   opacity: 0.7;

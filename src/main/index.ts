@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'el
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pollHealth } from './health'
+import { SettingsStore, settingsToEnv, type AppSettings } from './settings'
 import { spawnSidecar, type SidecarHandle } from './sidecar'
 import { StatusBus, toPublicStatus } from './status'
 
@@ -11,6 +12,8 @@ const STATUS_GET_CHANNEL = 'sanctum:get-status'
 const SAVE_DIALOG_CHANNEL = 'sanctum:show-save-dialog'
 const REVEAL_IN_FOLDER_CHANNEL = 'sanctum:reveal-in-folder'
 const MAPPING_STORE_PATH_CHANNEL = 'sanctum:get-mapping-store-path'
+const SETTINGS_GET_CHANNEL = 'sanctum:get-settings'
+const SETTINGS_UPDATE_CHANNEL = 'sanctum:update-settings'
 
 interface SaveDialogRequest {
   readonly defaultPath?: string
@@ -24,6 +27,7 @@ interface SaveDialogResult {
 
 const statusBus = new StatusBus()
 let sidecar: SidecarHandle | null = null
+let settingsStore: SettingsStore | null = null
 
 function broadcastStatus(): void {
   const payload = toPublicStatus(statusBus.status)
@@ -75,7 +79,8 @@ async function startSidecar(): Promise<void> {
   statusBus.set({ state: 'starting', message: 'Spawning Sanctum backend…' })
 
   try {
-    sidecar = await spawnSidecar()
+    const envOverrides = settingsStore !== null ? settingsToEnv(settingsStore.read()) : undefined
+    sidecar = await spawnSidecar({ envOverrides })
     statusBus.set({
       state: 'waiting-for-health',
       baseUrl: sidecar.baseUrl,
@@ -98,6 +103,22 @@ async function startSidecar(): Promise<void> {
       sidecar = null
     }
   }
+}
+
+/**
+ * Tear down the running sidecar and start a fresh one. Used when
+ * settings change so the new env (NLP tier, score threshold, default
+ * operator) lands on the sidecar process. The renderer's existing
+ * splash UX handles the transient 'starting' / 'waiting-for-health'
+ * states for free.
+ */
+async function respawnSidecar(): Promise<void> {
+  if (sidecar !== null) {
+    const handle = sidecar
+    sidecar = null
+    await handle.kill().catch(() => undefined)
+  }
+  await startSidecar()
 }
 
 ipcMain.handle(STATUS_GET_CHANNEL, () => toPublicStatus(statusBus.status))
@@ -143,7 +164,27 @@ ipcMain.handle(MAPPING_STORE_PATH_CHANNEL, (): string => {
   return join(homedir(), '.sanctum', 'mapping-store.bin')
 })
 
+ipcMain.handle(SETTINGS_GET_CHANNEL, (): AppSettings | null => {
+  return settingsStore?.read() ?? null
+})
+
+ipcMain.handle(
+  SETTINGS_UPDATE_CHANNEL,
+  async (_event, patch: Partial<AppSettings>): Promise<AppSettings | null> => {
+    if (settingsStore === null) return null
+    const next = await settingsStore.update(patch)
+    // Respawn so the new env lands on the sidecar. Don't block the
+    // IPC response on the full ready handshake — the renderer
+    // observes the status bus directly and surfaces the transient
+    // 'starting' / 'waiting-for-health' states via Splash.
+    void respawnSidecar()
+    return next
+  },
+)
+
 void app.whenReady().then(() => {
+  settingsStore = new SettingsStore(join(app.getPath('userData'), 'settings.json'))
+
   createWindow()
 
   app.on('activate', () => {
