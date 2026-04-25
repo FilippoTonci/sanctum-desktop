@@ -141,4 +141,62 @@ describe('useReviewStore', () => {
     expect(id1).toBe(id2)
     expect(useReviewStore.getState().detections).toHaveLength(2)
   })
+
+  it('setOperator overrides the default for one detection only', () => {
+    useReviewStore.getState().setDetections([makeDetection('a'), makeDetection('b')])
+    useReviewStore.getState().setOperator('a', 'mask')
+    expect(useReviewStore.getState().detections[0]?.operator).toBe('mask')
+    expect(useReviewStore.getState().detections[1]?.operator).toBeUndefined()
+  })
+
+  it('setCustomReplacement(id, null) clears the replacement', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    useReviewStore.getState().setCustomReplacement('a', '[REDACTED]')
+    expect(useReviewStore.getState().detections[0]?.customReplacement).toBe('[REDACTED]')
+    useReviewStore.getState().setCustomReplacement('a', null)
+    expect(useReviewStore.getState().detections[0]?.customReplacement).toBeUndefined()
+  })
+
+  it('buildCommitPayload mirrors the current store state into a server-shaped payload', () => {
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('a', { status: 'accepted' }),
+        makeDetection('b', { status: 'rejected' }),
+      ])
+    useReviewStore.getState().setOperator('a', 'mask')
+    useReviewStore.getState().setCustomReplacement('a', '[name]')
+    useReviewStore.getState().addMissed({
+      locator: { segmentId: 'body/p1/r0', start: 0, end: 4 },
+      text: 'Acme',
+    })
+
+    const payload = useReviewStore.getState().buildCommitPayload('attested')
+    expect(payload.attestation).toBe('attested')
+    expect(payload.defaultOperator).toBe('hips')
+    expect(payload.decisions).toHaveLength(3)
+
+    const proposed = payload.decisions.find((d) => d.id === 'a')
+    expect(proposed?.source).toBe('proposed')
+    expect(proposed?.operator).toBe('mask')
+    expect(proposed?.customReplacement).toBe('[name]')
+
+    const userAdded = payload.decisions.find((d) => d.id.startsWith('user:'))
+    expect(userAdded?.source).toBe('user-added')
+  })
+
+  it('openCommitPanel / closeCommitPanel toggle the panel flag', () => {
+    useReviewStore.getState().openCommitPanel()
+    expect(useReviewStore.getState().commitPanelOpen).toBe(true)
+    useReviewStore.getState().closeCommitPanel()
+    expect(useReviewStore.getState().commitPanelOpen).toBe(false)
+  })
+
+  it('startEditingReplacement records the target detection id, null clears', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    useReviewStore.getState().startEditingReplacement('a')
+    expect(useReviewStore.getState().editingReplacementId).toBe('a')
+    useReviewStore.getState().startEditingReplacement(null)
+    expect(useReviewStore.getState().editingReplacementId).toBeNull()
+  })
 })

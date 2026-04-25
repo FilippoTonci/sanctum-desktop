@@ -1,8 +1,8 @@
 import { autoUpdate, offset, shift, useFloating } from '@floating-ui/react'
-import { useEffect, useMemo, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { findSegmentRange } from '../review/segments'
 import { useReviewStore } from '../review/store'
-import type { Detection } from '../review/types'
+import { OPERATOR_NAMES, type Detection, type OperatorName } from '../review/types'
 
 interface DetectionTooltipProps {
   /** The DocxView body element; tooltip positions against ranges inside it. */
@@ -13,11 +13,31 @@ export function DetectionTooltip({ anchorRoot }: DetectionTooltipProps): ReactEl
   const focusedId = useReviewStore((s) => s.focusedId)
   const detections = useReviewStore((s) => s.detections)
   const setStatus = useReviewStore((s) => s.setStatus)
+  const setOperator = useReviewStore((s) => s.setOperator)
+  const setCustomReplacement = useReviewStore((s) => s.setCustomReplacement)
+  const defaultOperator = useReviewStore((s) => s.defaultOperator)
+  const editingReplacementId = useReviewStore((s) => s.editingReplacementId)
+  const startEditingReplacement = useReviewStore((s) => s.startEditingReplacement)
+
+  const [draftReplacement, setDraftReplacement] = useState('')
+  const editInputRef = useRef<HTMLInputElement | null>(null)
 
   const focused = useMemo(
     () => detections.find((d) => d.id === focusedId) ?? null,
     [detections, focusedId],
   )
+
+  const editing = focused !== null && editingReplacementId === focused.id
+
+  // Initialize the draft when the editor opens, and move keyboard focus
+  // into it so 'e' on the keyboard map lands on the input directly.
+  useEffect(() => {
+    if (editing) {
+      setDraftReplacement(focused.customReplacement ?? '')
+      editInputRef.current?.focus()
+      editInputRef.current?.select()
+    }
+  }, [editing, focused?.customReplacement])
 
   const virtualReference = useMemo(
     () => buildVirtualReference(anchorRoot, focused),
@@ -36,9 +56,11 @@ export function DetectionTooltip({ anchorRoot }: DetectionTooltipProps): ReactEl
 
   useEffect(() => {
     if (virtualReference !== null) update()
-  }, [update, virtualReference, focused])
+  }, [update, virtualReference, focused, editing])
 
   if (focused === null || virtualReference === null) return null
+
+  const effectiveOperator = focused.operator ?? defaultOperator
 
   return (
     <div
@@ -54,6 +76,83 @@ export function DetectionTooltip({ anchorRoot }: DetectionTooltipProps): ReactEl
         <span className="detection-tooltip-status">{focused.status}</span>
       </div>
       <p className="detection-tooltip-text">"{focused.text}"</p>
+
+      <label className="detection-tooltip-operator">
+        Operator
+        <select
+          value={effectiveOperator}
+          onChange={(e) => {
+            setOperator(focused.id, e.currentTarget.value as OperatorName)
+          }}
+        >
+          {OPERATOR_NAMES.map((op) => (
+            <option key={op} value={op}>
+              {op}
+              {op === defaultOperator && focused.operator === undefined ? ' (default)' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {editing ? (
+        <div className="detection-tooltip-edit">
+          <input
+            ref={editInputRef}
+            type="text"
+            value={draftReplacement}
+            placeholder="Custom replacement…"
+            onChange={(e) => {
+              setDraftReplacement(e.currentTarget.value)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                setCustomReplacement(
+                  focused.id,
+                  draftReplacement.length === 0 ? null : draftReplacement,
+                )
+                startEditingReplacement(null)
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                startEditingReplacement(null)
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="detection-tooltip-edit-cancel"
+            onClick={() => {
+              startEditingReplacement(null)
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : focused.customReplacement !== undefined ? (
+        <p className="detection-tooltip-replacement">
+          Replace with: <code>{focused.customReplacement}</code>
+          <button
+            type="button"
+            className="detection-tooltip-edit-start"
+            onClick={() => {
+              startEditingReplacement(focused.id)
+            }}
+          >
+            Edit
+          </button>
+        </p>
+      ) : (
+        <button
+          type="button"
+          className="detection-tooltip-edit-start"
+          onClick={() => {
+            startEditingReplacement(focused.id)
+          }}
+        >
+          Edit replacement
+        </button>
+      )}
+
       <div className="detection-tooltip-actions">
         <button
           type="button"

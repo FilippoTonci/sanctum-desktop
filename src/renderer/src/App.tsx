@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { CommitPanel } from './components/CommitPanel'
 import { DetectionSidebar } from './components/DetectionSidebar'
 import { DetectionTooltip } from './components/DetectionTooltip'
 import { DocxView } from './components/DocxView'
@@ -96,6 +97,7 @@ export function App(): ReactElement {
           <DetectionSidebar />
           <DetectionTooltip anchorRoot={docRoot} />
           <SelectModeBanner />
+          <CommitPanel />
         </div>
       ) : (
         <DropZone onFile={handleFile} />

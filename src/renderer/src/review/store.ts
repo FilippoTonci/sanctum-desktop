@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { SegmentLocator } from './segments'
-import type { Detection, DetectionStatus } from './types'
+import type { Detection, DetectionStatus, OperatorName } from './types'
 
 interface StatusEdit {
   readonly id: string
@@ -10,6 +10,31 @@ interface StatusEdit {
 export interface MissedSpan {
   readonly locator: SegmentLocator
   readonly text: string
+}
+
+/**
+ * The shape that lands in the commit panel. Mirrors what the slice 8 /
+ * WS5 wiring will POST to `/review-sessions/{id}/commit` once the
+ * server-owned ReviewSession contract lands. Each entry is one decision
+ * the backend's anonymizer will execute.
+ */
+export interface CommitDecision {
+  readonly id: string
+  readonly segmentId: string
+  readonly start: number
+  readonly end: number
+  readonly text: string
+  readonly entityType: string
+  readonly status: DetectionStatus
+  readonly operator?: OperatorName
+  readonly customReplacement?: string
+  readonly source: 'proposed' | 'user-added'
+}
+
+export interface CommitPayload {
+  readonly defaultOperator: OperatorName
+  readonly decisions: readonly CommitDecision[]
+  readonly attestation: string
 }
 
 /**
@@ -29,6 +54,8 @@ export interface ReviewState {
   readonly focusedId: string | null
   readonly undoStack: readonly StatusEdit[]
   readonly selectMode: boolean
+  readonly defaultOperator: OperatorName
+  readonly commitPanelOpen: boolean
 
   setDetections: (detections: readonly Detection[]) => void
   clear: () => void
@@ -41,6 +68,16 @@ export interface ReviewState {
   enterSelectMode: () => void
   exitSelectMode: () => void
   addMissed: (span: MissedSpan) => string
+
+  setOperator: (id: string, operator: OperatorName) => void
+  setCustomReplacement: (id: string, replacement: string | null) => void
+  setDefaultOperator: (operator: OperatorName) => void
+  startEditingReplacement: (id: string | null) => void
+  readonly editingReplacementId: string | null
+
+  openCommitPanel: () => void
+  closeCommitPanel: () => void
+  buildCommitPayload: (attestation: string) => CommitPayload
 }
 
 export const useReviewStore = create<ReviewState>((set, get) => ({
@@ -48,6 +85,9 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   focusedId: null,
   undoStack: [],
   selectMode: false,
+  defaultOperator: 'hips',
+  commitPanelOpen: false,
+  editingReplacementId: null,
 
   setDetections: (detections) => {
     set({
@@ -55,11 +95,20 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       focusedId: detections[0]?.id ?? null,
       undoStack: [],
       selectMode: false,
+      commitPanelOpen: false,
+      editingReplacementId: null,
     })
   },
 
   clear: () => {
-    set({ detections: [], focusedId: null, undoStack: [], selectMode: false })
+    set({
+      detections: [],
+      focusedId: null,
+      undoStack: [],
+      selectMode: false,
+      commitPanelOpen: false,
+      editingReplacementId: null,
+    })
   },
 
   setStatus: (id, status) => {
@@ -141,5 +190,56 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       }
     })
     return id
+  },
+
+  setOperator: (id, operator) => {
+    set((state) => ({
+      detections: state.detections.map((d) => (d.id === id ? { ...d, operator } : d)),
+    }))
+  },
+
+  setCustomReplacement: (id, replacement) => {
+    set((state) => ({
+      detections: state.detections.map((d) =>
+        d.id === id ? { ...d, customReplacement: replacement ?? undefined } : d,
+      ),
+    }))
+  },
+
+  setDefaultOperator: (operator) => {
+    set({ defaultOperator: operator })
+  },
+
+  startEditingReplacement: (id) => {
+    set({ editingReplacementId: id })
+  },
+
+  openCommitPanel: () => {
+    set({ commitPanelOpen: true })
+  },
+
+  closeCommitPanel: () => {
+    set({ commitPanelOpen: false })
+  },
+
+  buildCommitPayload: (attestation) => {
+    const state = get()
+    const decisions: CommitDecision[] = state.detections.map((d) => ({
+      id: d.id,
+      segmentId: d.segmentId,
+      start: d.start,
+      end: d.end,
+      text: d.text,
+      entityType: d.entityType,
+      status: d.status,
+      operator: d.operator,
+      customReplacement: d.customReplacement,
+      source: d.id.startsWith('user:') ? 'user-added' : 'proposed',
+    }))
+    return {
+      defaultOperator: state.defaultOperator,
+      decisions,
+      attestation,
+    }
   },
 }))

@@ -15,6 +15,24 @@
  */
 export type DetectionStatus = 'pending' | 'accepted' | 'rejected'
 
+/**
+ * Anonymization operator names — mirrors the backend's
+ * `BUILTIN_OPERATOR_NAMES` (sanctum/anonymizer/operators.py). The UI
+ * never invokes these directly; the reviewer's choice is shipped as a
+ * string field of the commit payload and the backend's anonymizer
+ * resolves it.
+ */
+export type OperatorName = 'hips' | 'replace' | 'redact' | 'mask' | 'encrypt' | 'pseudonymize'
+
+export const OPERATOR_NAMES: readonly OperatorName[] = [
+  'hips',
+  'replace',
+  'redact',
+  'mask',
+  'encrypt',
+  'pseudonymize',
+]
+
 export interface Detection {
   /** Stable id; mirrors ReviewProposal.detection_id once wired. */
   readonly id: string
@@ -30,4 +48,8 @@ export interface Detection {
   readonly entityType: string
   /** Reviewer verdict; defaults to 'pending' when unset by the user. */
   readonly status: DetectionStatus
+  /** Per-detection operator override. Falls back to session default. */
+  readonly operator?: OperatorName
+  /** Reviewer-provided literal replacement; wins over operator when set. */
+  readonly customReplacement?: string
 }

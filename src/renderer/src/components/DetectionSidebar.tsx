@@ -12,8 +12,10 @@ export function DetectionSidebar(): ReactElement {
   const detections = useReviewStore((s) => s.detections)
   const focusedId = useReviewStore((s) => s.focusedId)
   const setFocused = useReviewStore((s) => s.setFocused)
+  const openCommit = useReviewStore((s) => s.openCommitPanel)
 
   const counts = aggregate(detections)
+  const canCommit = detections.length > 0 && counts.pending === 0
 
   return (
     <aside className="detection-sidebar" aria-label="Detection list">
@@ -55,6 +57,21 @@ export function DetectionSidebar(): ReactElement {
           ))}
         </ul>
       )}
+      <footer className="sidebar-footer">
+        <button
+          type="button"
+          className="sidebar-commit"
+          disabled={!canCommit}
+          onClick={openCommit}
+          title={
+            canCommit
+              ? 'Open commit panel (Ctrl/Cmd + Enter)'
+              : 'Resolve every pending detection before committing'
+          }
+        >
+          Commit…
+        </button>
+      </footer>
     </aside>
   )
 }

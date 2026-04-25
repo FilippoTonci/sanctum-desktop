@@ -149,6 +149,18 @@ describe('dispatchKey', () => {
     expect(dispatchKey('Enter', useReviewStore.getState(), root)).toBe(false)
     expect(useReviewStore.getState().selectMode).toBe(true)
   })
+
+  it('e opens the replacement editor on the focused detection', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    expect(dispatchKey('e', useReviewStore.getState())).toBe(true)
+    expect(useReviewStore.getState().editingReplacementId).toBe('a')
+  })
+
+  it('e is a no-op with no focused detection', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    useReviewStore.getState().setFocused(null)
+    expect(dispatchKey('e', useReviewStore.getState())).toBe(false)
+  })
 })
 
 describe('isInputFocused', () => {

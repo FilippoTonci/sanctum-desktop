@@ -19,7 +19,22 @@ export function useReviewKeyboard(enabled: boolean, docRoot: HTMLElement | null)
 
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.defaultPrevented) return
-      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (event.altKey) return
+
+      // Ctrl/Cmd-Enter is the explicit commit shortcut. Routed before the
+      // input-suspension check so it works even from within the operator
+      // <select>; lots of users keep their hands on the keyboard during
+      // review and would otherwise have to mouse-click out before
+      // submitting.
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        useReviewStore.getState().openCommitPanel()
+        event.preventDefault()
+        return
+      }
+
+      // Other modifier combos pass through unchanged so browser shortcuts
+      // (Cmd+R, Cmd+W, …) keep working.
+      if (event.metaKey || event.ctrlKey) return
       if (isInputFocused(event.target)) return
 
       const handled = dispatchKey(event.key, useReviewStore.getState(), docRoot)
@@ -83,6 +98,10 @@ export function dispatchKey(
       return true
     case 'm':
       store.enterSelectMode()
+      return true
+    case 'e':
+      if (store.focusedId === null) return false
+      store.startEditingReplacement(store.focusedId)
       return true
     case 'Escape':
       if (store.focusedId === null) return false
