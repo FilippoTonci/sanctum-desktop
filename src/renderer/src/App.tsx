@@ -5,6 +5,7 @@ import { DocxView } from './components/DocxView'
 import { DropZone } from './components/DropZone'
 import { Splash } from './components/Splash'
 import { seedFakeDetections } from './review/fake-detections'
+import { useReviewKeyboard } from './review/keyboard'
 import { useReviewStore } from './review/store'
 import type { SanctumStatus } from './sanctum'
 
@@ -50,6 +51,8 @@ export function App(): ReactElement {
 
   const reviewMode = doc !== null
   const showBackendStatus = status.state !== 'ready'
+
+  useReviewKeyboard(reviewMode)
 
   const handleFile = useCallback(
     (file: File) => {

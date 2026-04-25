@@ -73,4 +73,34 @@ describe('useReviewStore', () => {
     useReviewStore.getState().setFocused(null)
     expect(useReviewStore.getState().focusedId).toBeNull()
   })
+
+  it('undoLastDecision reverses verdicts in LIFO order', () => {
+    useReviewStore.getState().setDetections([makeDetection('a'), makeDetection('b')])
+    useReviewStore.getState().setStatus('a', 'accepted')
+    useReviewStore.getState().setStatus('b', 'rejected')
+    useReviewStore.getState().undoLastDecision()
+    expect(useReviewStore.getState().detections[1]?.status).toBe('pending')
+    expect(useReviewStore.getState().detections[0]?.status).toBe('accepted')
+    useReviewStore.getState().undoLastDecision()
+    expect(useReviewStore.getState().detections[0]?.status).toBe('pending')
+  })
+
+  it('undoLastDecision is a no-op when the stack is empty', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    useReviewStore.getState().undoLastDecision()
+    expect(useReviewStore.getState().detections[0]?.status).toBe('pending')
+  })
+
+  it('setStatus does not push an edit when the status is unchanged', () => {
+    useReviewStore.getState().setDetections([makeDetection('a', { status: 'accepted' })])
+    useReviewStore.getState().setStatus('a', 'accepted')
+    expect(useReviewStore.getState().undoStack).toHaveLength(0)
+  })
+
+  it('setDetections clears the undo stack so it cannot leak across documents', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    useReviewStore.getState().setStatus('a', 'accepted')
+    useReviewStore.getState().setDetections([makeDetection('b')])
+    expect(useReviewStore.getState().undoStack).toHaveLength(0)
+  })
 })

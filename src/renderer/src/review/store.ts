@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import type { Detection, DetectionStatus } from './types'
 
+interface StatusEdit {
+  readonly id: string
+  readonly previous: DetectionStatus
+}
+
 /**
  * Single source of truth for the review session: the detections, the
  * reviewer's verdicts, and which one is focused. Components subscribe
@@ -16,6 +21,7 @@ import type { Detection, DetectionStatus } from './types'
 export interface ReviewState {
   readonly detections: readonly Detection[]
   readonly focusedId: string | null
+  readonly undoStack: readonly StatusEdit[]
 
   setDetections: (detections: readonly Detection[]) => void
   clear: () => void
@@ -23,27 +29,35 @@ export interface ReviewState {
   setFocused: (id: string | null) => void
   focusNext: () => void
   focusPrev: () => void
+  undoLastDecision: () => void
 }
 
 export const useReviewStore = create<ReviewState>((set, get) => ({
   detections: [],
   focusedId: null,
+  undoStack: [],
 
   setDetections: (detections) => {
     set({
       detections,
       focusedId: detections[0]?.id ?? null,
+      undoStack: [],
     })
   },
 
   clear: () => {
-    set({ detections: [], focusedId: null })
+    set({ detections: [], focusedId: null, undoStack: [] })
   },
 
   setStatus: (id, status) => {
-    set((state) => ({
-      detections: state.detections.map((d) => (d.id === id ? { ...d, status } : d)),
-    }))
+    set((state) => {
+      const target = state.detections.find((d) => d.id === id)
+      if (target === undefined || target.status === status) return state
+      return {
+        detections: state.detections.map((d) => (d.id === id ? { ...d, status } : d)),
+        undoStack: [...state.undoStack, { id, previous: target.status }],
+      }
+    })
   },
 
   setFocused: (id) => {
@@ -67,5 +81,19 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         ? detections.length - 1
         : (currentIdx - 1 + detections.length) % detections.length
     set({ focusedId: detections[prevIdx]?.id ?? null })
+  },
+
+  undoLastDecision: () => {
+    set((state) => {
+      const last = state.undoStack[state.undoStack.length - 1]
+      if (last === undefined) return state
+      return {
+        detections: state.detections.map((d) =>
+          d.id === last.id ? { ...d, status: last.previous } : d,
+        ),
+        undoStack: state.undoStack.slice(0, -1),
+        focusedId: last.id,
+      }
+    })
   },
 }))
