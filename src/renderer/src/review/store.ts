@@ -61,7 +61,15 @@ export interface ReviewState {
 
   setDetections: (detections: readonly Detection[]) => void
   setSessionId: (id: string | null) => void
+  /** Append a single detection (used by the synced addMissed flow). */
+  appendDetection: (detection: Detection) => void
+  /** Remove a single detection (used by reject-on-user-added DELETE). */
+  removeDetection: (id: string) => void
   clear: () => void
+
+  /** Last error from the backend-sync layer; null when clear. */
+  readonly lastSyncError: string | null
+  setLastSyncError: (message: string | null) => void
   setStatus: (id: string, status: DetectionStatus) => void
   setFocused: (id: string | null) => void
   focusNext: () => void
@@ -92,6 +100,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   commitPanelOpen: false,
   editingReplacementId: null,
   sessionId: null,
+  lastSyncError: null,
 
   setDetections: (detections) => {
     set({
@@ -108,6 +117,31 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     set({ sessionId: id })
   },
 
+  appendDetection: (detection) => {
+    set((state) => {
+      if (state.detections.some((d) => d.id === detection.id)) {
+        return { focusedId: detection.id }
+      }
+      return {
+        detections: [...state.detections, detection],
+        focusedId: detection.id,
+      }
+    })
+  },
+
+  removeDetection: (id) => {
+    set((state) => ({
+      detections: state.detections.filter((d) => d.id !== id),
+      focusedId: state.focusedId === id ? null : state.focusedId,
+      undoStack: state.undoStack.filter((edit) => edit.id !== id),
+      editingReplacementId: state.editingReplacementId === id ? null : state.editingReplacementId,
+    }))
+  },
+
+  setLastSyncError: (message) => {
+    set({ lastSyncError: message })
+  },
+
   clear: () => {
     set({
       detections: [],
@@ -117,6 +151,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       commitPanelOpen: false,
       editingReplacementId: null,
       sessionId: null,
+      lastSyncError: null,
     })
   },
 

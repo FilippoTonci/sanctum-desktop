@@ -14,6 +14,8 @@ import { sessionToDetections } from './review/from-session'
 import { useReviewKeyboard } from './review/keyboard'
 import { useReviewStore } from './review/store'
 import { OPERATOR_NAMES, type OperatorName } from './review/types'
+import { localActions, syncedActions, type ReviewActions } from './review/actions'
+import { ReviewActionsProvider } from './review/use-actions'
 import type { SanctumStatus } from './sanctum'
 
 type AnalysisState =
@@ -68,12 +70,22 @@ export function App(): ReactElement {
   const reviewMode = doc !== null
   const showBackendStatus = status.state !== 'ready'
 
-  useReviewKeyboard(reviewMode, docRoot)
-
   const sessionsClient = useMemo(() => {
     if (status.state !== 'ready') return null
     return clientFromCredentials({ baseUrl: status.baseUrl, token: status.token })
   }, [status])
+
+  // Keyboard handler reaches actions through the same factory the
+  // ReviewActionsProvider uses below — kept in sync via a shared
+  // memo so we never accidentally drift between "what the buttons
+  // do" (provider) and "what the keys do" (this hook).
+  const sessionId = useReviewStore((s) => s.sessionId)
+  const reviewActions = useMemo<ReviewActions>(() => {
+    if (sessionsClient === null || sessionId === null) return localActions
+    return syncedActions({ client: sessionsClient, sessionId })
+  }, [sessionsClient, sessionId])
+
+  useReviewKeyboard(reviewMode, docRoot, reviewActions)
 
   const handleFile = useCallback(
     (file: File) => {
@@ -159,20 +171,23 @@ export function App(): ReactElement {
       </header>
       {showBackendStatus ? <Splash status={status} /> : null}
       {reviewMode ? (
-        <div className="review-layout">
-          <DocxView
-            file={doc}
-            onClose={handleClose}
-            detections={detections}
-            focusedId={focusedId}
-            onRendered={handleRendered}
-          />
-          <DetectionSidebar />
-          <DetectionTooltip anchorRoot={docRoot} />
-          <SelectModeBanner />
-          <CommitPanel />
-          <AnalysisBanner state={analysis} />
-        </div>
+        <ReviewActionsProvider client={sessionsClient} sessionId={sessionId}>
+          <div className="review-layout">
+            <DocxView
+              file={doc}
+              onClose={handleClose}
+              detections={detections}
+              focusedId={focusedId}
+              onRendered={handleRendered}
+            />
+            <DetectionSidebar />
+            <DetectionTooltip anchorRoot={docRoot} />
+            <SelectModeBanner />
+            <CommitPanel />
+            <AnalysisBanner state={analysis} />
+            <SyncErrorToast />
+          </div>
+        </ReviewActionsProvider>
       ) : (
         <div className="landing">
           <RecentSessions client={sessionsClient} onResume={handleResume} />
@@ -228,4 +243,24 @@ function AnalysisBanner({ state }: { readonly state: AnalysisState }): ReactElem
 
 function isOperatorName(value: string): value is OperatorName {
   return (OPERATOR_NAMES as readonly string[]).includes(value)
+}
+
+function SyncErrorToast(): ReactElement | null {
+  const lastSyncError = useReviewStore((s) => s.lastSyncError)
+  const setLastSyncError = useReviewStore((s) => s.setLastSyncError)
+  if (lastSyncError === null) return null
+  return (
+    <div className="sync-error-toast" role="alert">
+      <span>Backend sync error: {lastSyncError}</span>
+      <button
+        type="button"
+        className="sync-error-toast-dismiss"
+        onClick={() => {
+          setLastSyncError(null)
+        }}
+      >
+        Dismiss
+      </button>
+    </div>
+  )
 }

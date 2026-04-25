@@ -83,6 +83,29 @@ export interface CreateReviewSessionRequest {
   readonly score_threshold?: number | null
 }
 
+export interface PatchProposalDecisionRequest {
+  readonly status: ProposalDecisionStatus
+  readonly operator?: string | null
+  readonly operator_params?: Record<string, unknown> | null
+  readonly custom_replacement?: string | null
+}
+
+export interface AddUserAddedDecisionRequest {
+  readonly segment_anchor: string
+  readonly entity_type: string
+  readonly original: string
+  readonly start: number
+  readonly end: number
+  readonly operator?: string | null
+  readonly operator_params?: Record<string, unknown> | null
+  readonly custom_replacement?: string | null
+}
+
+export interface DecisionWithPreviewResponse {
+  readonly decision: SessionDecision
+  readonly preview: string
+}
+
 export interface ReviewSessionResponse {
   readonly id: string
   readonly source_path: string

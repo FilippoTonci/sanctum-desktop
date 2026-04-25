@@ -20,8 +20,11 @@
 
 import {
   ApiError,
+  type AddUserAddedDecisionRequest,
   type ApiErrorBody,
   type CreateReviewSessionRequest,
+  type DecisionWithPreviewResponse,
+  type PatchProposalDecisionRequest,
   type ReviewSessionListResponse,
   type ReviewSessionResponse,
 } from './types'
@@ -33,6 +36,18 @@ export interface SessionsClient {
     signal?: AbortSignal,
   ): Promise<ReviewSessionResponse>
   getSession(id: string, signal?: AbortSignal): Promise<ReviewSessionResponse>
+  patchDecision(
+    sessionId: string,
+    proposalId: string,
+    body: PatchProposalDecisionRequest,
+    signal?: AbortSignal,
+  ): Promise<DecisionWithPreviewResponse>
+  addUserAdded(
+    sessionId: string,
+    body: AddUserAddedDecisionRequest,
+    signal?: AbortSignal,
+  ): Promise<DecisionWithPreviewResponse>
+  deleteUserAdded(sessionId: string, uaId: string, signal?: AbortSignal): Promise<void>
 }
 
 interface ClientOptions {
@@ -98,6 +113,51 @@ export function createSessionsClient(opts: ClientOptions): SessionsClient {
         signal,
       })
       return (await handle(response)) as ReviewSessionResponse
+    },
+
+    async patchDecision(sessionId, proposalId, body, signal) {
+      const response = await fetchImpl(
+        url(
+          `/review-sessions/${encodeURIComponent(sessionId)}/decisions/${encodeURIComponent(proposalId)}`,
+        ),
+        {
+          method: 'PATCH',
+          headers: { ...headers(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal,
+        },
+      )
+      return (await handle(response)) as DecisionWithPreviewResponse
+    },
+
+    async addUserAdded(sessionId, body, signal) {
+      const response = await fetchImpl(
+        url(`/review-sessions/${encodeURIComponent(sessionId)}/decisions/user-added`),
+        {
+          method: 'POST',
+          headers: { ...headers(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal,
+        },
+      )
+      return (await handle(response)) as DecisionWithPreviewResponse
+    },
+
+    async deleteUserAdded(sessionId, uaId, signal) {
+      const response = await fetchImpl(
+        url(
+          `/review-sessions/${encodeURIComponent(sessionId)}/decisions/user-added/${encodeURIComponent(uaId)}`,
+        ),
+        {
+          method: 'DELETE',
+          headers: headers(),
+          signal,
+        },
+      )
+      if (!response.ok) {
+        // 204 returns ok=true; only fail-paths reach here.
+        await handle(response)
+      }
     },
   }
 }

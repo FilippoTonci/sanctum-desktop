@@ -199,4 +199,34 @@ describe('useReviewStore', () => {
     useReviewStore.getState().startEditingReplacement(null)
     expect(useReviewStore.getState().editingReplacementId).toBeNull()
   })
+
+  it('appendDetection adds + focuses; deduplicates by id', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    useReviewStore.getState().appendDetection(makeDetection('b'))
+    expect(useReviewStore.getState().detections).toHaveLength(2)
+    expect(useReviewStore.getState().focusedId).toBe('b')
+
+    // Re-appending the same id is a focus-only refocus.
+    useReviewStore.getState().setFocused('a')
+    useReviewStore.getState().appendDetection(makeDetection('b'))
+    expect(useReviewStore.getState().detections).toHaveLength(2)
+    expect(useReviewStore.getState().focusedId).toBe('b')
+  })
+
+  it('removeDetection clears focus + undo entries that referenced the id', () => {
+    useReviewStore.getState().setDetections([makeDetection('a'), makeDetection('b')])
+    useReviewStore.getState().setStatus('a', 'accepted')
+    useReviewStore.getState().setFocused('a')
+    useReviewStore.getState().removeDetection('a')
+    expect(useReviewStore.getState().detections.map((d) => d.id)).toEqual(['b'])
+    expect(useReviewStore.getState().focusedId).toBeNull()
+    expect(useReviewStore.getState().undoStack).toHaveLength(0)
+  })
+
+  it('setLastSyncError stores and clears the error slot', () => {
+    useReviewStore.getState().setLastSyncError('something broke')
+    expect(useReviewStore.getState().lastSyncError).toBe('something broke')
+    useReviewStore.getState().setLastSyncError(null)
+    expect(useReviewStore.getState().lastSyncError).toBeNull()
+  })
 })

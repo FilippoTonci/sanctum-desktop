@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
+import { localActions, type ReviewActions } from './actions'
 import { rangeToLocator } from './segments'
 import { useReviewStore, type ReviewState } from './store'
 
@@ -13,7 +14,17 @@ import { useReviewStore, type ReviewState } from './store'
  * slice. `e` (edit replacement) and `m` (mark missed) wait for slices
  * 7 and 8 — adding them later just means another case in `dispatchKey`.
  */
-export function useReviewKeyboard(enabled: boolean, docRoot: HTMLElement | null): void {
+export function useReviewKeyboard(
+  enabled: boolean,
+  docRoot: HTMLElement | null,
+  actions: ReviewActions,
+): void {
+  // Ref so the listener always reads the freshest actions without
+  // re-attaching itself on every render — useful because actions
+  // re-build every time the synced session id changes.
+  const actionsRef = useRef(actions)
+  actionsRef.current = actions
+
   useEffect(() => {
     if (!enabled) return undefined
 
@@ -37,7 +48,7 @@ export function useReviewKeyboard(enabled: boolean, docRoot: HTMLElement | null)
       if (event.metaKey || event.ctrlKey) return
       if (isInputFocused(event.target)) return
 
-      const handled = dispatchKey(event.key, useReviewStore.getState(), docRoot)
+      const handled = dispatchKey(event.key, useReviewStore.getState(), docRoot, actionsRef.current)
       if (handled) event.preventDefault()
     }
 
@@ -59,6 +70,7 @@ export function dispatchKey(
   key: string,
   store: ReviewState,
   docRoot: HTMLElement | null = null,
+  actions: ReviewActions = localActions,
 ): boolean {
   // While select-mode is active, the only bindings are Enter (commit
   // the selection) and Escape (cancel). Everything else passes through
@@ -67,7 +79,7 @@ export function dispatchKey(
     if (key === 'Enter') {
       const span = readSelection(docRoot)
       if (span === null) return false
-      store.addMissed(span)
+      actions.addMissed(span)
       return true
     }
     if (key === 'Escape') {
@@ -86,15 +98,15 @@ export function dispatchKey(
       return true
     case 'a':
       if (store.focusedId === null) return false
-      store.setStatus(store.focusedId, 'accepted')
+      actions.accept(store.focusedId)
       return true
     case 'r':
       if (store.focusedId === null) return false
-      store.setStatus(store.focusedId, 'rejected')
+      actions.reject(store.focusedId)
       return true
     case 'u':
       if (store.undoStack.length === 0) return false
-      store.undoLastDecision()
+      actions.undoLastDecision()
       return true
     case 'm':
       store.enterSelectMode()
