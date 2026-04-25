@@ -229,4 +229,23 @@ describe('useReviewStore', () => {
     useReviewStore.getState().setLastSyncError(null)
     expect(useReviewStore.getState().lastSyncError).toBeNull()
   })
+
+  it('setPreviews replaces the whole map; setPreview merges one entry', () => {
+    useReviewStore.getState().setPreviews({ a: '<A>', b: '<B>' })
+    expect(useReviewStore.getState().previews).toEqual({ a: '<A>', b: '<B>' })
+    useReviewStore.getState().setPreview('c', '<C>')
+    expect(useReviewStore.getState().previews).toEqual({ a: '<A>', b: '<B>', c: '<C>' })
+  })
+
+  it('clearPreview removes a single key without disturbing siblings', () => {
+    useReviewStore.getState().setPreviews({ a: '<A>', b: '<B>' })
+    useReviewStore.getState().clearPreview('a')
+    expect(useReviewStore.getState().previews).toEqual({ b: '<B>' })
+  })
+
+  it('clear() empties the previews map alongside other state', () => {
+    useReviewStore.getState().setPreviews({ a: '<A>' })
+    useReviewStore.getState().clear()
+    expect(useReviewStore.getState().previews).toEqual({})
+  })
 })

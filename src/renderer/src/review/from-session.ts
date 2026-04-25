@@ -105,3 +105,24 @@ function knownOperator(value: string | null | undefined): OperatorName | undefin
   if (value === null || value === undefined) return undefined
   return (OPERATOR_NAMES as readonly string[]).includes(value) ? (value as OperatorName) : undefined
 }
+
+/**
+ * Project the session response's `previews` map onto the renderer's
+ * Detection.id key space. The wire keys are either a proposal's
+ * `detection_id` (used verbatim) or a user-added decision's `id` (which
+ * the renderer prefixes with `user:` to keep the user-added namespace
+ * disjoint from proposal ids — see `sessionToDetections`).
+ */
+export function previewsForStore(session: ReviewSessionResponse): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const proposal of session.proposals) {
+    const preview = session.previews[proposal.detection_id]
+    if (preview !== undefined) out[proposal.detection_id] = preview
+  }
+  for (const decision of session.decisions) {
+    if (decision.kind !== 'user_added') continue
+    const preview = session.previews[decision.id]
+    if (preview !== undefined) out[`user:${decision.id}`] = preview
+  }
+  return out
+}

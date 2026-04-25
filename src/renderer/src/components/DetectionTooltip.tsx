@@ -76,10 +76,15 @@ export function DetectionTooltip({ anchorRoot }: DetectionTooltipProps): ReactEl
       </div>
       <p className="detection-tooltip-text">"{focused.text}"</p>
 
-      <label className="detection-tooltip-operator">
+      <label
+        className={`detection-tooltip-operator${
+          focused.customReplacement !== undefined ? ' detection-tooltip-operator-bypassed' : ''
+        }`}
+      >
         Operator
         <select
           value={effectiveOperator}
+          disabled={focused.customReplacement !== undefined}
           onChange={(e) => {
             actions.setOperator(focused.id, e.currentTarget.value as OperatorName)
           }}
@@ -91,6 +96,11 @@ export function DetectionTooltip({ anchorRoot }: DetectionTooltipProps): ReactEl
             </option>
           ))}
         </select>
+        {focused.customReplacement !== undefined ? (
+          <span className="detection-tooltip-operator-hint">
+            Bypassed by custom replacement below.
+          </span>
+        ) : null}
       </label>
 
       {editing ? (

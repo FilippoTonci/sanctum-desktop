@@ -290,6 +290,35 @@ body {
   background: rgba(255, 255, 255, 0.15);
 }
 
+.preview-bubble {
+  position: absolute;
+  z-index: 25;
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: baseline;
+  background: rgba(45, 138, 63, 0.9);
+  color: white;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-style: italic;
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.preview-bubble-arrow {
+  font-style: normal;
+  opacity: 0.85;
+}
+
+.preview-bubble-text {
+  font-style: italic;
+}
+
 .drop-zone {
   border: 2px dashed rgba(127, 127, 127, 0.4);
   border-radius: 12px;
@@ -701,6 +730,24 @@ body {
   text-transform: none;
   letter-spacing: normal;
   font-family: inherit;
+}
+
+.detection-tooltip-operator select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.detection-tooltip-operator-bypassed {
+  opacity: 0.75;
+}
+
+.detection-tooltip-operator-hint {
+  font-size: 0.7rem;
+  text-transform: none;
+  letter-spacing: normal;
+  font-style: italic;
+  color: #b87c00;
+  margin-top: 0.15rem;
 }
 
 .detection-tooltip-edit {

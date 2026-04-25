@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest'
-import { sessionToDetections } from '../../../src/renderer/src/review/from-session'
+import {
+  previewsForStore,
+  sessionToDetections,
+} from '../../../src/renderer/src/review/from-session'
 import type { ReviewSessionResponse } from '../../../src/renderer/src/api/types'
 
 function makeSession(overrides: Partial<ReviewSessionResponse> = {}): ReviewSessionResponse {
@@ -186,5 +189,67 @@ describe('sessionToDetections', () => {
       }),
     )
     expect(out.map((d) => d.id)).toEqual(['p2', 'p1', 'user:u-z', 'user:u-a'])
+  })
+})
+
+describe('previewsForStore', () => {
+  it('keys proposal previews by detection_id verbatim', () => {
+    const out = previewsForStore(
+      makeSession({
+        proposals: [
+          {
+            detection_id: 'det-1',
+            entity_type: 'PERSON',
+            score: 1,
+            original: 'Alice',
+            segment_anchor: 's',
+            start: 0,
+            end: 5,
+          },
+        ],
+        previews: { 'det-1': '<PERSON>' },
+      }),
+    )
+    expect(out).toEqual({ 'det-1': '<PERSON>' })
+  })
+
+  it('prefixes user-added preview keys with user: to match Detection.id', () => {
+    const out = previewsForStore(
+      makeSession({
+        decisions: [
+          {
+            kind: 'user_added',
+            id: 'ua-uuid',
+            segment_anchor: 's',
+            entity_type: 'PERSON',
+            original: 'Smith',
+            start: 0,
+            end: 5,
+          },
+        ],
+        previews: { 'ua-uuid': '[CUSTOM]' },
+      }),
+    )
+    expect(out).toEqual({ 'user:ua-uuid': '[CUSTOM]' })
+  })
+
+  it('skips proposals + user-added without a preview entry', () => {
+    const out = previewsForStore(
+      makeSession({
+        proposals: [
+          {
+            detection_id: 'det-1',
+            entity_type: 'X',
+            score: 1,
+            original: 'a',
+            segment_anchor: 's',
+            start: 0,
+            end: 1,
+          },
+        ],
+        previews: {},
+      }),
+    )
+    expect(out).toEqual({})
   })
 })

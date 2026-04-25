@@ -22,7 +22,7 @@
  */
 
 import type { SessionsClient } from '../api/sessions'
-import { ApiError } from '../api/types'
+import { ApiError, type DecisionWithPreviewResponse } from '../api/types'
 import { useReviewStore } from './store'
 import type { Detection, OperatorName } from './types'
 import type { MissedSpan } from './store'
@@ -107,7 +107,7 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       operator: OperatorName | null
       customReplacement: string | null
     }>,
-  ): Promise<unknown> => {
+  ): Promise<DecisionWithPreviewResponse> => {
     const status: 'accept' | 'reject' =
       overrides.status ??
       (detection.status === 'accepted'
@@ -127,6 +127,10 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
     })
   }
 
+  const recordPreview = (id: string, response: DecisionWithPreviewResponse): void => {
+    useReviewStore.getState().setPreview(id, response.preview)
+  }
+
   return {
     accept(id) {
       const detection = detectionById(id)
@@ -144,7 +148,8 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
 
       void (async () => {
         try {
-          await patchProposal(detection, { status: 'accept' })
+          const response = await patchProposal(detection, { status: 'accept' })
+          recordPreview(id, response)
         } catch (err) {
           useReviewStore.getState().setStatus(id, previous)
           reportError('accept', err)
@@ -166,6 +171,7 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
           try {
             await client.deleteUserAdded(sessionId, uaId)
             useReviewStore.getState().removeDetection(id)
+            useReviewStore.getState().clearPreview(id)
           } catch (err) {
             useReviewStore.getState().setStatus(id, previous)
             reportError('reject (user-added)', err)
@@ -176,7 +182,8 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
 
       void (async () => {
         try {
-          await patchProposal(detection, { status: 'reject' })
+          const response = await patchProposal(detection, { status: 'reject' })
+          recordPreview(id, response)
         } catch (err) {
           useReviewStore.getState().setStatus(id, previous)
           reportError('reject', err)
@@ -198,7 +205,8 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
 
       void (async () => {
         try {
-          await patchProposal(detection, { operator })
+          const response = await patchProposal(detection, { operator })
+          recordPreview(id, response)
         } catch (err) {
           if (previous === undefined) {
             // Roll back by clearing the operator (back to default).
@@ -231,7 +239,8 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
 
       void (async () => {
         try {
-          await patchProposal(detection, { customReplacement: replacement })
+          const response = await patchProposal(detection, { customReplacement: replacement })
+          recordPreview(id, response)
         } catch (err) {
           useReviewStore.getState().setCustomReplacement(id, previous)
           reportError('setCustomReplacement', err)
@@ -258,8 +267,9 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
           })
           if (response.decision.kind !== 'user_added') return
           const ua = response.decision
+          const detectionId = `user:${ua.id}`
           useReviewStore.getState().appendDetection({
-            id: `user:${ua.id}`,
+            id: detectionId,
             segmentId: ua.segment_anchor,
             start: ua.start,
             end: ua.end,
@@ -267,6 +277,7 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
             entityType: 'USER_ADDED',
             status: 'accepted',
           })
+          useReviewStore.getState().setPreview(detectionId, response.preview)
         } catch (err) {
           reportError('addMissed', err)
         }
@@ -294,9 +305,10 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       const reverted: Detection = { ...detection, status: last.previous }
       void (async () => {
         try {
-          await patchProposal(reverted, {
+          const response = await patchProposal(reverted, {
             status: last.previous === 'accepted' ? 'accept' : 'reject',
           })
+          recordPreview(last.id, response)
         } catch (err) {
           // Re-apply the change we just undid by re-pushing it onto the
           // undo stack semantics: forcibly set status back to what the

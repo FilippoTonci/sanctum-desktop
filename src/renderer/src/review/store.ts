@@ -70,6 +70,18 @@ export interface ReviewState {
   /** Last error from the backend-sync layer; null when clear. */
   readonly lastSyncError: string | null
   setLastSyncError: (message: string | null) => void
+
+  /**
+   * Per-detection-id preview text — what the operator would replace
+   * the detection with. Computed server-side and shipped on every
+   * session GET and every decision-touching PATCH/POST. Keys are the
+   * renderer's Detection.id (i.e. `user:<ua_id>` for user-added,
+   * raw `detection_id` for proposals).
+   */
+  readonly previews: Readonly<Record<string, string>>
+  setPreviews: (map: Record<string, string>) => void
+  setPreview: (id: string, preview: string) => void
+  clearPreview: (id: string) => void
   setStatus: (id: string, status: DetectionStatus) => void
   setFocused: (id: string | null) => void
   focusNext: () => void
@@ -101,6 +113,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   editingReplacementId: null,
   sessionId: null,
   lastSyncError: null,
+  previews: {},
 
   setDetections: (detections) => {
     set({
@@ -142,6 +155,25 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     set({ lastSyncError: message })
   },
 
+  setPreviews: (map) => {
+    set({ previews: { ...map } })
+  },
+
+  setPreview: (id, preview) => {
+    set((state) => ({ previews: { ...state.previews, [id]: preview } }))
+  },
+
+  clearPreview: (id) => {
+    set((state) => {
+      if (!(id in state.previews)) return state
+      const next: Record<string, string> = {}
+      for (const [k, v] of Object.entries(state.previews)) {
+        if (k !== id) next[k] = v
+      }
+      return { previews: next }
+    })
+  },
+
   clear: () => {
     set({
       detections: [],
@@ -152,6 +184,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       editingReplacementId: null,
       sessionId: null,
       lastSyncError: null,
+      previews: {},
     })
   },
 

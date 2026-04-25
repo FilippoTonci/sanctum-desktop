@@ -259,6 +259,74 @@ describe('syncedActions.addMissed', () => {
   })
 })
 
+describe('syncedActions previews map', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+
+  it('writes the PATCH-response preview into the store under the detection id', async () => {
+    useReviewStore.getState().setDetections([makeDetection('det-1')])
+    const patchDecision = vi.fn(() =>
+      Promise.resolve({ decision: {} as never, preview: '<PERSON>' }),
+    )
+    const actions = syncedActions({
+      client: fakeClient({ patchDecision }),
+      sessionId: 'sess-1',
+    })
+
+    actions.accept('det-1')
+    await flushMicrotasks()
+
+    expect(useReviewStore.getState().previews).toEqual({ 'det-1': '<PERSON>' })
+  })
+
+  it('writes the POST-response preview after a synced addMissed', async () => {
+    const addUserAdded = vi.fn(() =>
+      Promise.resolve({
+        decision: {
+          kind: 'user_added' as const,
+          id: 'backend-uuid',
+          segment_anchor: 'body/p4/r0',
+          entity_type: 'USER_ADDED',
+          original: 'Smith',
+          start: 9,
+          end: 14,
+        },
+        preview: '[CUSTOM]',
+      }),
+    )
+    const actions = syncedActions({
+      client: fakeClient({ addUserAdded }),
+      sessionId: 'sess-1',
+    })
+
+    actions.addMissed({
+      locator: { segmentId: 'body/p4/r0', start: 9, end: 14 },
+      text: 'Smith',
+    })
+    await flushMicrotasks()
+
+    expect(useReviewStore.getState().previews).toEqual({ 'user:backend-uuid': '[CUSTOM]' })
+  })
+
+  it('clears the preview entry when a user-added decision is rejected (DELETE)', async () => {
+    useReviewStore
+      .getState()
+      .setDetections([makeDetection('user:abc-uuid', { entityType: 'USER_ADDED' })])
+    useReviewStore.getState().setPreview('user:abc-uuid', '[STALE]')
+    const deleteUserAdded = vi.fn(() => Promise.resolve())
+    const actions = syncedActions({
+      client: fakeClient({ deleteUserAdded }),
+      sessionId: 'sess-1',
+    })
+
+    actions.reject('user:abc-uuid')
+    await flushMicrotasks()
+
+    expect(useReviewStore.getState().previews).toEqual({})
+  })
+})
+
 describe('syncedActions.undoLastDecision', () => {
   beforeEach(() => {
     useReviewStore.getState().clear()

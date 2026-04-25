@@ -6,11 +6,12 @@ import { DetectionSidebar } from './components/DetectionSidebar'
 import { DetectionTooltip } from './components/DetectionTooltip'
 import { DocxView } from './components/DocxView'
 import { DropZone } from './components/DropZone'
+import { PreviewOverlay } from './components/PreviewOverlay'
 import { RecentSessions } from './components/RecentSessions'
 import { SelectModeBanner } from './components/SelectModeBanner'
 import { Splash } from './components/Splash'
 import { seedFakeDetections } from './review/fake-detections'
-import { sessionToDetections } from './review/from-session'
+import { previewsForStore, sessionToDetections } from './review/from-session'
 import { useReviewKeyboard } from './review/keyboard'
 import { useReviewStore } from './review/store'
 import { OPERATOR_NAMES, type OperatorName } from './review/types'
@@ -35,6 +36,7 @@ export function App(): ReactElement {
   const setStoreDetections = useReviewStore((s) => s.setDetections)
   const setSessionId = useReviewStore((s) => s.setSessionId)
   const setDefaultOperator = useReviewStore((s) => s.setDefaultOperator)
+  const setPreviews = useReviewStore((s) => s.setPreviews)
   const clearStore = useReviewStore((s) => s.clear)
 
   useEffect(() => {
@@ -142,6 +144,7 @@ export function App(): ReactElement {
           setDefaultOperator(response.default_operator)
         }
         setStoreDetections(sessionToDetections(response))
+        setPreviews(previewsForStore(response))
         setAnalysis({ kind: 'ready' })
       },
       onError: (message) => {
@@ -151,7 +154,7 @@ export function App(): ReactElement {
     return () => {
       ctrl.abort()
     }
-  }, [doc, sessionsClient, setSessionId, setDefaultOperator, setStoreDetections])
+  }, [doc, sessionsClient, setSessionId, setDefaultOperator, setStoreDetections, setPreviews])
 
   const handleResume = useCallback((sessionId: string) => {
     // Slice 2 ships create-on-drop only. Resume requires the desktop to
@@ -182,6 +185,7 @@ export function App(): ReactElement {
             />
             <DetectionSidebar />
             <DetectionTooltip anchorRoot={docRoot} />
+            <PreviewOverlay anchorRoot={docRoot} />
             <SelectModeBanner />
             <CommitPanel />
             <AnalysisBanner state={analysis} />
