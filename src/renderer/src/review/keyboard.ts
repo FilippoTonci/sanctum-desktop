@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { rangeToLocator } from './segments'
 import { useReviewStore, type ReviewState } from './store'
 
 /**
@@ -12,7 +13,7 @@ import { useReviewStore, type ReviewState } from './store'
  * slice. `e` (edit replacement) and `m` (mark missed) wait for slices
  * 7 and 8 — adding them later just means another case in `dispatchKey`.
  */
-export function useReviewKeyboard(enabled: boolean): void {
+export function useReviewKeyboard(enabled: boolean, docRoot: HTMLElement | null): void {
   useEffect(() => {
     if (!enabled) return undefined
 
@@ -21,7 +22,7 @@ export function useReviewKeyboard(enabled: boolean): void {
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (isInputFocused(event.target)) return
 
-      const handled = dispatchKey(event.key, useReviewStore.getState())
+      const handled = dispatchKey(event.key, useReviewStore.getState(), docRoot)
       if (handled) event.preventDefault()
     }
 
@@ -29,7 +30,7 @@ export function useReviewKeyboard(enabled: boolean): void {
     return () => {
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [enabled])
+  }, [enabled, docRoot])
 }
 
 /**
@@ -39,7 +40,28 @@ export function useReviewKeyboard(enabled: boolean): void {
  * Extracted from the hook so unit tests can exercise the binding table
  * without spinning up a DOM + event loop.
  */
-export function dispatchKey(key: string, store: ReviewState): boolean {
+export function dispatchKey(
+  key: string,
+  store: ReviewState,
+  docRoot: HTMLElement | null = null,
+): boolean {
+  // While select-mode is active, the only bindings are Enter (commit
+  // the selection) and Escape (cancel). Everything else passes through
+  // so the user can still scroll, reach standard browser shortcuts, etc.
+  if (store.selectMode) {
+    if (key === 'Enter') {
+      const span = readSelection(docRoot)
+      if (span === null) return false
+      store.addMissed(span)
+      return true
+    }
+    if (key === 'Escape') {
+      store.exitSelectMode()
+      return true
+    }
+    return false
+  }
+
   switch (key) {
     case 'j':
       store.focusNext()
@@ -59,6 +81,9 @@ export function dispatchKey(key: string, store: ReviewState): boolean {
       if (store.undoStack.length === 0) return false
       store.undoLastDecision()
       return true
+    case 'm':
+      store.enterSelectMode()
+      return true
     case 'Escape':
       if (store.focusedId === null) return false
       store.setFocused(null)
@@ -66,6 +91,28 @@ export function dispatchKey(key: string, store: ReviewState): boolean {
     default:
       return false
   }
+}
+
+/**
+ * Read the current document selection and project it onto a locator.
+ * Returns null if there is no selection, the selection lies outside
+ * the docx body, the selection straddles two segments, or the captured
+ * text is empty.
+ */
+function readSelection(docRoot: HTMLElement | null): {
+  readonly locator: NonNullable<ReturnType<typeof rangeToLocator>>
+  readonly text: string
+} | null {
+  if (docRoot === null) return null
+  const selection = docRoot.ownerDocument.defaultView?.getSelection()
+  if (selection === null || selection === undefined || selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  if (!docRoot.contains(range.commonAncestorContainer)) return null
+  const locator = rangeToLocator(range, docRoot)
+  if (locator === null) return null
+  const text = range.toString()
+  if (text.length === 0) return null
+  return { locator, text }
 }
 
 /**

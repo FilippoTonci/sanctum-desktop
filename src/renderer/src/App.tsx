@@ -3,6 +3,7 @@ import { DetectionSidebar } from './components/DetectionSidebar'
 import { DetectionTooltip } from './components/DetectionTooltip'
 import { DocxView } from './components/DocxView'
 import { DropZone } from './components/DropZone'
+import { SelectModeBanner } from './components/SelectModeBanner'
 import { Splash } from './components/Splash'
 import { seedFakeDetections } from './review/fake-detections'
 import { useReviewKeyboard } from './review/keyboard'
@@ -52,7 +53,7 @@ export function App(): ReactElement {
   const reviewMode = doc !== null
   const showBackendStatus = status.state !== 'ready'
 
-  useReviewKeyboard(reviewMode)
+  useReviewKeyboard(reviewMode, docRoot)
 
   const handleFile = useCallback(
     (file: File) => {
@@ -94,6 +95,7 @@ export function App(): ReactElement {
           />
           <DetectionSidebar />
           <DetectionTooltip anchorRoot={docRoot} />
+          <SelectModeBanner />
         </div>
       ) : (
         <DropZone onFile={handleFile} />

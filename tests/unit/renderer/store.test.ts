@@ -103,4 +103,42 @@ describe('useReviewStore', () => {
     useReviewStore.getState().setDetections([makeDetection('b')])
     expect(useReviewStore.getState().undoStack).toHaveLength(0)
   })
+
+  it('enterSelectMode flips the flag, exitSelectMode unflips', () => {
+    useReviewStore.getState().enterSelectMode()
+    expect(useReviewStore.getState().selectMode).toBe(true)
+    useReviewStore.getState().exitSelectMode()
+    expect(useReviewStore.getState().selectMode).toBe(false)
+  })
+
+  it('addMissed appends a USER_ADDED detection, exits select-mode, focuses it', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    useReviewStore.getState().enterSelectMode()
+    const id = useReviewStore.getState().addMissed({
+      locator: { segmentId: 'body/p1/r0', start: 0, end: 5 },
+      text: 'Smith',
+    })
+    const state = useReviewStore.getState()
+    expect(state.selectMode).toBe(false)
+    expect(state.focusedId).toBe(id)
+    expect(state.detections).toHaveLength(2)
+    const added = state.detections[1]!
+    expect(added.entityType).toBe('USER_ADDED')
+    expect(added.text).toBe('Smith')
+    expect(added.status).toBe('pending')
+  })
+
+  it('addMissed deduplicates: re-marking the same span just refocuses it', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    const id1 = useReviewStore.getState().addMissed({
+      locator: { segmentId: 'body/p1/r0', start: 0, end: 5 },
+      text: 'Smith',
+    })
+    const id2 = useReviewStore.getState().addMissed({
+      locator: { segmentId: 'body/p1/r0', start: 0, end: 5 },
+      text: 'Smith',
+    })
+    expect(id1).toBe(id2)
+    expect(useReviewStore.getState().detections).toHaveLength(2)
+  })
 })

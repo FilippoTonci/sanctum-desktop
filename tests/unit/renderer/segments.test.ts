@@ -4,6 +4,7 @@ import {
   findSegmentRange,
   findSegmentRanges,
   locatorKey,
+  rangeToLocator,
   rangeWithinElement,
   type SegmentLocator,
 } from '../../../src/renderer/src/review/segments'
@@ -106,6 +107,67 @@ describe('findSegmentRanges', () => {
     expect(result.get(locatorKey(locators[1]!))?.toString()).toBe('Bob')
     expect(result.get(locatorKey(locators[2]!))?.toString()).toBe('Carol')
     expect(result.has(locatorKey(locators[3]!))).toBe(false)
+  })
+})
+
+describe('rangeToLocator', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('inverts a range built inside a single run', () => {
+    const root = setBody('<p><span data-segment-id="body/p0/r0">Hello, Rachel Moore!</span></p>')
+    const segEl = root.querySelector('[data-segment-id]')!
+    const textNode = segEl.firstChild as Text
+    const range = document.createRange()
+    range.setStart(textNode, 7)
+    range.setEnd(textNode, 19)
+
+    const locator = rangeToLocator(range, root)
+    expect(locator).toEqual({ segmentId: 'body/p0/r0', start: 7, end: 19 })
+  })
+
+  it('returns null for a collapsed selection', () => {
+    const root = setBody('<p><span data-segment-id="body/p0/r0">Hello.</span></p>')
+    const textNode = root.querySelector('[data-segment-id]')!.firstChild as Text
+    const range = document.createRange()
+    range.setStart(textNode, 2)
+    range.setEnd(textNode, 2)
+    expect(rangeToLocator(range, root)).toBeNull()
+  })
+
+  it('returns null when the selection straddles two segments', () => {
+    const root = setBody(`
+      <p><span data-segment-id="body/p0/r0">Alice</span></p>
+      <p><span data-segment-id="body/p2/r0">Bob</span></p>
+    `)
+    const a = root.querySelectorAll('[data-segment-id]')[0]!.firstChild as Text
+    const b = root.querySelectorAll('[data-segment-id]')[1]!.firstChild as Text
+    const range = document.createRange()
+    range.setStart(a, 0)
+    range.setEnd(b, 1)
+    expect(rangeToLocator(range, root)).toBeNull()
+  })
+
+  it('returns null when the range falls outside any tagged segment', () => {
+    const root = setBody('<p>Untagged text only.</p>')
+    const textNode = root.querySelector('p')!.firstChild as Text
+    const range = document.createRange()
+    range.setStart(textNode, 0)
+    range.setEnd(textNode, 5)
+    expect(rangeToLocator(range, root)).toBeNull()
+  })
+
+  it('walks across nested formatting spans inside one run', () => {
+    const root = setBody('<span data-segment-id="body/p0/r0">Party A: <b>Rachel</b> Moore.</span>')
+    const textBefore = root.querySelector('[data-segment-id]')!.firstChild as Text
+    const boldText = root.querySelector('b')!.firstChild as Text
+    const range = document.createRange()
+    range.setStart(textBefore, 9) // past "Party A: "
+    range.setEnd(boldText, 6) // end of "Rachel"
+
+    const locator = rangeToLocator(range, root)
+    expect(locator).toEqual({ segmentId: 'body/p0/r0', start: 9, end: 15 })
   })
 })
 

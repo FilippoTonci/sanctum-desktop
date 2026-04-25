@@ -115,3 +115,66 @@ export function findSegmentRanges(
 export function locatorKey(loc: SegmentLocator): string {
   return `${loc.segmentId}:${String(loc.start)}-${String(loc.end)}`
 }
+
+/**
+ * Inverse of `findSegmentRange`: turn a user-made Range (typically from
+ * `window.getSelection`) into a locator anchored on the run that
+ * contains it. Returns `null` when the range is collapsed, falls
+ * outside any tagged segment, or straddles two segments — the user has
+ * to pick a span inside a single run for the locator to be meaningful.
+ */
+export function rangeToLocator(range: Range, root: ParentNode): SegmentLocator | null {
+  if (range.collapsed) return null
+
+  const startSegment = nearestSegmentAncestor(range.startContainer, root)
+  const endSegment = nearestSegmentAncestor(range.endContainer, root)
+  if (startSegment === null || endSegment === null) return null
+  if (startSegment !== endSegment) return null
+
+  const segmentId = startSegment.getAttribute('data-segment-id')
+  if (segmentId === null) return null
+
+  const start = textOffsetWithin(startSegment, range.startContainer, range.startOffset)
+  const end = textOffsetWithin(startSegment, range.endContainer, range.endOffset)
+  if (start === null || end === null || start === end) return null
+
+  return { segmentId, start, end }
+}
+
+function nearestSegmentAncestor(node: Node, root: ParentNode): HTMLElement | null {
+  let current: Node | null = node
+  while (current !== null && current !== root) {
+    if (current instanceof HTMLElement && current.hasAttribute('data-segment-id')) return current
+    current = current.parentNode
+  }
+  return null
+}
+
+function textOffsetWithin(host: Element, target: Node, targetOffset: number): number | null {
+  const doc = host.ownerDocument
+  const walker = doc.createTreeWalker(host, NodeFilter.SHOW_TEXT)
+  let consumed = 0
+  for (
+    let node = walker.nextNode() as Text | null;
+    node !== null;
+    node = walker.nextNode() as Text | null
+  ) {
+    if (node === target) return consumed + targetOffset
+    consumed += node.data.length
+  }
+  // Caller passed a target that is not a descendant of host, or is an
+  // element node: treat the offset as positions within child nodes.
+  if (target instanceof Element && target === host) {
+    let acc = 0
+    const childWalker = doc.createTreeWalker(host, NodeFilter.SHOW_TEXT)
+    let child = childWalker.nextNode() as Text | null
+    let i = 0
+    while (child !== null && i < targetOffset) {
+      acc += child.data.length
+      child = childWalker.nextNode() as Text | null
+      i++
+    }
+    return acc
+  }
+  return null
+}

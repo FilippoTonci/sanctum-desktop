@@ -89,6 +89,66 @@ describe('dispatchKey', () => {
     dispatchKey('a', useReviewStore.getState()) // already accepted, no-op
     expect(useReviewStore.getState().undoStack).toHaveLength(1)
   })
+
+  it('m enters select-mode', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    expect(dispatchKey('m', useReviewStore.getState())).toBe(true)
+    expect(useReviewStore.getState().selectMode).toBe(true)
+  })
+
+  it('inside select-mode, j / a / r / k / u are inert and pass through', () => {
+    useReviewStore.getState().setDetections([makeDetection('a'), makeDetection('b')])
+    useReviewStore.getState().enterSelectMode()
+    expect(dispatchKey('j', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('a', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('r', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('u', useReviewStore.getState())).toBe(false)
+    // verdicts unchanged
+    expect(useReviewStore.getState().detections[0]?.status).toBe('pending')
+    expect(useReviewStore.getState().focusedId).toBe('a')
+  })
+
+  it('Escape exits select-mode without clearing focus', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    useReviewStore.getState().enterSelectMode()
+    expect(dispatchKey('Escape', useReviewStore.getState())).toBe(true)
+    expect(useReviewStore.getState().selectMode).toBe(false)
+    expect(useReviewStore.getState().focusedId).toBe('a')
+  })
+
+  it('Enter inside select-mode commits the current selection when one exists', () => {
+    document.body.innerHTML =
+      '<div id="root"><span data-segment-id="body/p0/r0">Hello, Smith!</span></div>'
+    const root = document.getElementById('root')!
+    const seg = root.querySelector('[data-segment-id]')!.firstChild as Text
+    const range = document.createRange()
+    range.setStart(seg, 7) // "Smith"
+    range.setEnd(seg, 12)
+    const sel = window.getSelection()!
+    sel.removeAllRanges()
+    sel.addRange(range)
+
+    useReviewStore.getState().setDetections([])
+    useReviewStore.getState().enterSelectMode()
+
+    expect(dispatchKey('Enter', useReviewStore.getState(), root)).toBe(true)
+
+    const state = useReviewStore.getState()
+    expect(state.selectMode).toBe(false)
+    expect(state.detections).toHaveLength(1)
+    expect(state.detections[0]?.text).toBe('Smith')
+    expect(state.detections[0]?.entityType).toBe('USER_ADDED')
+  })
+
+  it('Enter inside select-mode is a no-op when nothing is selected', () => {
+    document.body.innerHTML = '<div id="root"></div>'
+    const root = document.getElementById('root')!
+    window.getSelection()?.removeAllRanges()
+
+    useReviewStore.getState().enterSelectMode()
+    expect(dispatchKey('Enter', useReviewStore.getState(), root)).toBe(false)
+    expect(useReviewStore.getState().selectMode).toBe(true)
+  })
 })
 
 describe('isInputFocused', () => {

@@ -1,9 +1,15 @@
 import { create } from 'zustand'
+import type { SegmentLocator } from './segments'
 import type { Detection, DetectionStatus } from './types'
 
 interface StatusEdit {
   readonly id: string
   readonly previous: DetectionStatus
+}
+
+export interface MissedSpan {
+  readonly locator: SegmentLocator
+  readonly text: string
 }
 
 /**
@@ -22,6 +28,7 @@ export interface ReviewState {
   readonly detections: readonly Detection[]
   readonly focusedId: string | null
   readonly undoStack: readonly StatusEdit[]
+  readonly selectMode: boolean
 
   setDetections: (detections: readonly Detection[]) => void
   clear: () => void
@@ -30,23 +37,29 @@ export interface ReviewState {
   focusNext: () => void
   focusPrev: () => void
   undoLastDecision: () => void
+
+  enterSelectMode: () => void
+  exitSelectMode: () => void
+  addMissed: (span: MissedSpan) => string
 }
 
 export const useReviewStore = create<ReviewState>((set, get) => ({
   detections: [],
   focusedId: null,
   undoStack: [],
+  selectMode: false,
 
   setDetections: (detections) => {
     set({
       detections,
       focusedId: detections[0]?.id ?? null,
       undoStack: [],
+      selectMode: false,
     })
   },
 
   clear: () => {
-    set({ detections: [], focusedId: null, undoStack: [] })
+    set({ detections: [], focusedId: null, undoStack: [], selectMode: false })
   },
 
   setStatus: (id, status) => {
@@ -95,5 +108,38 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         focusedId: last.id,
       }
     })
+  },
+
+  enterSelectMode: () => {
+    set({ selectMode: true })
+  },
+
+  exitSelectMode: () => {
+    set({ selectMode: false })
+  },
+
+  addMissed: (span) => {
+    const id = `user:${span.locator.segmentId}:${String(span.locator.start)}-${String(span.locator.end)}`
+    set((state) => {
+      // If the same span has already been marked, just refocus it.
+      if (state.detections.some((d) => d.id === id)) {
+        return { selectMode: false, focusedId: id }
+      }
+      const detection: Detection = {
+        id,
+        segmentId: span.locator.segmentId,
+        start: span.locator.start,
+        end: span.locator.end,
+        text: span.text,
+        entityType: 'USER_ADDED',
+        status: 'pending',
+      }
+      return {
+        detections: [...state.detections, detection],
+        focusedId: id,
+        selectMode: false,
+      }
+    })
+    return id
   },
 }))
