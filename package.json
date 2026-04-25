@@ -50,6 +50,7 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
+    "happy-dom": "20.9.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.11",
     "patch-package": "8.0.1",
