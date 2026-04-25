@@ -8,11 +8,16 @@ files:
   - out/**/*
   - package.json
   - '!**/*.{md,map}'
-# WS3: extraResources will point at the PyInstaller onedir output of the
-# Python sidecar, one per platform architecture.
-# extraResources:
-#   - from: sidecar-build/${platform}-${arch}/
-#     to: sidecar/
+# PyInstaller onedir output of the Python sidecar is built by
+# `scripts/build-sidecar.sh` under `sidecar-build/<os>-<arch>/`.
+# electron-builder templates `${os}` = mac/linux/win and `${arch}` =
+# x64/arm64 per build target. At runtime `src/main/paths.ts` reads
+# `process.resourcesPath/sidecar/sanctum-sidecar[.exe]`.
+extraResources:
+  - from: 'sidecar-build/${os}-${arch}'
+    to: sidecar
+    filter:
+      - '**/*'
 mac:
   target:
     - target: dmg

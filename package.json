@@ -24,8 +24,9 @@
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run",
+    "test": "VITEST_LANE=unit vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
     "make": "electron-vite build && electron-builder",
     "prepare": "husky"

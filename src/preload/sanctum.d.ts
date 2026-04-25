@@ -1,11 +1,9 @@
-export interface SanctumApi {
-  readonly ready: boolean
-  readonly baseUrl?: string
-  readonly token?: string
-}
+import type { SanctumApi } from './index'
 
 declare global {
   interface Window {
     readonly sanctum: SanctumApi
   }
 }
+
+export {}
