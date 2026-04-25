@@ -29,9 +29,11 @@
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
     "make": "electron-vite build && electron-builder",
-    "prepare": "husky"
+    "prepare": "husky",
+    "postinstall": "patch-package"
   },
   "dependencies": {
+    "docx-preview": "0.3.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -50,6 +52,7 @@
     "globals": "^15.14.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.11",
+    "patch-package": "8.0.1",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",

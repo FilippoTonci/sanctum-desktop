@@ -36,6 +36,9 @@ playwright/.cache/
 .eslintcache
 .cache/
 
+# Playwright MCP scratch (screenshots, snapshots, console logs)
+.playwright-mcp/
+
 # OS
 .DS_Store
 Thumbs.db
