@@ -1,12 +1,16 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useState, type ReactElement } from 'react'
 import { DocxView } from './components/DocxView'
 import { DropZone } from './components/DropZone'
 import { Splash } from './components/Splash'
+import { seedFakeDetections } from './review/fake-detections'
+import type { Detection } from './review/types'
 import type { SanctumStatus } from './sanctum'
 
 export function App(): ReactElement {
   const [status, setStatus] = useState<SanctumStatus>({ state: 'idle' })
   const [doc, setDoc] = useState<File | null>(null)
+  const [detections, setDetections] = useState<readonly Detection[]>([])
+  const [focusedId, setFocusedId] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -41,6 +45,24 @@ export function App(): ReactElement {
   const reviewMode = doc !== null
   const showBackendStatus = status.state !== 'ready'
 
+  const handleFile = useCallback((file: File) => {
+    setDoc(file)
+    setDetections([])
+    setFocusedId(null)
+  }, [])
+
+  const handleClose = useCallback(() => {
+    setDoc(null)
+    setDetections([])
+    setFocusedId(null)
+  }, [])
+
+  const handleRendered = useCallback((root: HTMLElement) => {
+    const seeded = seedFakeDetections(root)
+    setDetections(seeded)
+    setFocusedId(seeded[0]?.id ?? null)
+  }, [])
+
   return (
     <main className={`shell${reviewMode ? ' shell-review' : ''}`}>
       <header>
@@ -51,12 +73,13 @@ export function App(): ReactElement {
       {reviewMode ? (
         <DocxView
           file={doc}
-          onClose={() => {
-            setDoc(null)
-          }}
+          onClose={handleClose}
+          detections={detections}
+          focusedId={focusedId}
+          onRendered={handleRendered}
         />
       ) : (
-        <DropZone onFile={setDoc} />
+        <DropZone onFile={handleFile} />
       )}
     </main>
   )

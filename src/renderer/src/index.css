@@ -227,6 +227,28 @@ body {
   overflow-x: auto;
 }
 
+::highlight(sanctum-pending) {
+  background-color: rgba(255, 196, 87, 0.45);
+  text-decoration: underline dotted rgba(184, 124, 0, 0.7);
+  text-underline-offset: 2px;
+}
+
+::highlight(sanctum-accepted) {
+  background-color: rgba(99, 187, 113, 0.4);
+  text-decoration: underline solid rgba(34, 124, 53, 0.7);
+  text-underline-offset: 2px;
+}
+
+::highlight(sanctum-rejected) {
+  background-color: rgba(180, 180, 180, 0.25);
+  text-decoration: line-through rgba(120, 120, 120, 0.7);
+}
+
+::highlight(sanctum-focused) {
+  background-color: rgba(79, 140, 255, 0.35);
+  outline: 2px solid #4f8cff;
+}
+
 @media (prefers-color-scheme: dark) {
   .docx-view-body {
     background: #f8f8f8;

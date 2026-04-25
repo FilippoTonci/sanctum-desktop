@@ -1,14 +1,25 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { renderAsync } from 'docx-preview'
+import { applyHighlightRegistries, resolveDetections } from '../review/highlights'
+import type { Detection } from '../review/types'
 
 interface DocxViewProps {
   readonly file: File
   readonly onClose: () => void
+  readonly detections: readonly Detection[]
+  readonly focusedId: string | null
+  readonly onRendered?: (root: HTMLElement) => void
 }
 
 type RenderState = { kind: 'rendering' } | { kind: 'ready' } | { kind: 'error'; message: string }
 
-export function DocxView({ file, onClose }: DocxViewProps): ReactElement {
+export function DocxView({
+  file,
+  onClose,
+  detections,
+  focusedId,
+  onRendered,
+}: DocxViewProps): ReactElement {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const [state, setState] = useState<RenderState>({ kind: 'rendering' })
 
@@ -31,7 +42,10 @@ export function DocxView({ file, onClose }: DocxViewProps): ReactElement {
           experimental: false,
           useBase64URL: true,
         })
-        if (!isCancelled()) setState({ kind: 'ready' })
+        if (!isCancelled()) {
+          setState({ kind: 'ready' })
+          onRendered?.(host)
+        }
       } catch (err) {
         if (!isCancelled()) {
           const message = err instanceof Error ? err.message : String(err)
@@ -44,7 +58,15 @@ export function DocxView({ file, onClose }: DocxViewProps): ReactElement {
       ctrl.cancelled = true
       host.replaceChildren()
     }
-  }, [file])
+  }, [file, onRendered])
+
+  useEffect(() => {
+    if (state.kind !== 'ready') return
+    const host = bodyRef.current
+    if (host === null) return
+    const resolved = resolveDetections(host, detections)
+    applyHighlightRegistries(resolved, focusedId)
+  }, [state.kind, detections, focusedId])
 
   return (
     <section className="docx-view" aria-busy={state.kind === 'rendering'}>
