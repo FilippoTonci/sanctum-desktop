@@ -1,0 +1,71 @@
+diff --git a/node_modules/docx-preview/dist/docx-preview.mjs b/node_modules/docx-preview/dist/docx-preview.mjs
+index 0ab9123..72ecc94 100644
+--- a/node_modules/docx-preview/dist/docx-preview.mjs
++++ b/node_modules/docx-preview/dist/docx-preview.mjs
+@@ -3059,6 +3059,7 @@ class HtmlRenderer {
+     renderSections(document) {
+         const result = [];
+         this.processElement(document);
++        this.assignSegmentIds(document.children);
+         const sections = this.splitBySection(document.children, document.props);
+         const pages = this.groupByPageBreaks(sections);
+         let prevProps = null;
+@@ -3087,6 +3088,49 @@ class HtmlRenderer {
+         }
+         return result;
+     }
++    assignSegmentIds(bodyChildren) {
++        let bodyParaIdx = 0;
++        let tableIdx = 0;
++        for (const node of bodyChildren) {
++            if (node.type === "paragraph") {
++                this._assignParagraphRunIds(node, `body/p${bodyParaIdx}`);
++                bodyParaIdx++;
++            }
++            else if (node.type === "table") {
++                this._assignTableRunIds(node, `table/t${tableIdx}`);
++                tableIdx++;
++            }
++        }
++    }
++    _assignParagraphRunIds(paragraph, prefix) {
++        let runIdx = 0;
++        if (!paragraph.children) return;
++        for (const child of paragraph.children) {
++            if (child.type === "run") {
++                child.dataSegmentId = `${prefix}/r${runIdx}`;
++                runIdx++;
++            }
++        }
++    }
++    _assignTableRunIds(table, prefix) {
++        if (!table.children) return;
++        let r = 0;
++        for (const row of table.children) {
++            if (row.type !== "row" || !row.children) continue;
++            let c = 0;
++            for (const cell of row.children) {
++                if (cell.type !== "cell" || !cell.children) continue;
++                let p = 0;
++                for (const para of cell.children) {
++                    if (para.type !== "paragraph") continue;
++                    this._assignParagraphRunIds(para, `${prefix}/row${r}/cell${c}/p${p}`);
++                    p++;
++                }
++                c++;
++            }
++            r++;
++        }
++    }
+     renderHeaderFooter(refs, props, page, firstOfSection, into) {
+         if (!refs)
+             return;
+@@ -3620,6 +3664,8 @@ section.${c}>footer { z-index: 1; }
+         const result = this.createElement("span");
+         if (elem.id)
+             result.id = elem.id;
++        if (elem.dataSegmentId)
++            result.setAttribute("data-segment-id", elem.dataSegmentId);
+         this.renderClass(elem, result);
+         this.renderStyleValues(elem.cssStyle, result);
+         if (elem.verticalAlign) {

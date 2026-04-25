@@ -83,3 +83,631 @@ body {
     transform: rotate(360deg);
   }
 }
+
+.shell-review {
+  max-width: none;
+  padding: 1.5rem 2rem 4rem;
+}
+
+.drop-zone {
+  border: 2px dashed rgba(127, 127, 127, 0.4);
+  border-radius: 12px;
+  padding: 4rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+  background: rgba(127, 127, 127, 0.04);
+}
+
+.drop-zone:focus-visible {
+  outline: 2px solid #4f8cff;
+  outline-offset: 2px;
+}
+
+.drop-zone:hover,
+.drop-zone-active {
+  border-color: #4f8cff;
+  background: rgba(79, 140, 255, 0.08);
+}
+
+.drop-zone-headline {
+  margin: 0 0 0.25rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.drop-zone-hint {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.drop-zone-browse {
+  margin-top: 1rem;
+  padding: 0.55rem 1.25rem;
+  border-radius: 6px;
+  border: 1px solid #4f8cff;
+  background: #4f8cff;
+  color: white;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.drop-zone-browse:hover {
+  background: #3973f0;
+  border-color: #3973f0;
+}
+
+.drop-zone-browse:focus-visible {
+  outline: 2px solid #4f8cff;
+  outline-offset: 2px;
+}
+
+.drop-zone-error {
+  margin: 1rem 0 0;
+  color: #c53030;
+  font-size: 0.9rem;
+}
+
+.drop-zone-input {
+  display: none;
+}
+
+.docx-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.docx-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.05);
+}
+
+.docx-view-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.docx-view-meta strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.docx-view-size {
+  opacity: 0.6;
+  font-size: 0.85rem;
+}
+
+.docx-view-close {
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  background: transparent;
+  color: inherit;
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.docx-view-close:hover {
+  border-color: #4f8cff;
+  color: #4f8cff;
+}
+
+.docx-view-status {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.06);
+  font-size: 0.95rem;
+}
+
+.docx-view-error {
+  background: rgba(197, 48, 48, 0.08);
+  color: #c53030;
+}
+
+.docx-view-body {
+  background: white;
+  color: #111;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow-x: auto;
+}
+
+::highlight(sanctum-pending) {
+  background-color: rgba(255, 196, 87, 0.45);
+  text-decoration: underline dotted rgba(184, 124, 0, 0.7);
+  text-underline-offset: 2px;
+}
+
+::highlight(sanctum-accepted) {
+  background-color: rgba(99, 187, 113, 0.4);
+  text-decoration: underline solid rgba(34, 124, 53, 0.7);
+  text-underline-offset: 2px;
+}
+
+::highlight(sanctum-rejected) {
+  background-color: rgba(180, 180, 180, 0.25);
+  text-decoration: line-through rgba(120, 120, 120, 0.7);
+}
+
+::highlight(sanctum-focused) {
+  background-color: rgba(79, 140, 255, 0.35);
+  outline: 2px solid #4f8cff;
+}
+
+.review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.detection-sidebar {
+  position: sticky;
+  top: 1rem;
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  .detection-sidebar {
+    background: rgba(0, 0, 0, 0.25);
+  }
+}
+
+.sidebar-header {
+  border-bottom: 1px solid rgba(127, 127, 127, 0.2);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.sidebar-header h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+.sidebar-counts {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.sidebar-empty {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.sidebar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sidebar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.sidebar-item:hover {
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.sidebar-item-focused {
+  border-color: #4f8cff;
+  background: rgba(79, 140, 255, 0.12);
+}
+
+.sidebar-item-text {
+  font-size: 0.95rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-item-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.sidebar-item-entity {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.sidebar-item-status-pending {
+  color: #b87c00;
+}
+
+.sidebar-item-status-accepted {
+  color: #227c35;
+}
+
+.sidebar-item-status-rejected {
+  color: #888;
+  text-decoration: line-through;
+}
+
+.detection-tooltip {
+  z-index: 30;
+  background: #fff;
+  color: #111;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.18),
+    0 2px 6px rgba(0, 0, 0, 0.1);
+  padding: 0.75rem 0.85rem;
+  min-width: 220px;
+  max-width: 340px;
+  font-size: 0.9rem;
+}
+
+.detection-tooltip-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+}
+
+.detection-tooltip-entity {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #4f8cff;
+}
+
+.detection-tooltip-status {
+  opacity: 0.6;
+}
+
+.detection-tooltip-text {
+  margin: 0 0 0.6rem;
+  font-style: italic;
+  word-break: break-word;
+}
+
+.detection-tooltip-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.detection-tooltip-accept,
+.detection-tooltip-reject {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  border-radius: 5px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.detection-tooltip-accept {
+  background: #2d8a3f;
+  color: white;
+  border-color: #2d8a3f;
+}
+
+.detection-tooltip-accept:hover {
+  background: #237030;
+}
+
+.detection-tooltip-reject {
+  background: transparent;
+  color: #b03333;
+  border-color: rgba(176, 51, 51, 0.5);
+}
+
+.detection-tooltip-reject:hover {
+  background: rgba(176, 51, 51, 0.1);
+}
+
+.select-mode-banner {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  background: #4f8cff;
+  color: white;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.select-mode-banner kbd {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  padding: 0.05rem 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+
+.select-mode-banner-cancel {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: white;
+  padding: 0.25rem 0.6rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.select-mode-banner-cancel:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.detection-tooltip-operator {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.5rem;
+  gap: 0.2rem;
+  opacity: 0.8;
+}
+
+.detection-tooltip-operator select {
+  padding: 0.3rem 0.4rem;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 5px;
+  font-size: 0.85rem;
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: inherit;
+}
+
+.detection-tooltip-edit {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.detection-tooltip-edit input {
+  flex: 1;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 5px;
+  font-size: 0.85rem;
+}
+
+.detection-tooltip-edit-cancel,
+.detection-tooltip-edit-start {
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 5px;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: inherit;
+}
+
+.detection-tooltip-edit-start {
+  margin-bottom: 0.5rem;
+  margin-left: 0.4rem;
+}
+
+.detection-tooltip-replacement {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.detection-tooltip-replacement code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.sidebar-footer {
+  margin-top: 0.75rem;
+  border-top: 1px solid rgba(127, 127, 127, 0.2);
+  padding-top: 0.75rem;
+}
+
+.sidebar-commit {
+  width: 100%;
+  background: #4f8cff;
+  color: white;
+  border: 1px solid #4f8cff;
+  padding: 0.55rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.sidebar-commit:hover:not(:disabled) {
+  background: #3973f0;
+  border-color: #3973f0;
+}
+
+.sidebar-commit:disabled {
+  background: rgba(127, 127, 127, 0.2);
+  border-color: rgba(127, 127, 127, 0.2);
+  color: rgba(0, 0, 0, 0.4);
+  cursor: not-allowed;
+}
+
+.commit-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 1rem;
+}
+
+.commit-panel {
+  background: white;
+  color: #111;
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 520px;
+  width: 100%;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+.commit-panel header h2 {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+}
+
+.commit-panel-summary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem 1.5rem;
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+}
+
+.commit-panel-summary div {
+  display: flex;
+  justify-content: space-between;
+}
+
+.commit-panel-summary dt {
+  opacity: 0.7;
+  font-weight: 400;
+}
+
+.commit-panel-summary dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.commit-panel-warn {
+  color: #b87c00;
+}
+
+.commit-panel-default-operator {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  opacity: 0.85;
+  margin-bottom: 1rem;
+}
+
+.commit-panel-default-operator select {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 5px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.commit-panel-blocker {
+  margin: 0 0 1rem;
+  padding: 0.55rem 0.7rem;
+  background: rgba(184, 124, 0, 0.12);
+  color: #8a5a00;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.commit-panel-attest {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  font-size: 0.9rem;
+  margin-bottom: 1.25rem;
+  cursor: pointer;
+}
+
+.commit-panel-attest input {
+  margin-top: 0.2rem;
+}
+
+.commit-panel-actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+}
+
+.commit-panel-cancel,
+.commit-panel-submit {
+  padding: 0.5rem 1.1rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.commit-panel-cancel {
+  background: transparent;
+  color: inherit;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.commit-panel-submit {
+  background: #2d8a3f;
+  color: white;
+  border: 1px solid #2d8a3f;
+}
+
+.commit-panel-submit:hover:not(:disabled) {
+  background: #237030;
+}
+
+.commit-panel-submit:disabled {
+  background: rgba(127, 127, 127, 0.2);
+  border-color: rgba(127, 127, 127, 0.2);
+  color: rgba(0, 0, 0, 0.4);
+  cursor: not-allowed;
+}
+
+@media (prefers-color-scheme: dark) {
+  .docx-view-body {
+    background: #f8f8f8;
+  }
+}

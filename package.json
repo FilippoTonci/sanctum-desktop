@@ -29,11 +29,15 @@
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
     "make": "electron-vite build && electron-builder",
-    "prepare": "husky"
+    "prepare": "husky",
+    "postinstall": "patch-package"
   },
   "dependencies": {
+    "@floating-ui/react": "0.27.19",
+    "docx-preview": "0.3.7",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zustand": "5.0.12"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
@@ -48,8 +52,10 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
+    "happy-dom": "20.9.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.11",
+    "patch-package": "8.0.1",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",

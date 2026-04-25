@@ -24,6 +24,9 @@ export interface SanctumApi {
 
 declare global {
   interface Window {
-    readonly sanctum: SanctumApi
+    // Optional because the renderer can also be loaded directly in a plain
+    // browser (e.g. Vite dev server hit by Playwright for visual iteration)
+    // where the Electron preload bridge is not present.
+    readonly sanctum?: SanctumApi
   }
 }

@@ -24,5 +24,6 @@
     "tests/unit/**/*.ts",
     "tests/integration/**/*.ts",
     "tests/e2e/**/*.ts"
-  ]
+  ],
+  "exclude": ["tests/unit/renderer/**/*"]
 }
