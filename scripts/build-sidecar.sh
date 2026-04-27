@@ -11,7 +11,11 @@
 #
 # Environment:
 #   SANCTUM_REPO   Path to a local sanctum checkout. Required.
-#                  Will be `pip install -e`'d into the build venv.
+#                  Will be `pip install`'d into the build venv as a
+#                  regular (non-editable) install — PyInstaller's
+#                  module analyzer doesn't freeze the source for
+#                  `pip install -e` checkouts; the resulting binary
+#                  hits `ModuleNotFoundError: sanctum` at startup.
 #                  (Release workflow pins this to a specific commit via
 #                  a worktree checkout; local builds point at the dev
 #                  sibling repo.)
@@ -67,23 +71,30 @@ fi
 
 pip install --upgrade pip wheel
 pip install pyinstaller
-pip install -e "$SANCTUM_REPO"
+# Force-reinstall in case a prior editable install of sanctum is
+# present in this venv — pip won't replace an editable install with
+# a non-editable one without the explicit reinstall flag.
+pip install --force-reinstall --no-deps "$SANCTUM_REPO"
+pip install "$SANCTUM_REPO[security,api,documents]"
 
 if [ "$MODEL_TIER" = "standard" ]; then
   python -m spacy download en_core_web_sm
 fi
 
 # PyInstaller collectors:
+#   --collect-all sanctum          — the entry-point package itself; the
+#                                    analyzer doesn't follow the import
+#                                    from `sidecar_entry.py` reliably.
 #   --collect-all spacy            — bundles spaCy data files that the
 #                                    default collector misses.
 #   --collect-all en_core_web_sm   — bundles the Standard-tier model.
-#   --collect-submodules presidio_analyzer
-#   --copy-metadata presidio_analyzer
-#   --copy-metadata presidio_anonymizer
+#   --collect-all presidio_analyzer
+#   --collect-all presidio_anonymizer
 #                                  — Presidio dynamically discovers
-#                                    recognizers; both the submodules
-#                                    and the package metadata have to
-#                                    ride along.
+#                                    recognizers AND ships YAML config
+#                                    under `conf/` that the engine reads
+#                                    at __init__; --collect-submodules
+#                                    alone leaves those data files out.
 #   --name sanctum-sidecar         — deliberately NOT `sanctum.exe`, to
 #                                    reduce Windows AV false-positive
 #                                    collisions.
@@ -97,10 +108,10 @@ PYINSTALLER_ARGS=(
   --distpath "$BUILD_ROOT/dist-$OS-$ARCH"
   --workpath "$BUILD_ROOT/work-$OS-$ARCH"
   --specpath "$BUILD_ROOT/spec-$OS-$ARCH"
+  --collect-all sanctum
   --collect-all spacy
-  --collect-submodules presidio_analyzer
-  --copy-metadata presidio_analyzer
-  --copy-metadata presidio_anonymizer
+  --collect-all presidio_analyzer
+  --collect-all presidio_anonymizer
   --noconfirm
 )
 
