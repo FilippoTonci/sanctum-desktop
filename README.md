@@ -8,7 +8,7 @@
 <img src="https://img.shields.io/badge/electron-latest-47848F?style=for-the-badge&logo=electron" alt="Electron"/>
 <img src="https://img.shields.io/badge/react-19-61DAFB?style=for-the-badge&logo=react" alt="React"/>
 <img src="https://img.shields.io/badge/typescript-5.x-3178C6?style=for-the-badge&logo=typescript" alt="TypeScript"/>
-<img src="https://img.shields.io/badge/status-scaffolding-orange?style=for-the-badge" alt="Status"/>
+<img src="https://img.shields.io/badge/status-pre--alpha-orange?style=for-the-badge" alt="Status"/>
 
 # Sanctum Desktop
 
@@ -118,7 +118,7 @@ The renderer is generated from `schema/openapi.json` in the `sanctum` repo (pinn
 
 ## 🚀 Getting Started
 
-> **Status:** This repo is in early scaffolding. Workstream 1 of Phase 3 (backend contract hardening) is complete in the `sanctum` repo; Workstream 2 (this repo's Electron scaffold) is about to land. There are no shippable installers yet.
+> **Status:** Workstreams 1–4 of Phase 3 are shipped (backend contract hardening in `sanctum`; Electron scaffold, sidecar integration, and the `.docx` review surface here). Workstream 5 (session workflow UI) is in flight — landing page, real session create/commit/abandon, mapping-store unlock, settings + sidecar respawn, and typed error surfaces are all live; a packaged unsigned build runs end-to-end on Linux. WS6 (signing, notarization, release pipeline) is the next major milestone — no signed installers yet.
 
 ### Prerequisites
 
@@ -193,42 +193,45 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [x] SIGTERM cleanup audit with integration tests
 - [x] Contract compat harness in CI
 
-### WS2 — Desktop scaffold _(this repo — next)_
+### WS2 — Desktop scaffold ✅ _(shipped)_
 
-- [ ] Electron + Vite + React 19 + TypeScript scaffold via `electron-vite`
-- [ ] Sandbox + contextIsolation + no node integration
-- [ ] ESLint, Prettier, `tsc --noEmit`, pre-commit (husky + lint-staged)
-- [ ] GitHub Actions CI matrix (macOS / Windows / Ubuntu)
-- [ ] Playwright smoke test
-- [ ] Code-signing secret placeholders
+- [x] Electron + Vite + React 19 + TypeScript scaffold via `electron-vite`
+- [x] Sandbox + contextIsolation + no node integration
+- [x] ESLint, Prettier, `tsc --noEmit`, pre-commit (husky + lint-staged)
+- [x] GitHub Actions CI matrix (macOS / Windows / Ubuntu)
+- [x] Playwright smoke test
+- [x] Code-signing secret placeholders
 
-### WS3 — Python sidecar integration
+### WS3 — Python sidecar integration ✅ _(shipped)_
 
-- [ ] PyInstaller onedir build of the Sanctum backend
-- [ ] `spawnSidecar()` / `killSidecar()` lifecycle manager
-- [ ] Health polling + splash screen (cold start can exceed 30 s)
-- [ ] `contextBridge` exposure of `{ baseUrl, token }`
-- [ ] User-confirmed Professional-tier model download (1.4 GB)
-- [ ] Graceful-shutdown hooks
+- [x] PyInstaller onedir build of the Sanctum backend
+- [x] `spawnSidecar()` / `killSidecar()` lifecycle manager
+- [x] Health polling + splash screen (cold start can exceed 30 s)
+- [x] `contextBridge` exposure of `{ baseUrl, token }`
+- [x] User-confirmed Professional-tier model download (1.4 GB)
+- [x] Graceful-shutdown hooks
 
-### WS4 — `.docx` review surface
+### WS4 — `.docx` review surface ✅ _(shipped)_
 
-- [ ] docx-preview integration with a `data-segment-id` emission patch (`patch-package`)
-- [ ] Segment-id ⇄ DOM Range mapping
-- [ ] CSS Custom Highlight API overlay (pending / accepted / rejected / focused)
-- [ ] Detection tooltip + sidebar list
-- [ ] Full keyboard navigation
-- [ ] Mark-missed-span flow
-- [ ] Per-detection operator picker
-- [ ] Commit flow with attestation checkbox
+- [x] docx-preview integration with a `data-segment-id` emission patch (`patch-package`)
+- [x] Segment-id ⇄ DOM Range mapping
+- [x] CSS Custom Highlight API overlay (pending / accepted / rejected / focused)
+- [x] Detection tooltip + sidebar list
+- [x] Full keyboard navigation
+- [x] Mark-missed-span flow
+- [x] Per-detection operator picker
+- [x] Commit flow with attestation checkbox
 
-### WS5 — Session workflow UI
+### WS5 — Session workflow UI _(in progress)_
 
-- [ ] Landing page, drop zone, recent sessions
-- [ ] Mapping-store unlock UX
-- [ ] Settings page → sidecar env on respawn
-- [ ] Error surfaces (409 / 413 / 415 / 503)
-- [ ] Session abandonment + resume
+- [x] Landing page, drop zone, recent sessions
+- [x] Real `/review-sessions` create + commit + abandon (with optimistic+rollback decision sync)
+- [x] Ghost-text preview overlay
+- [x] Mapping-store unlock UX
+- [x] Settings page → sidecar env on respawn
+- [x] Error surfaces (409 / 413 / 415 / 503)
+- [x] Session abandonment keeps the manifest so terminal sessions stay in Recent Sessions
+- [ ] Session resume from a Recent Sessions row (needs `GET /review-sessions/{id}/input` or a desktop-side cache)
 
 ### WS6 — Polish, signing, release
 
