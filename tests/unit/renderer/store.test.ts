@@ -199,4 +199,103 @@ describe('useReviewStore', () => {
     useReviewStore.getState().startEditingReplacement(null)
     expect(useReviewStore.getState().editingReplacementId).toBeNull()
   })
+
+  it('appendDetection adds + focuses; deduplicates by id', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    useReviewStore.getState().appendDetection(makeDetection('b'))
+    expect(useReviewStore.getState().detections).toHaveLength(2)
+    expect(useReviewStore.getState().focusedId).toBe('b')
+
+    // Re-appending the same id is a focus-only refocus.
+    useReviewStore.getState().setFocused('a')
+    useReviewStore.getState().appendDetection(makeDetection('b'))
+    expect(useReviewStore.getState().detections).toHaveLength(2)
+    expect(useReviewStore.getState().focusedId).toBe('b')
+  })
+
+  it('removeDetection clears focus + undo entries that referenced the id', () => {
+    useReviewStore.getState().setDetections([makeDetection('a'), makeDetection('b')])
+    useReviewStore.getState().setStatus('a', 'accepted')
+    useReviewStore.getState().setFocused('a')
+    useReviewStore.getState().removeDetection('a')
+    expect(useReviewStore.getState().detections.map((d) => d.id)).toEqual(['b'])
+    expect(useReviewStore.getState().focusedId).toBeNull()
+    expect(useReviewStore.getState().undoStack).toHaveLength(0)
+  })
+
+  it('setLastSyncError stores and clears the error slot', () => {
+    useReviewStore.getState().setLastSyncError('something broke')
+    expect(useReviewStore.getState().lastSyncError).toEqual({
+      status: null,
+      message: 'something broke',
+    })
+    useReviewStore.getState().setLastSyncError(null)
+    expect(useReviewStore.getState().lastSyncError).toBeNull()
+  })
+
+  it('setLastSyncError preserves an HTTP status when given a typed error', () => {
+    useReviewStore.getState().setLastSyncError({ status: 503, message: 'sidecar down' })
+    expect(useReviewStore.getState().lastSyncError).toEqual({
+      status: 503,
+      message: 'sidecar down',
+    })
+  })
+
+  it('setPreviews replaces the whole map; setPreview merges one entry', () => {
+    useReviewStore.getState().setPreviews({ a: '<A>', b: '<B>' })
+    expect(useReviewStore.getState().previews).toEqual({ a: '<A>', b: '<B>' })
+    useReviewStore.getState().setPreview('c', '<C>')
+    expect(useReviewStore.getState().previews).toEqual({ a: '<A>', b: '<B>', c: '<C>' })
+  })
+
+  it('clearPreview removes a single key without disturbing siblings', () => {
+    useReviewStore.getState().setPreviews({ a: '<A>', b: '<B>' })
+    useReviewStore.getState().clearPreview('a')
+    expect(useReviewStore.getState().previews).toEqual({ b: '<B>' })
+  })
+
+  it('clear() empties the previews map alongside other state', () => {
+    useReviewStore.getState().setPreviews({ a: '<A>' })
+    useReviewStore.getState().clear()
+    expect(useReviewStore.getState().previews).toEqual({})
+  })
+
+  it('setCommitResult records + clears the post-commit slot', () => {
+    useReviewStore
+      .getState()
+      .setCommitResult({ outputPath: '/tmp/out.docx', committedAt: '2026-04-25T12:00:00Z' })
+    expect(useReviewStore.getState().commitResult).toEqual({
+      outputPath: '/tmp/out.docx',
+      committedAt: '2026-04-25T12:00:00Z',
+    })
+    useReviewStore.getState().setCommitResult(null)
+    expect(useReviewStore.getState().commitResult).toBeNull()
+  })
+
+  it('clear() empties commitResult', () => {
+    useReviewStore
+      .getState()
+      .setCommitResult({ outputPath: '/tmp/out.docx', committedAt: '2026-04-25T12:00:00Z' })
+    useReviewStore.getState().clear()
+    expect(useReviewStore.getState().commitResult).toBeNull()
+  })
+
+  it('setMappingStoreUnlocked tracks the lock state across true/false/null', () => {
+    expect(useReviewStore.getState().mappingStoreUnlocked).toBeNull()
+    useReviewStore.getState().setMappingStoreUnlocked(true)
+    expect(useReviewStore.getState().mappingStoreUnlocked).toBe(true)
+    useReviewStore.getState().setMappingStoreUnlocked(false)
+    expect(useReviewStore.getState().mappingStoreUnlocked).toBe(false)
+    useReviewStore.getState().setMappingStoreUnlocked(null)
+    expect(useReviewStore.getState().mappingStoreUnlocked).toBeNull()
+  })
+
+  it('clear() does not clobber the mapping-store lock state', () => {
+    // The lock state is user-scoped; clearing per-document state must
+    // not flip it back to "unknown" or the user would see the
+    // pseudonymize option freeze every time they close a document.
+    useReviewStore.getState().setMappingStoreUnlocked(true)
+    useReviewStore.getState().clear()
+    expect(useReviewStore.getState().mappingStoreUnlocked).toBe(true)
+  })
 })

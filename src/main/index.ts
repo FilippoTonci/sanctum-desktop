@@ -1,15 +1,33 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pollHealth } from './health'
+import { SettingsStore, settingsToEnv, type AppSettings } from './settings'
 import { spawnSidecar, type SidecarHandle } from './sidecar'
 import { StatusBus, toPublicStatus } from './status'
 
 const APP_URL_ALLOWLIST = new Set<string>(['https://github.com/FilippoTonci/sanctum'])
 const STATUS_CHANNEL = 'sanctum:status-change'
 const STATUS_GET_CHANNEL = 'sanctum:get-status'
+const SAVE_DIALOG_CHANNEL = 'sanctum:show-save-dialog'
+const REVEAL_IN_FOLDER_CHANNEL = 'sanctum:reveal-in-folder'
+const MAPPING_STORE_PATH_CHANNEL = 'sanctum:get-mapping-store-path'
+const SETTINGS_GET_CHANNEL = 'sanctum:get-settings'
+const SETTINGS_UPDATE_CHANNEL = 'sanctum:update-settings'
+
+interface SaveDialogRequest {
+  readonly defaultPath?: string
+  readonly title?: string
+}
+
+interface SaveDialogResult {
+  readonly canceled: boolean
+  readonly filePath: string | null
+}
 
 const statusBus = new StatusBus()
 let sidecar: SidecarHandle | null = null
+let settingsStore: SettingsStore | null = null
 
 function broadcastStatus(): void {
   const payload = toPublicStatus(statusBus.status)
@@ -61,7 +79,8 @@ async function startSidecar(): Promise<void> {
   statusBus.set({ state: 'starting', message: 'Spawning Sanctum backend…' })
 
   try {
-    sidecar = await spawnSidecar()
+    const envOverrides = settingsStore !== null ? settingsToEnv(settingsStore.read()) : undefined
+    sidecar = await spawnSidecar({ envOverrides })
     statusBus.set({
       state: 'waiting-for-health',
       baseUrl: sidecar.baseUrl,
@@ -86,9 +105,86 @@ async function startSidecar(): Promise<void> {
   }
 }
 
+/**
+ * Tear down the running sidecar and start a fresh one. Used when
+ * settings change so the new env (NLP tier, score threshold, default
+ * operator) lands on the sidecar process. The renderer's existing
+ * splash UX handles the transient 'starting' / 'waiting-for-health'
+ * states for free.
+ */
+async function respawnSidecar(): Promise<void> {
+  if (sidecar !== null) {
+    const handle = sidecar
+    sidecar = null
+    await handle.kill().catch(() => undefined)
+  }
+  await startSidecar()
+}
+
 ipcMain.handle(STATUS_GET_CHANNEL, () => toPublicStatus(statusBus.status))
 
+ipcMain.handle(
+  SAVE_DIALOG_CHANNEL,
+  async (event, request: SaveDialogRequest): Promise<SaveDialogResult> => {
+    // Anchor the dialog on the BrowserWindow that issued the request so
+    // it modal-stacks over the right surface (multi-window is not in
+    // scope today, but the call site is the same).
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result =
+      win === null
+        ? await dialog.showSaveDialog({
+            defaultPath: request.defaultPath,
+            title: request.title,
+          })
+        : await dialog.showSaveDialog(win, {
+            defaultPath: request.defaultPath,
+            title: request.title,
+          })
+    return {
+      canceled: result.canceled,
+      // Electron types `filePath` as a non-optional string but populates
+      // it with the empty string on cancel; normalise to null so the
+      // renderer sees one shape.
+      filePath: result.canceled || result.filePath === '' ? null : result.filePath,
+    }
+  },
+)
+
+ipcMain.handle(REVEAL_IN_FOLDER_CHANNEL, (_event, path: string) => {
+  // shell.showItemInFolder is sync and returns void; expose it as a
+  // promise-returning IPC for symmetry with the rest of the surface.
+  shell.showItemInFolder(path)
+})
+
+ipcMain.handle(MAPPING_STORE_PATH_CHANNEL, (): string => {
+  // Default location matches the backend's CLI default. WS5-7 (settings)
+  // will let the user override this via env / config; for now it's
+  // hard-wired so the mapping-unlock UX doesn't have to ask the user
+  // to type the path.
+  return join(homedir(), '.sanctum', 'mapping-store.bin')
+})
+
+ipcMain.handle(SETTINGS_GET_CHANNEL, (): AppSettings | null => {
+  return settingsStore?.read() ?? null
+})
+
+ipcMain.handle(
+  SETTINGS_UPDATE_CHANNEL,
+  async (_event, patch: Partial<AppSettings>): Promise<AppSettings | null> => {
+    if (settingsStore === null) return null
+    const next = await settingsStore.update(patch)
+    // Respawn so the new env lands on the sidecar. Don't block the
+    // IPC response on the full ready handshake — the renderer
+    // observes the status bus directly and surfaces the transient
+    // 'starting' / 'waiting-for-health' states via Splash.
+    void respawnSidecar()
+    return next
+  },
+)
+
 void app.whenReady().then(() => {
+  settingsStore = new SettingsStore(join(app.getPath('userData'), 'settings.json'))
+
   createWindow()
 
   app.on('activate', () => {

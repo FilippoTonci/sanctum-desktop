@@ -23,6 +23,13 @@ export interface SpawnOptions {
   readonly killTimeoutMs?: number
   readonly commandResolver?: () => SidecarCommand
   readonly spawnFn?: typeof spawn
+  /**
+   * Extra environment variables merged on top of the resolver's default
+   * env (which itself layers over `process.env`). Used by the settings
+   * IPC respawn flow to inject `SANCTUM_NLP__NER_BACKEND` etc. without
+   * touching the resolver.
+   */
+  readonly envOverrides?: Record<string, string>
 }
 
 const READY_PATTERN = /SANCTUM_READY\s+host=(\S+)\s+port=(\d+)/
@@ -53,7 +60,7 @@ export async function spawnSidecar(options: SpawnOptions = {}): Promise<SidecarH
   // guard on every access.
   const child = spawnImpl(command, [...args], {
     cwd,
-    env: { ...process.env, ...env },
+    env: { ...process.env, ...env, ...(options.envOverrides ?? {}) },
     stdio: ['pipe', 'pipe', 'pipe'],
   }) as SpawnedChild
 

@@ -56,9 +56,58 @@ export interface ReviewState {
   readonly selectMode: boolean
   readonly defaultOperator: OperatorName
   readonly commitPanelOpen: boolean
+  /** Backend session id once a real `/review-sessions` round-trip lands. */
+  readonly sessionId: string | null
 
   setDetections: (detections: readonly Detection[]) => void
+  setSessionId: (id: string | null) => void
+  /** Append a single detection (used by the synced addMissed flow). */
+  appendDetection: (detection: Detection) => void
+  /** Remove a single detection (used by reject-on-user-added DELETE). */
+  removeDetection: (id: string) => void
   clear: () => void
+
+  /**
+   * Last error from the backend-sync layer; null when clear. Carries
+   * both the message and the HTTP status (if known) so the SyncErrorToast
+   * can render a typed surface — see `components/TypedError.tsx`.
+   */
+  readonly lastSyncError: { readonly status: number | null; readonly message: string } | null
+  setLastSyncError: (error: { status: number | null; message: string } | string | null) => void
+
+  /**
+   * Set when the session has been successfully committed via
+   * `POST /review-sessions/{id}/commit`. The CommitPanel switches to a
+   * success state showing the output path; the abandon-on-close path
+   * skips its DELETE because the backend already torn the session
+   * down at commit time.
+   */
+  readonly commitResult: { readonly outputPath: string; readonly committedAt: string } | null
+  setCommitResult: (result: { outputPath: string; committedAt: string } | null) => void
+
+  /**
+   * Mapping-store lock state, mirrored from /health and updated locally
+   * after successful unlock/lock round-trips. `null` means we haven't
+   * polled /health yet (status still 'idle' / 'starting'). Components
+   * that gate on the lock state (e.g. the pseudonymize operator option
+   * in the tooltip + commit panel) treat null as "unknown — assume
+   * locked" so the user doesn't pick an operator that will fail at
+   * commit time.
+   */
+  readonly mappingStoreUnlocked: boolean | null
+  setMappingStoreUnlocked: (unlocked: boolean | null) => void
+
+  /**
+   * Per-detection-id preview text — what the operator would replace
+   * the detection with. Computed server-side and shipped on every
+   * session GET and every decision-touching PATCH/POST. Keys are the
+   * renderer's Detection.id (i.e. `user:<ua_id>` for user-added,
+   * raw `detection_id` for proposals).
+   */
+  readonly previews: Readonly<Record<string, string>>
+  setPreviews: (map: Record<string, string>) => void
+  setPreview: (id: string, preview: string) => void
+  clearPreview: (id: string) => void
   setStatus: (id: string, status: DetectionStatus) => void
   setFocused: (id: string | null) => void
   focusNext: () => void
@@ -88,6 +137,11 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   defaultOperator: 'hips',
   commitPanelOpen: false,
   editingReplacementId: null,
+  sessionId: null,
+  lastSyncError: null,
+  previews: {},
+  commitResult: null,
+  mappingStoreUnlocked: null,
 
   setDetections: (detections) => {
     set({
@@ -100,6 +154,70 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     })
   },
 
+  setSessionId: (id) => {
+    set({ sessionId: id })
+  },
+
+  appendDetection: (detection) => {
+    set((state) => {
+      if (state.detections.some((d) => d.id === detection.id)) {
+        return { focusedId: detection.id }
+      }
+      return {
+        detections: [...state.detections, detection],
+        focusedId: detection.id,
+      }
+    })
+  },
+
+  removeDetection: (id) => {
+    set((state) => ({
+      detections: state.detections.filter((d) => d.id !== id),
+      focusedId: state.focusedId === id ? null : state.focusedId,
+      undoStack: state.undoStack.filter((edit) => edit.id !== id),
+      editingReplacementId: state.editingReplacementId === id ? null : state.editingReplacementId,
+    }))
+  },
+
+  setLastSyncError: (error) => {
+    if (error === null) {
+      set({ lastSyncError: null })
+      return
+    }
+    if (typeof error === 'string') {
+      set({ lastSyncError: { status: null, message: error } })
+      return
+    }
+    set({ lastSyncError: error })
+  },
+
+  setCommitResult: (result) => {
+    set({ commitResult: result })
+  },
+
+  setMappingStoreUnlocked: (unlocked) => {
+    set({ mappingStoreUnlocked: unlocked })
+  },
+
+  setPreviews: (map) => {
+    set({ previews: { ...map } })
+  },
+
+  setPreview: (id, preview) => {
+    set((state) => ({ previews: { ...state.previews, [id]: preview } }))
+  },
+
+  clearPreview: (id) => {
+    set((state) => {
+      if (!(id in state.previews)) return state
+      const next: Record<string, string> = {}
+      for (const [k, v] of Object.entries(state.previews)) {
+        if (k !== id) next[k] = v
+      }
+      return { previews: next }
+    })
+  },
+
   clear: () => {
     set({
       detections: [],
@@ -108,6 +226,10 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       selectMode: false,
       commitPanelOpen: false,
       editingReplacementId: null,
+      sessionId: null,
+      lastSyncError: null,
+      previews: {},
+      commitResult: null,
     })
   },
 

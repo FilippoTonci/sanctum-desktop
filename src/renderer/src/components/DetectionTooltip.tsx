@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { findSegmentRange } from '../review/segments'
 import { useReviewStore } from '../review/store'
 import { OPERATOR_NAMES, type Detection, type OperatorName } from '../review/types'
+import { useReviewActions } from '../review/use-actions'
 
 interface DetectionTooltipProps {
   /** The DocxView body element; tooltip positions against ranges inside it. */
@@ -12,12 +13,11 @@ interface DetectionTooltipProps {
 export function DetectionTooltip({ anchorRoot }: DetectionTooltipProps): ReactElement | null {
   const focusedId = useReviewStore((s) => s.focusedId)
   const detections = useReviewStore((s) => s.detections)
-  const setStatus = useReviewStore((s) => s.setStatus)
-  const setOperator = useReviewStore((s) => s.setOperator)
-  const setCustomReplacement = useReviewStore((s) => s.setCustomReplacement)
   const defaultOperator = useReviewStore((s) => s.defaultOperator)
   const editingReplacementId = useReviewStore((s) => s.editingReplacementId)
   const startEditingReplacement = useReviewStore((s) => s.startEditingReplacement)
+  const mappingUnlocked = useReviewStore((s) => s.mappingStoreUnlocked)
+  const actions = useReviewActions()
 
   const [draftReplacement, setDraftReplacement] = useState('')
   const editInputRef = useRef<HTMLInputElement | null>(null)
@@ -77,21 +77,39 @@ export function DetectionTooltip({ anchorRoot }: DetectionTooltipProps): ReactEl
       </div>
       <p className="detection-tooltip-text">"{focused.text}"</p>
 
-      <label className="detection-tooltip-operator">
+      <label
+        className={`detection-tooltip-operator${
+          focused.customReplacement !== undefined ? ' detection-tooltip-operator-bypassed' : ''
+        }`}
+      >
         Operator
         <select
           value={effectiveOperator}
+          disabled={focused.customReplacement !== undefined}
           onChange={(e) => {
-            setOperator(focused.id, e.currentTarget.value as OperatorName)
+            actions.setOperator(focused.id, e.currentTarget.value as OperatorName)
           }}
         >
-          {OPERATOR_NAMES.map((op) => (
-            <option key={op} value={op}>
-              {op}
-              {op === defaultOperator && focused.operator === undefined ? ' (default)' : ''}
-            </option>
-          ))}
+          {OPERATOR_NAMES.map((op) => {
+            const pseudonymizeLocked = op === 'pseudonymize' && mappingUnlocked !== true
+            return (
+              <option key={op} value={op} disabled={pseudonymizeLocked}>
+                {op}
+                {op === defaultOperator && focused.operator === undefined ? ' (default)' : ''}
+                {pseudonymizeLocked ? ' — mapping store locked' : ''}
+              </option>
+            )
+          })}
         </select>
+        {focused.customReplacement !== undefined ? (
+          <span className="detection-tooltip-operator-hint">
+            Bypassed by custom replacement below.
+          </span>
+        ) : focused.operator === 'pseudonymize' && mappingUnlocked !== true ? (
+          <span className="detection-tooltip-operator-hint">
+            Unlock the mapping store before committing.
+          </span>
+        ) : null}
       </label>
 
       {editing ? (
@@ -107,7 +125,7 @@ export function DetectionTooltip({ anchorRoot }: DetectionTooltipProps): ReactEl
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
-                setCustomReplacement(
+                actions.setCustomReplacement(
                   focused.id,
                   draftReplacement.length === 0 ? null : draftReplacement,
                 )
@@ -158,7 +176,7 @@ export function DetectionTooltip({ anchorRoot }: DetectionTooltipProps): ReactEl
           type="button"
           className="detection-tooltip-accept"
           onClick={() => {
-            setStatus(focused.id, 'accepted')
+            actions.accept(focused.id)
           }}
         >
           Accept
@@ -167,7 +185,7 @@ export function DetectionTooltip({ anchorRoot }: DetectionTooltipProps): ReactEl
           type="button"
           className="detection-tooltip-reject"
           onClick={() => {
-            setStatus(focused.id, 'rejected')
+            actions.reject(focused.id)
           }}
         >
           Reject

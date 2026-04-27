@@ -1,24 +1,48 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
+import { mappingClientFromCredentials } from './api/mapping'
+import { clientFromCredentials, type SessionsClient } from './api/sessions'
+import { ApiError } from './api/types'
 import { CommitPanel } from './components/CommitPanel'
 import { DetectionSidebar } from './components/DetectionSidebar'
 import { DetectionTooltip } from './components/DetectionTooltip'
 import { DocxView } from './components/DocxView'
 import { DropZone } from './components/DropZone'
+import { MappingStoreChip } from './components/MappingStoreChip'
+import { PreviewOverlay } from './components/PreviewOverlay'
+import { RecentSessions } from './components/RecentSessions'
 import { SelectModeBanner } from './components/SelectModeBanner'
+import { SettingsModal } from './components/SettingsModal'
 import { Splash } from './components/Splash'
+import { TypedError } from './components/TypedError'
 import { seedFakeDetections } from './review/fake-detections'
+import { previewsForStore, sessionToDetections } from './review/from-session'
 import { useReviewKeyboard } from './review/keyboard'
 import { useReviewStore } from './review/store'
+import { OPERATOR_NAMES, type OperatorName } from './review/types'
+import { localActions, syncedActions, type ReviewActions } from './review/actions'
+import { ReviewActionsProvider } from './review/use-actions'
 import type { SanctumStatus } from './sanctum'
+
+type AnalysisState =
+  | { kind: 'fake' }
+  | { kind: 'pending' }
+  | { kind: 'ready' }
+  | { kind: 'error'; error: unknown }
 
 export function App(): ReactElement {
   const [status, setStatus] = useState<SanctumStatus>({ state: 'idle' })
   const [doc, setDoc] = useState<File | null>(null)
   const [docRoot, setDocRoot] = useState<HTMLElement | null>(null)
+  const [analysis, setAnalysis] = useState<AnalysisState>({ kind: 'fake' })
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const detections = useReviewStore((s) => s.detections)
   const focusedId = useReviewStore((s) => s.focusedId)
   const setStoreDetections = useReviewStore((s) => s.setDetections)
+  const setSessionId = useReviewStore((s) => s.setSessionId)
+  const setDefaultOperator = useReviewStore((s) => s.setDefaultOperator)
+  const setPreviews = useReviewStore((s) => s.setPreviews)
+  const setMappingStoreUnlocked = useReviewStore((s) => s.setMappingStoreUnlocked)
   const clearStore = useReviewStore((s) => s.clear)
 
   useEffect(() => {
@@ -54,54 +78,254 @@ export function App(): ReactElement {
   const reviewMode = doc !== null
   const showBackendStatus = status.state !== 'ready'
 
-  useReviewKeyboard(reviewMode, docRoot)
+  const sessionsClient = useMemo(() => {
+    if (status.state !== 'ready') return null
+    return clientFromCredentials({ baseUrl: status.baseUrl, token: status.token })
+  }, [status])
+
+  const mappingClient = useMemo(() => {
+    if (status.state !== 'ready') return null
+    return mappingClientFromCredentials({ baseUrl: status.baseUrl, token: status.token })
+  }, [status])
+
+  // Mirror the /health-reported lock state into the store on every
+  // status change. unlock/lock round-trips will overwrite locally;
+  // a fresh /health poll (e.g. on sidecar respawn) re-syncs.
+  useEffect(() => {
+    if (status.state !== 'ready') return
+    setMappingStoreUnlocked(status.health.mapping_store_unlocked ?? null)
+  }, [status, setMappingStoreUnlocked])
+
+  // Keyboard handler reaches actions through the same factory the
+  // ReviewActionsProvider uses below — kept in sync via a shared
+  // memo so we never accidentally drift between "what the buttons
+  // do" (provider) and "what the keys do" (this hook).
+  const sessionId = useReviewStore((s) => s.sessionId)
+  const reviewActions = useMemo<ReviewActions>(() => {
+    if (sessionsClient === null || sessionId === null) return localActions
+    return syncedActions({ client: sessionsClient, sessionId })
+  }, [sessionsClient, sessionId])
+
+  useReviewKeyboard(reviewMode, docRoot, reviewActions)
 
   const handleFile = useCallback(
     (file: File) => {
       setDoc(file)
       clearStore()
+      // Mode is decided in the effect below once `doc` settles.
     },
     [clearStore],
   )
 
   const handleClose = useCallback(() => {
+    // If the session is open and the user closes without committing,
+    // tell the backend to drop it — keeps the on-disk session store
+    // tidy and prevents stale entries piling up in the Recent Sessions
+    // list. We only DELETE when the session hasn't already been
+    // committed (commit deletes the session dir on its own).
+    const state = useReviewStore.getState()
+    if (sessionsClient !== null && state.sessionId !== null && state.commitResult === null) {
+      const sid = state.sessionId
+      void sessionsClient.abandonSession(sid).catch(() => {
+        // Don't block local close on a failed DELETE — the user wants
+        // out and we already cleared the local view. Surface via the
+        // sync-error toast so it isn't silently swallowed.
+        useReviewStore.getState().setLastSyncError(`abandon: failed to delete session ${sid}`)
+      })
+    }
     setDoc(null)
     setDocRoot(null)
+    setAnalysis({ kind: 'fake' })
     clearStore()
-  }, [clearStore])
+  }, [clearStore, sessionsClient])
 
   const handleRendered = useCallback(
     (root: HTMLElement) => {
       setDocRoot(root)
-      setStoreDetections(seedFakeDetections(root))
+      // The seedFakeDetections fallback only fires when we're not
+      // talking to a real backend. Real-mode detections arrive via the
+      // POST round-trip the effect below kicks off.
+      if (analysis.kind === 'fake') {
+        setStoreDetections(seedFakeDetections(root))
+      }
     },
-    [setStoreDetections],
+    [analysis.kind, setStoreDetections],
   )
+
+  // Drive the create-session round-trip whenever the dropped file
+  // changes AND we have a usable client + on-disk path. Fires exactly
+  // once per file because the cleanup function aborts the in-flight
+  // POST if `doc` is replaced before it returns.
+  useEffect(() => {
+    if (doc === null) return undefined
+    const path = window.sanctum?.getFilePath(doc) ?? ''
+    if (sessionsClient === null || path === '') {
+      // Fake-seeder fallback: standalone browser, sidecar skipped, or
+      // a renderer-synthesised File without an on-disk path.
+      setAnalysis({ kind: 'fake' })
+      return undefined
+    }
+
+    setAnalysis({ kind: 'pending' })
+    const ctrl = new AbortController()
+    void runAnalysis({
+      client: sessionsClient,
+      path,
+      signal: ctrl.signal,
+      onSuccess: (response) => {
+        setSessionId(response.id)
+        if (isOperatorName(response.default_operator)) {
+          setDefaultOperator(response.default_operator)
+        }
+        setStoreDetections(sessionToDetections(response))
+        setPreviews(previewsForStore(response))
+        setAnalysis({ kind: 'ready' })
+      },
+      onError: (err) => {
+        setAnalysis({ kind: 'error', error: err })
+      },
+    })
+    return () => {
+      ctrl.abort()
+    }
+  }, [doc, sessionsClient, setSessionId, setDefaultOperator, setStoreDetections, setPreviews])
+
+  const handleResume = useCallback((sessionId: string) => {
+    // Slice 2 ships create-on-drop only. Resume requires the desktop to
+    // re-acquire the original input bytes — a follow-up that needs
+    // either a backend `GET /review-sessions/{id}/input` endpoint or a
+    // desktop-side input cache. Left as a no-op so the list stays
+    // useful (timestamps, counts) without misleading the user about
+    // what the click does.
+    console.info('[sanctum] resume not yet wired for session', sessionId)
+  }, [])
 
   return (
     <main className={`shell${reviewMode ? ' shell-review' : ''}`}>
-      <header>
-        <h1>Sanctum Desktop</h1>
-        <p className="tagline">Local-first document anonymization — coming soon.</p>
+      <header className="shell-header">
+        <div>
+          <h1>Sanctum Desktop</h1>
+          <p className="tagline">Local-first document anonymization — coming soon.</p>
+        </div>
+        <div className="shell-header-controls">
+          <MappingStoreChip client={mappingClient} />
+          {window.sanctum?.getSettings !== undefined ? (
+            <button
+              type="button"
+              className="shell-settings-button"
+              onClick={() => {
+                setSettingsOpen(true)
+              }}
+              title="Settings"
+              aria-label="Settings"
+            >
+              ⚙️
+            </button>
+          ) : null}
+        </div>
       </header>
+      {settingsOpen ? (
+        <SettingsModal
+          onClose={() => {
+            setSettingsOpen(false)
+          }}
+        />
+      ) : null}
       {showBackendStatus ? <Splash status={status} /> : null}
       {reviewMode ? (
-        <div className="review-layout">
-          <DocxView
-            file={doc}
-            onClose={handleClose}
-            detections={detections}
-            focusedId={focusedId}
-            onRendered={handleRendered}
-          />
-          <DetectionSidebar />
-          <DetectionTooltip anchorRoot={docRoot} />
-          <SelectModeBanner />
-          <CommitPanel />
-        </div>
+        <ReviewActionsProvider client={sessionsClient} sessionId={sessionId}>
+          <div className="review-layout">
+            <DocxView
+              file={doc}
+              onClose={handleClose}
+              detections={detections}
+              focusedId={focusedId}
+              onRendered={handleRendered}
+            />
+            <DetectionSidebar />
+            <DetectionTooltip anchorRoot={docRoot} />
+            <PreviewOverlay anchorRoot={docRoot} />
+            <SelectModeBanner />
+            <CommitPanel client={sessionsClient} sourceFileName={doc.name} onDone={handleClose} />
+            <AnalysisBanner state={analysis} />
+            <SyncErrorToast />
+          </div>
+        </ReviewActionsProvider>
       ) : (
-        <DropZone onFile={handleFile} />
+        <div className="landing">
+          <RecentSessions client={sessionsClient} onResume={handleResume} />
+          <DropZone onFile={handleFile} />
+        </div>
       )}
     </main>
+  )
+}
+
+interface RunAnalysisArgs {
+  readonly client: SessionsClient
+  readonly path: string
+  readonly signal: AbortSignal
+  readonly onSuccess: (response: Awaited<ReturnType<SessionsClient['createSession']>>) => void
+  readonly onError: (err: unknown) => void
+}
+
+async function runAnalysis(args: RunAnalysisArgs): Promise<void> {
+  try {
+    const response = await args.client.createSession(
+      { input_path: args.path, default_operator: 'hips' },
+      args.signal,
+    )
+    if (args.signal.aborted) return
+    args.onSuccess(response)
+  } catch (err) {
+    if (args.signal.aborted) return
+    args.onError(err)
+  }
+}
+
+function AnalysisBanner({ state }: { readonly state: AnalysisState }): ReactElement | null {
+  if (state.kind === 'pending') {
+    return (
+      <div className="analysis-banner analysis-banner-pending" role="status">
+        <span className="splash-spinner" aria-hidden="true" />
+        Analyzing document…
+      </div>
+    )
+  }
+  if (state.kind === 'error') {
+    return (
+      <div className="analysis-banner-host">
+        <TypedError error={state.error} />
+      </div>
+    )
+  }
+  return null
+}
+
+function isOperatorName(value: string): value is OperatorName {
+  return (OPERATOR_NAMES as readonly string[]).includes(value)
+}
+
+function SyncErrorToast(): ReactElement | null {
+  const lastSyncError = useReviewStore((s) => s.lastSyncError)
+  const setLastSyncError = useReviewStore((s) => s.setLastSyncError)
+  if (lastSyncError === null) return null
+  // Reconstruct an ApiError-shaped object so TypedError can route on
+  // the status code. The store doesn't preserve the class identity
+  // (it serialises to a plain object), so we use the same .status +
+  // .message pair from the error class signature.
+  const fauxError =
+    lastSyncError.status !== null
+      ? new ApiError(lastSyncError.status, null, lastSyncError.message)
+      : new Error(lastSyncError.message)
+  return (
+    <div className="sync-error-toast-host">
+      <TypedError
+        error={fauxError}
+        onDismiss={() => {
+          setLastSyncError(null)
+        }}
+      />
+    </div>
   )
 }

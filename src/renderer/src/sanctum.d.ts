@@ -17,9 +17,37 @@ export type SanctumStatus =
     }
   | { readonly state: 'error'; readonly message: string }
 
+export interface SaveDialogOptions {
+  readonly defaultPath?: string
+  readonly title?: string
+}
+
+export interface SaveDialogResult {
+  readonly canceled: boolean
+  readonly filePath: string | null
+}
+
+export type NerBackend = 'spacy' | 'gliner'
+
+export interface AppSettings {
+  readonly nerBackend: NerBackend
+  readonly scoreThreshold: number
+  readonly defaultOperator: string
+}
+
 export interface SanctumApi {
   getStatus(): Promise<SanctumStatus>
   onStatusChange(listener: (status: SanctumStatus) => void): () => void
+  /**
+   * Absolute filesystem path for a dropped File, or '' when unavailable
+   * (renderer-synthesised test files, browsers without webUtils, etc.).
+   */
+  getFilePath(file: File): string
+  showSaveDialog(options: SaveDialogOptions): Promise<SaveDialogResult>
+  revealInFolder(path: string): Promise<void>
+  getMappingStorePath(): Promise<string>
+  getSettings(): Promise<AppSettings | null>
+  updateSettings(patch: Partial<AppSettings>): Promise<AppSettings | null>
 }
 
 declare global {
