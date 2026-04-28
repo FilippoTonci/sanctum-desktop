@@ -10,6 +10,7 @@ export default tseslint.config(
       'out/**',
       'dist/**',
       'release/**',
+      'sidecar-build/**',
       'node_modules/**',
       'playwright-report/**',
       'test-results/**',
