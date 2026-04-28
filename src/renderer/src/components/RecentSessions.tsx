@@ -5,7 +5,13 @@ import { ApiError, type ReviewSessionIndexEntry } from '../api/types'
 interface RecentSessionsProps {
   /** API client for fetching the list. `null` = no backend, render empty state. */
   readonly client: SessionsClient | null
-  /** Slice 2 wires this; for now slice 1 just stubs the click. */
+  /**
+   * Called when the user clicks a row to resume a session. Only fires
+   * for `open` sessions; terminal rows (committed / abandoned) render
+   * disabled because the backend has shed their input bytes — there's
+   * nothing for the desktop to load. The list still shows them so the
+   * user keeps an audit trail of past reviews.
+   */
   readonly onResume?: (sessionId: string) => void
 }
 
@@ -79,45 +85,53 @@ export function RecentSessions({ client, onResume }: RecentSessionsProps): React
 
       {state.kind === 'ready' && state.sessions.length > 0 ? (
         <ul className="recent-sessions-list">
-          {state.sessions.map((s) => (
-            <li key={s.id}>
-              <button
-                type="button"
-                className={`recent-sessions-item recent-sessions-item-${s.status}`}
-                onClick={() => onResume?.(s.id)}
-                title={`${s.source_path} · ${s.id}`}
-              >
-                <div className="recent-sessions-item-row">
-                  <span className="recent-sessions-item-name">{filename(s.source_path)}</span>
-                  <span
-                    className={`recent-sessions-item-status recent-sessions-item-status-${s.status}`}
-                  >
-                    {s.status}
-                  </span>
-                </div>
-                <div className="recent-sessions-item-meta">
-                  <span>{formatRelative(s.created_at)}</span>
-                  <span className="recent-sessions-item-counts">
-                    {s.pending_count > 0 ? (
-                      <span className="recent-sessions-item-pending">
-                        {String(s.pending_count)} pending
-                      </span>
-                    ) : null}
-                    {s.accepted_count > 0 ? (
-                      <span className="recent-sessions-item-accepted">
-                        {String(s.accepted_count)} accepted
-                      </span>
-                    ) : null}
-                    {s.rejected_count > 0 ? (
-                      <span className="recent-sessions-item-rejected">
-                        {String(s.rejected_count)} rejected
-                      </span>
-                    ) : null}
-                  </span>
-                </div>
-              </button>
-            </li>
-          ))}
+          {state.sessions.map((s) => {
+            const resumable = s.status === 'open'
+            const tooltip = resumable
+              ? `${s.source_path} · ${s.id}`
+              : `${s.source_path} · ${s.id} — ${s.status}; input bytes shed at terminal status`
+            return (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  className={`recent-sessions-item recent-sessions-item-${s.status}`}
+                  onClick={resumable ? () => onResume?.(s.id) : undefined}
+                  disabled={!resumable}
+                  aria-disabled={!resumable}
+                  title={tooltip}
+                >
+                  <div className="recent-sessions-item-row">
+                    <span className="recent-sessions-item-name">{filename(s.source_path)}</span>
+                    <span
+                      className={`recent-sessions-item-status recent-sessions-item-status-${s.status}`}
+                    >
+                      {s.status}
+                    </span>
+                  </div>
+                  <div className="recent-sessions-item-meta">
+                    <span>{formatRelative(s.created_at)}</span>
+                    <span className="recent-sessions-item-counts">
+                      {s.pending_count > 0 ? (
+                        <span className="recent-sessions-item-pending">
+                          {String(s.pending_count)} pending
+                        </span>
+                      ) : null}
+                      {s.accepted_count > 0 ? (
+                        <span className="recent-sessions-item-accepted">
+                          {String(s.accepted_count)} accepted
+                        </span>
+                      ) : null}
+                      {s.rejected_count > 0 ? (
+                        <span className="recent-sessions-item-rejected">
+                          {String(s.rejected_count)} rejected
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                </button>
+              </li>
+            )
+          })}
         </ul>
       ) : null}
     </section>

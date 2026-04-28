@@ -25,6 +25,7 @@ function fakeClient(overrides: Partial<SessionsClient> = {}): SessionsClient {
     listSessions: noop,
     createSession: noop,
     getSession: noop,
+    getSessionInput: noop,
     patchDecision: noop,
     addUserAdded: noop,
     deleteUserAdded: noop,

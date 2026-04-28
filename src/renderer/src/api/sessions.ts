@@ -38,6 +38,14 @@ export interface SessionsClient {
     signal?: AbortSignal,
   ): Promise<ReviewSessionResponse>
   getSession(id: string, signal?: AbortSignal): Promise<ReviewSessionResponse>
+  /**
+   * Fetch the original input bytes pinned for an OPEN session. The
+   * desktop's "resume from Recent Sessions" flow feeds the returned
+   * Blob into docx-preview; the on-disk source path is not required.
+   * Throws ApiError(410) for terminal sessions (committed / abandoned)
+   * — those have shed their input bytes by design.
+   */
+  getSessionInput(id: string, signal?: AbortSignal): Promise<Blob>
   patchDecision(
     sessionId: string,
     proposalId: string,
@@ -121,6 +129,26 @@ export function createSessionsClient(opts: ClientOptions): SessionsClient {
         signal,
       })
       return (await handle(response)) as ReviewSessionResponse
+    },
+
+    async getSessionInput(id, signal) {
+      // Override the default Accept since this endpoint returns the
+      // session's source-document bytes, not JSON. The 4xx/5xx error
+      // bodies are still JSON, so `handle()` is reused for fail-paths
+      // and the success branch reads the response as a Blob.
+      const response = await fetchImpl(url(`/review-sessions/${encodeURIComponent(id)}/input`), {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${opts.token}` },
+        signal,
+      })
+      if (!response.ok) {
+        await handle(response)
+        // handle() always throws on a non-ok response. The throw above
+        // is never seen by the caller; this line is purely for the
+        // type-checker since `handle()` is typed as Promise<unknown>.
+        throw new Error('unreachable')
+      }
+      return response.blob()
     },
 
     async patchDecision(sessionId, proposalId, body, signal) {

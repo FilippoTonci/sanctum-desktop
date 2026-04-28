@@ -156,8 +156,20 @@ export function App(): ReactElement {
   // changes AND we have a usable client + on-disk path. Fires exactly
   // once per file because the cleanup function aborts the in-flight
   // POST if `doc` is replaced before it returns.
+  //
+  // Resume short-circuit: handleResume hydrates the store + sessionId
+  // synchronously before setDoc, so a non-null sessionId here means
+  // "already analysed; skip the create-session round-trip." Fresh
+  // drops always pass through `clearStore` first → sessionId is
+  // null → the gate stays open.
   useEffect(() => {
     if (doc === null) return undefined
+
+    if (sessionId !== null) {
+      setAnalysis({ kind: 'ready' })
+      return undefined
+    }
+
     const path = window.sanctum?.getFilePath(doc) ?? ''
     if (sessionsClient === null || path === '') {
       // Fake-seeder fallback: standalone browser, sidecar skipped, or
@@ -188,17 +200,61 @@ export function App(): ReactElement {
     return () => {
       ctrl.abort()
     }
-  }, [doc, sessionsClient, setSessionId, setDefaultOperator, setStoreDetections, setPreviews])
+  }, [
+    doc,
+    sessionsClient,
+    sessionId,
+    setSessionId,
+    setDefaultOperator,
+    setStoreDetections,
+    setPreviews,
+  ])
 
-  const handleResume = useCallback((sessionId: string) => {
-    // Slice 2 ships create-on-drop only. Resume requires the desktop to
-    // re-acquire the original input bytes — a follow-up that needs
-    // either a backend `GET /review-sessions/{id}/input` endpoint or a
-    // desktop-side input cache. Left as a no-op so the list stays
-    // useful (timestamps, counts) without misleading the user about
-    // what the click does.
-    console.info('[sanctum] resume not yet wired for session', sessionId)
-  }, [])
+  const handleResume = useCallback(
+    (resumeSessionId: string): void => {
+      if (sessionsClient === null) return
+
+      // Resume is split between two ticks: the async fetches run
+      // concurrently (session JSON + input bytes), then a single
+      // synchronous batch hydrates store + sessionId + doc so the
+      // create-session effect above sees the resumed state and
+      // short-circuits. Errors surface via the AnalysisState union
+      // and the existing TypedError surface renders them.
+      setAnalysis({ kind: 'pending' })
+      const ctrl = new AbortController()
+      void (async () => {
+        try {
+          const [session, blob] = await Promise.all([
+            sessionsClient.getSession(resumeSessionId, ctrl.signal),
+            sessionsClient.getSessionInput(resumeSessionId, ctrl.signal),
+          ])
+          if (ctrl.signal.aborted) return
+
+          const filename = filenameFromSourcePath(session.source_path)
+          const file = new File([blob], filename, {
+            type: blob.type || 'application/octet-stream',
+          })
+
+          // Order matters: clear first so we never carry decisions
+          // from a prior session into the resumed view, then write
+          // the resumed state in the order the create-session effect
+          // expects (sessionId before doc so the gate above fires).
+          clearStore()
+          setSessionId(resumeSessionId)
+          if (isOperatorName(session.default_operator)) {
+            setDefaultOperator(session.default_operator)
+          }
+          setStoreDetections(sessionToDetections(session))
+          setPreviews(previewsForStore(session))
+          setDoc(file)
+        } catch (err) {
+          if (ctrl.signal.aborted) return
+          setAnalysis({ kind: 'error', error: err })
+        }
+      })()
+    },
+    [sessionsClient, clearStore, setSessionId, setDefaultOperator, setStoreDetections, setPreviews],
+  )
 
   return (
     <main className={`shell${reviewMode ? ' shell-review' : ''}`}>
@@ -304,6 +360,20 @@ function AnalysisBanner({ state }: { readonly state: AnalysisState }): ReactElem
 
 function isOperatorName(value: string): value is OperatorName {
   return (OPERATOR_NAMES as readonly string[]).includes(value)
+}
+
+/**
+ * Pull a usable display filename out of the session manifest's
+ * `source_path`. The backend stores the absolute path the user dropped
+ * the file from, which on Windows can use either separator. A bare
+ * fallback ('session.docx') exists for the unreachable corner case
+ * where the path has no separator and is empty — keeps `new File`
+ * happy without throwing.
+ */
+function filenameFromSourcePath(sourcePath: string): string {
+  const parts = sourcePath.split(/[/\\]/)
+  const last = parts[parts.length - 1]
+  return last !== undefined && last !== '' ? last : 'session.docx'
 }
 
 function SyncErrorToast(): ReactElement | null {
