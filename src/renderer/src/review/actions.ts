@@ -267,6 +267,14 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
             end: span.locator.end,
           })
           if (response.decision.kind !== 'user_added') return
+          // Backend drops any model proposal whose char range overlapped
+          // the new UA span (sanctum#31). Mirror the cascade locally so
+          // the listing matches what a refetch would show.
+          const removedIds = response.removed_proposal_ids ?? []
+          for (const id of removedIds) {
+            useReviewStore.getState().removeDetection(id)
+            useReviewStore.getState().clearPreview(id)
+          }
           const ua = response.decision
           const detectionId = `user:${ua.id}`
           useReviewStore.getState().appendDetection({
