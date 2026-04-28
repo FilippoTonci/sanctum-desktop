@@ -242,6 +242,56 @@ describe('syncedActions.addMissed', () => {
     expect(detections[0]?.status).toBe('accepted')
   })
 
+  it('drops detections + previews the backend purged via removed_proposal_ids', async () => {
+    // sanctum#31: backend deletes any model proposal whose char range
+    // overlaps the new UA span. The renderer mirrors that cascade so a
+    // session refetch isn't needed.
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('p_miller', { start: 35, end: 41, text: 'Miller' }),
+        makeDetection('p_henderson', { start: 43, end: 52, text: 'Henderson' }),
+        makeDetection('p_unrelated', { segmentId: 'body/p9/r0', start: 0, end: 4, text: 'keep' }),
+      ])
+    useReviewStore.getState().setPreviews({
+      p_miller: '<LOCATION>',
+      p_henderson: '<LOCATION>',
+      p_unrelated: '<PERSON>',
+    })
+    const addUserAdded = vi.fn(() =>
+      Promise.resolve({
+        decision: {
+          kind: 'user_added' as const,
+          id: 'backend-uuid',
+          segment_anchor: 'body/p4/r0',
+          entity_type: 'USER_ADDED',
+          original: 'Miller, Henderson and Johnson',
+          start: 35,
+          end: 64,
+        },
+        preview: '<ORGANIZATION>',
+        removed_proposal_ids: ['p_miller', 'p_henderson'],
+      }),
+    )
+    const actions = syncedActions({
+      client: fakeClient({ addUserAdded }),
+      sessionId: 'sess-1',
+    })
+
+    actions.addMissed({
+      locator: { segmentId: 'body/p4/r0', start: 35, end: 64 },
+      text: 'Miller, Henderson and Johnson',
+    })
+    await flushMicrotasks()
+
+    const detectionIds = useReviewStore.getState().detections.map((d) => d.id)
+    expect(detectionIds).toEqual(['p_unrelated', 'user:backend-uuid'])
+    expect(useReviewStore.getState().previews).toEqual({
+      p_unrelated: '<PERSON>',
+      'user:backend-uuid': '<ORGANIZATION>',
+    })
+  })
+
   it('exits select-mode and surfaces an error when the POST fails', async () => {
     useReviewStore.getState().enterSelectMode()
     const addUserAdded = vi.fn(() => Promise.reject(new ApiError(409, null, 'session committed')))

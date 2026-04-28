@@ -104,6 +104,14 @@ export interface AddUserAddedDecisionRequest {
 export interface DecisionWithPreviewResponse {
   readonly decision: SessionDecision
   readonly preview: string
+  /**
+   * Detection ids the backend dropped because the user-added span
+   * overlapped them (sanctum#31). Non-empty only on POST user-added
+   * when the new span ate at least one model proposal; empty for PATCH
+   * and for non-overlapping spans. Older backends that predate the
+   * field are read as `[]` since the property is optional on the wire.
+   */
+  readonly removed_proposal_ids?: readonly string[]
 }
 
 export interface CommitReviewSessionRequest {
