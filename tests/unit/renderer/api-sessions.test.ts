@@ -209,6 +209,94 @@ describe('createSessionsClient.getSession', () => {
   })
 })
 
+describe('createSessionsClient.getSessionInput', () => {
+  it('GETs /review-sessions/{id}/input and returns the body as a Blob', async () => {
+    const docxBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14])
+    const fetchImpl = vi.fn((input: Request | string | URL, init?: RequestInit) => {
+      expect(urlOf(input)).toBe('http://127.0.0.1:9000/review-sessions/sess-7/input')
+      expect(init?.method).toBe('GET')
+      const headers = init?.headers as Record<string, string>
+      expect(headers.Authorization).toBe('Bearer t')
+      // Accept header is intentionally absent on this method since it
+      // returns binary, not JSON. Asserting absence catches drift if
+      // someone copies a JSON-route's headers helper later.
+      expect(headers.Accept).toBeUndefined()
+      return Promise.resolve(
+        new Response(docxBytes, {
+          status: 200,
+          headers: {
+            'content-type':
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          },
+        }),
+      )
+    })
+    const client = createSessionsClient({
+      baseUrl: 'http://127.0.0.1:9000',
+      token: 't',
+      fetchImpl,
+    })
+    const blob = await client.getSessionInput('sess-7')
+    expect(blob).toBeInstanceOf(Blob)
+    expect(blob.type).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    )
+    const out = new Uint8Array(await blob.arrayBuffer())
+    expect(Array.from(out)).toEqual(Array.from(docxBytes))
+  })
+
+  it('url-encodes the session id', async () => {
+    const fetchImpl = vi.fn((input: Request | string | URL) => {
+      expect(urlOf(input)).toBe('http://127.0.0.1:9000/review-sessions/sess%2Fweird%20id/input')
+      return Promise.resolve(new Response(new Uint8Array([1, 2]), { status: 200 }))
+    })
+    const client = createSessionsClient({
+      baseUrl: 'http://127.0.0.1:9000',
+      token: 't',
+      fetchImpl,
+    })
+    await client.getSessionInput('sess/weird id')
+    expect(fetchImpl).toHaveBeenCalledOnce()
+  })
+
+  it('throws ApiError with the parsed JSON body on 410 Gone (terminal session)', async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse(410, {
+          error: 'session is committed; input bytes were shed at terminal status',
+        }),
+      ),
+    )
+    const client = createSessionsClient({
+      baseUrl: 'http://127.0.0.1:9000',
+      token: 't',
+      fetchImpl,
+    })
+    try {
+      await client.getSessionInput('sess-committed')
+      expect.fail('expected ApiError')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError)
+      expect((err as ApiError).status).toBe(410)
+      expect((err as ApiError).message).toMatch(/committed|shed/)
+    }
+  })
+
+  it('throws ApiError on 404 unknown session', async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(jsonResponse(404, { error: "session 'no-such-id' not found" })),
+    )
+    const client = createSessionsClient({
+      baseUrl: 'http://127.0.0.1:9000',
+      token: 't',
+      fetchImpl,
+    })
+    await expect(client.getSessionInput('no-such-id')).rejects.toMatchObject({
+      status: 404,
+    })
+  })
+})
+
 describe('createSessionsClient.commitSession', () => {
   it('POSTs the commit body and returns the typed response', async () => {
     const fetchImpl = vi.fn((input: Request | string | URL, init?: RequestInit) => {

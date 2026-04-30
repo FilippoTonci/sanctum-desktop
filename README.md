@@ -118,7 +118,7 @@ The renderer is generated from `schema/openapi.json` in the `sanctum` repo (pinn
 
 ## 🚀 Getting Started
 
-> **Status:** Workstreams 1–4 of Phase 3 are shipped (backend contract hardening in `sanctum`; Electron scaffold, sidecar integration, and the `.docx` review surface here). Workstream 5 (session workflow UI) is in flight — landing page, real session create/commit/abandon, mapping-store unlock, settings + sidecar respawn, and typed error surfaces are all live; a packaged unsigned build runs end-to-end on Linux. WS6 (signing, notarization, release pipeline) is the next major milestone — no signed installers yet.
+> **Status:** Workstreams 1–5 of Phase 3 are shipped — backend contract hardening (`sanctum`), Electron scaffold, sidecar integration, the `.docx` review surface, and the full session workflow UI (landing page, real session create/commit/abandon with sync, mapping-store unlock, settings + sidecar respawn, typed error surfaces, and resume from a Recent Sessions row). A packaged unsigned build runs end-to-end on Linux. WS6 (signing, notarization, release pipeline) is the next major milestone — no signed installers yet.
 
 ### Prerequisites
 
@@ -222,7 +222,7 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [x] Per-detection operator picker
 - [x] Commit flow with attestation checkbox
 
-### WS5 — Session workflow UI _(in progress)_
+### WS5 — Session workflow UI ✅ _(shipped)_
 
 - [x] Landing page, drop zone, recent sessions
 - [x] Real `/review-sessions` create + commit + abandon (with optimistic+rollback decision sync)
@@ -231,7 +231,7 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [x] Settings page → sidecar env on respawn
 - [x] Error surfaces (409 / 413 / 415 / 503)
 - [x] Session abandonment keeps the manifest so terminal sessions stay in Recent Sessions
-- [ ] Session resume from a Recent Sessions row (needs `GET /review-sessions/{id}/input` or a desktop-side cache)
+- [x] Session resume from a Recent Sessions row (`GET /review-sessions/{id}/input` returns pinned bytes for OPEN sessions; terminal rows render disabled)
 
 ### WS6 — Polish, signing, release
 
