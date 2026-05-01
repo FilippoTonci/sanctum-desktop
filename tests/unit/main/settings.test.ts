@@ -30,7 +30,7 @@ describe('SettingsStore', () => {
     expect(fresh.read()).toEqual({
       nerBackend: 'gliner',
       scoreThreshold: 0.6,
-      defaultOperator: 'hips',
+      defaultOperator: 'replace',
     })
   })
 
@@ -55,7 +55,7 @@ describe('SettingsStore', () => {
     expect(store.read()).toEqual({
       nerBackend: 'gliner',
       scoreThreshold: 0.8,
-      defaultOperator: 'hips',
+      defaultOperator: 'replace',
     })
   })
 

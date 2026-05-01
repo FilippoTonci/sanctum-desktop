@@ -173,7 +173,7 @@ describe('useReviewStore', () => {
 
     const payload = useReviewStore.getState().buildCommitPayload('attested')
     expect(payload.attestation).toBe('attested')
-    expect(payload.defaultOperator).toBe('hips')
+    expect(payload.defaultOperator).toBe('replace')
     expect(payload.decisions).toHaveLength(3)
 
     const proposed = payload.decisions.find((d) => d.id === 'a')
