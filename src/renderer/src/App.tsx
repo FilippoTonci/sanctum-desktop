@@ -269,8 +269,8 @@ export function App(): ReactElement {
             </p>
             <h1>Sanctum Desktop</h1>
             <p className="tagline">
-              A local-first sanctuary for sensitive documents — review, redact, and seal without
-              ever leaving your machine.
+              Local-first sanctuary for sensitive documents — review, redact, and seal without ever
+              leaving your machine.
             </p>
           </div>
         </div>
