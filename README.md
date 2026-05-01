@@ -12,7 +12,7 @@
 
 # Sanctum Desktop
 
-<img src="https://raw.githubusercontent.com/FilippoTonci/sanctum/main/img/SanctumLogo.png" alt="Sanctum" width="280"/>
+<img src="img/SanctumLogo.png" alt="Sanctum" width="280"/>
 
 ### _The downloadable desktop app for Sanctum — local-first document anonymization._
 
