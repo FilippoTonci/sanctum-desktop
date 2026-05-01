@@ -39,6 +39,14 @@ function broadcastStatus(): void {
 
 statusBus.on('change', broadcastStatus)
 
+function resolveIconPath(): string {
+  // Dev: __dirname is out/main/, so two levels up → project root → resources/icon.png.
+  // Packaged: copied via electron-builder extraResources to resourcesPath/icon.png.
+  return app.isPackaged
+    ? join(process.resourcesPath, 'icon.png')
+    : join(__dirname, '../../resources/icon.png')
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
@@ -47,6 +55,7 @@ function createWindow(): void {
     minHeight: 640,
     show: false,
     autoHideMenuBar: true,
+    icon: resolveIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,

@@ -3,7 +3,7 @@ productName: Sanctum Desktop
 copyright: Copyright © 2026 Filippo Tonci
 directories:
   output: release
-  buildResources: build
+  buildResources: resources
 files:
   - out/**/*
   - package.json
@@ -18,6 +18,8 @@ extraResources:
     to: sidecar
     filter:
       - '**/*'
+  - from: resources/icon.png
+    to: icon.png
 mac:
   target:
     - target: dmg
