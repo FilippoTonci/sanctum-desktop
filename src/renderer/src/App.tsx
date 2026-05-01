@@ -10,6 +10,7 @@ import { DropZone } from './components/DropZone'
 import { MappingStoreChip } from './components/MappingStoreChip'
 import { PreviewOverlay } from './components/PreviewOverlay'
 import { RecentSessions } from './components/RecentSessions'
+import { SanctumEmblem } from './components/SanctumEmblem'
 import { SelectModeBanner } from './components/SelectModeBanner'
 import { SettingsModal } from './components/SettingsModal'
 import { Splash } from './components/Splash'
@@ -259,9 +260,19 @@ export function App(): ReactElement {
   return (
     <main className={`shell${reviewMode ? ' shell-review' : ''}`}>
       <header className="shell-header">
-        <div>
-          <h1>Sanctum Desktop</h1>
-          <p className="tagline">Local-first document anonymization — coming soon.</p>
+        <div className="shell-brand">
+          <SanctumEmblem />
+          <div className="shell-brand-text">
+            <p className="shell-eyebrow">
+              <span className="shell-eyebrow-dot" aria-hidden="true" />
+              <span>Local · Offline · Sealed</span>
+            </p>
+            <h1>Sanctum Desktop</h1>
+            <p className="tagline">
+              Local-first sanctuary for sensitive documents — review, redact, and seal without ever
+              leaving your machine.
+            </p>
+          </div>
         </div>
         <div className="shell-header-controls">
           <MappingStoreChip client={mappingClient} />
