@@ -338,8 +338,14 @@ interface RunAnalysisArgs {
 
 async function runAnalysis(args: RunAnalysisArgs): Promise<void> {
   try {
+    // Honour the Settings panel's default operator so the fresh session
+    // matches what the user picked. Fall back to 'hips' when the bridge
+    // is unavailable (standalone-browser / sidecar-skip path) or when
+    // the persisted value didn't come through.
+    const settings = await window.sanctum?.getSettings()
+    const defaultOperator = settings?.defaultOperator ?? 'hips'
     const response = await args.client.createSession(
-      { input_path: args.path, default_operator: 'hips' },
+      { input_path: args.path, default_operator: defaultOperator },
       args.signal,
     )
     if (args.signal.aborted) return
