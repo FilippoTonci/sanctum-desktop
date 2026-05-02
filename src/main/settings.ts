@@ -33,7 +33,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   nerBackend: 'spacy',
   scoreThreshold: 0.35,
-  defaultOperator: 'hips',
+  defaultOperator: 'replace',
 }
 
 export class SettingsStore {

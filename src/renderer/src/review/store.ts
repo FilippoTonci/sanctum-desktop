@@ -134,7 +134,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   focusedId: null,
   undoStack: [],
   selectMode: false,
-  defaultOperator: 'hips',
+  defaultOperator: 'replace',
   commitPanelOpen: false,
   editingReplacementId: null,
   sessionId: null,
