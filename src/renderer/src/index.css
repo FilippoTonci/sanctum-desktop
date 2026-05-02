@@ -428,15 +428,15 @@ body {
   gap: 1.75rem;
 }
 
-/* ---- Recent sessions ---- */
+/* ---- Recent sessions (collapsible disclosure) ---- */
 
 .recent-sessions {
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-lg);
   background: var(--paper-elevated);
-  padding: 1.25rem 1.4rem 1.4rem;
   box-shadow: var(--shadow-card);
   position: relative;
+  overflow: hidden;
 }
 
 /* Folder-tab marker — sits on the top edge, signals "archive". */
@@ -454,26 +454,84 @@ body {
   border: 1px solid var(--hairline-strong);
   border-radius: 999px;
   line-height: 1.7;
+  z-index: 1;
 }
 
-.recent-sessions-header {
+/* Disclosure trigger — full-width button that doubles as the section header. */
+.recent-sessions-toggle {
+  width: 100%;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.9rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--hairline);
-}
-
-.recent-sessions-header h2 {
+  background: transparent;
+  border: 0;
+  padding: 1.1rem 1.4rem;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   font-family: var(--font-display);
   font-variation-settings: var(--fraunces-body);
   font-size: 1.15rem;
   font-weight: 500;
   letter-spacing: -0.01em;
-  margin: 0;
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.recent-sessions-toggle:hover {
+  background: var(--paper-sunken);
+}
+
+.recent-sessions-toggle:focus-visible {
+  outline: 2px solid var(--oxblood);
+  outline-offset: -2px;
+}
+
+.recent-sessions-toggle-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55rem;
   color: var(--ink);
+}
+
+.recent-sessions-toggle-chevron {
+  display: inline-block;
+  font-size: 0.85em;
+  color: var(--ink-muted);
+  width: 0.9em;
+  transition: transform 160ms ease;
+}
+
+.recent-sessions-toggle-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.recent-sessions-toggle-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  height: 1.4rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--oxblood-soft);
+  color: var(--oxblood);
+  border: 1px solid rgba(124, 32, 24, 0.25);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+  .recent-sessions-toggle-badge {
+    border-color: rgba(217, 106, 93, 0.3);
+  }
 }
 
 .recent-sessions-count {
@@ -482,6 +540,13 @@ body {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-muted);
+  font-weight: 400;
+}
+
+/* Expanded body — divider + interior padding. */
+.recent-sessions-panel {
+  padding: 0.4rem 1.4rem 1.4rem;
+  border-top: 1px solid var(--hairline);
 }
 
 .recent-sessions-status,
@@ -502,7 +567,7 @@ body {
 
 .recent-sessions-list {
   list-style: none;
-  margin: 0;
+  margin: 0.6rem 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
