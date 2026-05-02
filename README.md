@@ -51,7 +51,7 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 
 - **Drop a `.docx`** onto the window and the app spawns the Sanctum engine, analyses the file, and opens a review surface in seconds.
 - **Inline highlights** — every detected PII span is painted directly over the rendered document using the CSS Custom Highlight API. No modal dialogs, no separate "findings" tab.
-- **Keyboard-first navigation** — step through detections with `j` / `k`, `a` to accept, `r` to reject, `e` to edit the replacement, `m` to mark a missed span. Designed for professionals who review hundreds of detections per document.
+- **Keyboard-first navigation** — step through detections with `↓` / `↑` (or `Tab` / `Shift+Tab`), `Enter` to accept, `Delete` / `Backspace` to reject — both auto-advance to the next pending detection so a long document reviews in one continuous flow. `e` edits the replacement, `m` marks a missed span. Designed for professionals who review hundreds of detections per document.
 
 ### 🔒 Air-Gapped by Construction
 
@@ -165,18 +165,19 @@ Signed release builds run only from the tag-driven release workflow on the self-
 
 ## ⌨️ Keyboard Reference
 
-| Key                | Action                                 |
-| ------------------ | -------------------------------------- |
-| `j` / `k`          | Step to next / previous detection      |
-| `a`                | Accept the focused detection           |
-| `r`                | Reject the focused detection           |
-| `e`                | Edit the replacement text              |
-| `m`                | Mark a missed span (enter select-mode) |
-| `u`                | Undo the last decision                 |
-| `Esc`              | Close tooltip / cancel select-mode     |
-| `Ctrl/Cmd + Enter` | Open the commit panel                  |
+| Key                    | Action                                       |
+| ---------------------- | -------------------------------------------- |
+| `↓` / `Tab`            | Step to next detection                       |
+| `↑` / `Shift + Tab`    | Step to previous detection                   |
+| `Enter`                | Accept the focused detection (auto-advances) |
+| `Delete` / `Backspace` | Reject the focused detection (auto-advances) |
+| `e`                    | Edit the replacement text                    |
+| `m`                    | Mark a missed span (enter select-mode)       |
+| `Ctrl/Cmd + Z`         | Undo the last decision                       |
+| `Esc`                  | Close tooltip / cancel select-mode           |
+| `Ctrl/Cmd + Enter`     | Open the commit panel                        |
 
-All shortcuts are suspended while an input is focused.
+After Accept or Reject, focus jumps to the next still-pending detection — keep your hands on the home row and a long document reviews in one continuous flow. All shortcuts are suspended while an input is focused. `Tab` / `Shift+Tab` only step through detections when no other element holds focus, so native focus traversal in the sidebar / modals keeps working.
 
 ---
 

@@ -6,13 +6,16 @@ import { useReviewStore, type ReviewState } from './store'
 /**
  * Bind the review-surface keyboard map. Suspended whenever an input,
  * textarea, or contenteditable region holds focus — so a user typing
- * in a future "edit replacement" field cannot accidentally accept the
+ * in the "edit replacement" field cannot accidentally accept the
  * detection underneath the modal.
  *
  * The set of bindings is derived from README §⌨️ Keyboard Reference.
- * Only the verdict + navigation + undo + dismiss subset lives in this
- * slice. `e` (edit replacement) and `m` (mark missed) wait for slices
- * 7 and 8 — adding them later just means another case in `dispatchKey`.
+ *
+ * Tab / Shift+Tab are intercepted only when no specific element holds
+ * focus (i.e. the document body is the active element). That keeps
+ * native focus traversal alive whenever the user is tabbing through
+ * the sidebar buttons / commit panel / settings, but lets Tab act as
+ * "next detection" while the review surface is the ambient context.
  */
 export function useReviewKeyboard(
   enabled: boolean,
@@ -43,11 +46,38 @@ export function useReviewKeyboard(
         return
       }
 
+      // Ctrl/Cmd-Z is the undo shortcut. Suspended while typing so the
+      // browser's native input-undo still works inside the replacement
+      // editor.
+      if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
+        if (isInputFocused(event.target)) return
+        if (useReviewStore.getState().undoStack.length === 0) return
+        actionsRef.current.undoLastDecision()
+        event.preventDefault()
+        return
+      }
+
       // Other modifier combos pass through unchanged so browser shortcuts
       // (Cmd+R, Cmd+W, …) keep working.
       if (event.metaKey || event.ctrlKey) return
       if (isInputFocused(event.target)) return
 
+      // Tab navigation is gated on the review surface owning focus
+      // (i.e. nothing more specific is focused). Without this gate we'd
+      // hijack Tab inside the sidebar / settings modal / commit panel
+      // and break native focus traversal.
+      if (event.key === 'Tab') {
+        if (event.target !== document.body) return
+        const store = useReviewStore.getState()
+        if (store.detections.length === 0) return
+        if (event.shiftKey) {
+          store.focusPrev()
+        } else {
+          store.focusNext()
+        }
+        event.preventDefault()
+        return
+      }
       const handled = dispatchKey(event.key, useReviewStore.getState(), docRoot, actionsRef.current)
       if (handled) event.preventDefault()
     }
@@ -64,7 +94,10 @@ export function useReviewKeyboard(
  * iff the key was bound (so callers can decide whether to preventDefault).
  *
  * Extracted from the hook so unit tests can exercise the binding table
- * without spinning up a DOM + event loop.
+ * without spinning up a DOM + event loop. The hook above handles the
+ * modifier-bearing shortcuts (Ctrl/Cmd+Enter, Ctrl/Cmd+Z) and the
+ * focus-scoped Tab traversal; everything in here is the un-modified
+ * key map that runs whenever the review surface owns the keyboard.
  */
 export function dispatchKey(
   key: string,
@@ -90,23 +123,28 @@ export function dispatchKey(
   }
 
   switch (key) {
-    case 'j':
+    case 'ArrowDown':
+      if (store.detections.length === 0) return false
       store.focusNext()
       return true
-    case 'k':
+    case 'ArrowUp':
+      if (store.detections.length === 0) return false
       store.focusPrev()
       return true
-    case 'a':
+    case 'Enter':
+      // Accept + auto-advance to the next pending detection. Picking
+      // the next pending entry (rather than the next-by-index) keeps
+      // the user moving forward through outstanding work without
+      // re-visiting items they already decided.
       if (store.focusedId === null) return false
       actions.accept(store.focusedId)
+      useReviewStore.getState().focusNextPending()
       return true
-    case 'r':
+    case 'Delete':
+    case 'Backspace':
       if (store.focusedId === null) return false
       actions.reject(store.focusedId)
-      return true
-    case 'u':
-      if (store.undoStack.length === 0) return false
-      actions.undoLastDecision()
+      useReviewStore.getState().focusNextPending()
       return true
     case 'm':
       store.enterSelectMode()

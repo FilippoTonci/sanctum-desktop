@@ -68,6 +68,45 @@ describe('useReviewStore', () => {
     expect(useReviewStore.getState().focusedId).toBeNull()
   })
 
+  it('focusNextPending advances to the next pending detection, skipping decided ones', () => {
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('a'),
+        makeDetection('b', { status: 'accepted' }),
+        makeDetection('c', { status: 'rejected' }),
+        makeDetection('d'),
+      ])
+    useReviewStore.getState().focusNextPending()
+    expect(useReviewStore.getState().focusedId).toBe('d')
+  })
+
+  it('focusNextPending wraps backwards when the only pending entry is earlier in the list', () => {
+    useReviewStore
+      .getState()
+      .setDetections([makeDetection('a'), makeDetection('b', { status: 'accepted' })])
+    useReviewStore.getState().setFocused('b')
+    useReviewStore.getState().focusNextPending()
+    expect(useReviewStore.getState().focusedId).toBe('a')
+  })
+
+  it('focusNextPending leaves focus put when nothing else is pending', () => {
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('a'),
+        makeDetection('b', { status: 'accepted' }),
+        makeDetection('c', { status: 'rejected' }),
+      ])
+    useReviewStore.getState().focusNextPending()
+    expect(useReviewStore.getState().focusedId).toBe('a')
+  })
+
+  it('focusNextPending is a no-op on an empty list', () => {
+    useReviewStore.getState().focusNextPending()
+    expect(useReviewStore.getState().focusedId).toBeNull()
+  })
+
   it('setFocused accepts null to clear focus', () => {
     useReviewStore.getState().setDetections([makeDetection('a')])
     useReviewStore.getState().setFocused(null)
