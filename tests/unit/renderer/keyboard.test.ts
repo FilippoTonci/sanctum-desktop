@@ -22,52 +22,93 @@ describe('dispatchKey', () => {
     useReviewStore.getState().clear()
   })
 
-  it('j focuses next, k focuses prev', () => {
+  it('ArrowDown focuses next, ArrowUp focuses prev', () => {
     useReviewStore.getState().setDetections([makeDetection('a'), makeDetection('b')])
     expect(useReviewStore.getState().focusedId).toBe('a')
 
-    expect(dispatchKey('j', useReviewStore.getState())).toBe(true)
+    expect(dispatchKey('ArrowDown', useReviewStore.getState())).toBe(true)
     expect(useReviewStore.getState().focusedId).toBe('b')
 
-    expect(dispatchKey('k', useReviewStore.getState())).toBe(true)
+    expect(dispatchKey('ArrowUp', useReviewStore.getState())).toBe(true)
     expect(useReviewStore.getState().focusedId).toBe('a')
   })
 
-  it('a / r set status of the focused detection only when one is focused', () => {
-    useReviewStore.getState().setDetections([makeDetection('a'), makeDetection('b')])
-
-    expect(dispatchKey('a', useReviewStore.getState())).toBe(true)
-    expect(useReviewStore.getState().detections[0]?.status).toBe('accepted')
-
-    useReviewStore.getState().setFocused('b')
-    expect(dispatchKey('r', useReviewStore.getState())).toBe(true)
-    expect(useReviewStore.getState().detections[1]?.status).toBe('rejected')
+  it('arrow nav returns false on an empty list (so no preventDefault swallows the key)', () => {
+    expect(dispatchKey('ArrowDown', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('ArrowUp', useReviewStore.getState())).toBe(false)
   })
 
-  it('a / r are no-ops with no focused detection', () => {
+  it('Enter accepts the focused detection and auto-advances to the next pending one', () => {
+    useReviewStore
+      .getState()
+      .setDetections([makeDetection('a'), makeDetection('b'), makeDetection('c')])
+
+    expect(dispatchKey('Enter', useReviewStore.getState())).toBe(true)
+    expect(useReviewStore.getState().detections[0]?.status).toBe('accepted')
+    // Auto-advance lands on the next pending entry.
+    expect(useReviewStore.getState().focusedId).toBe('b')
+  })
+
+  it('Delete and Backspace both reject the focused detection and auto-advance', () => {
+    useReviewStore
+      .getState()
+      .setDetections([makeDetection('a'), makeDetection('b'), makeDetection('c')])
+
+    expect(dispatchKey('Delete', useReviewStore.getState())).toBe(true)
+    expect(useReviewStore.getState().detections[0]?.status).toBe('rejected')
+    expect(useReviewStore.getState().focusedId).toBe('b')
+
+    expect(dispatchKey('Backspace', useReviewStore.getState())).toBe(true)
+    expect(useReviewStore.getState().detections[1]?.status).toBe('rejected')
+    expect(useReviewStore.getState().focusedId).toBe('c')
+  })
+
+  it('auto-advance skips detections that are already accepted/rejected', () => {
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('a'),
+        makeDetection('b', { status: 'accepted' }),
+        makeDetection('c', { status: 'rejected' }),
+        makeDetection('d'),
+      ])
+
+    expect(dispatchKey('Enter', useReviewStore.getState())).toBe(true)
+    expect(useReviewStore.getState().detections[0]?.status).toBe('accepted')
+    // Skips already-decided 'b' and 'c', lands on the next pending 'd'.
+    expect(useReviewStore.getState().focusedId).toBe('d')
+  })
+
+  it('auto-advance leaves focus put when no other pending detections remain', () => {
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('a'),
+        makeDetection('b', { status: 'accepted' }),
+        makeDetection('c', { status: 'rejected' }),
+      ])
+
+    expect(dispatchKey('Enter', useReviewStore.getState())).toBe(true)
+    expect(useReviewStore.getState().detections[0]?.status).toBe('accepted')
+    // No remaining pending detection — focus stays on the one we just decided.
+    expect(useReviewStore.getState().focusedId).toBe('a')
+  })
+
+  it('auto-advance wraps backwards to a pending detection earlier in the list', () => {
+    useReviewStore.getState().setDetections([makeDetection('a'), makeDetection('b')])
+    useReviewStore.getState().setFocused('b')
+
+    expect(dispatchKey('Enter', useReviewStore.getState())).toBe(true)
+    expect(useReviewStore.getState().detections[1]?.status).toBe('accepted')
+    expect(useReviewStore.getState().focusedId).toBe('a')
+  })
+
+  it('Enter / Delete are no-ops with no focused detection', () => {
     useReviewStore.getState().setDetections([makeDetection('a')])
     useReviewStore.getState().setFocused(null)
-    expect(dispatchKey('a', useReviewStore.getState())).toBe(false)
-    expect(dispatchKey('r', useReviewStore.getState())).toBe(false)
-  })
-
-  it('u reverses the most recent verdict and restores focus to it', () => {
-    useReviewStore.getState().setDetections([makeDetection('a'), makeDetection('b')])
-    dispatchKey('a', useReviewStore.getState()) // accept "a"
-    useReviewStore.getState().setFocused('b')
-    dispatchKey('r', useReviewStore.getState()) // reject "b"
-
-    expect(dispatchKey('u', useReviewStore.getState())).toBe(true)
-    expect(useReviewStore.getState().detections[1]?.status).toBe('pending')
-    expect(useReviewStore.getState().focusedId).toBe('b')
-
-    expect(dispatchKey('u', useReviewStore.getState())).toBe(true)
-    expect(useReviewStore.getState().detections[0]?.status).toBe('pending')
-  })
-
-  it('u returns false when the undo stack is empty', () => {
-    useReviewStore.getState().setDetections([makeDetection('a')])
-    expect(dispatchKey('u', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('Enter', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('Delete', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('Backspace', useReviewStore.getState())).toBe(false)
   })
 
   it('Escape clears focus only when something is focused', () => {
@@ -80,13 +121,23 @@ describe('dispatchKey', () => {
   it('returns false for unbound keys', () => {
     useReviewStore.getState().setDetections([makeDetection('a')])
     expect(dispatchKey('z', useReviewStore.getState())).toBe(false)
+    // Tab is handled at the hook level (focus-scoped), not in the
+    // pure dispatcher — so the dispatcher itself reports it unbound.
     expect(dispatchKey('Tab', useReviewStore.getState())).toBe(false)
+    // Old j/k/a/r/u bindings are gone — they should report as unbound.
+    expect(dispatchKey('j', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('k', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('a', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('r', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('u', useReviewStore.getState())).toBe(false)
   })
 
   it('repeated accepts on the same detection do not balloon the undo stack', () => {
     useReviewStore.getState().setDetections([makeDetection('a')])
-    dispatchKey('a', useReviewStore.getState()) // pending → accepted, push edit
-    dispatchKey('a', useReviewStore.getState()) // already accepted, no-op
+    dispatchKey('Enter', useReviewStore.getState()) // pending → accepted, push edit
+    // After auto-advance, focus moved away; bring it back to retry.
+    useReviewStore.getState().setFocused('a')
+    dispatchKey('Enter', useReviewStore.getState()) // already accepted, no-op
     expect(useReviewStore.getState().undoStack).toHaveLength(1)
   })
 
@@ -96,13 +147,13 @@ describe('dispatchKey', () => {
     expect(useReviewStore.getState().selectMode).toBe(true)
   })
 
-  it('inside select-mode, j / a / r / k / u are inert and pass through', () => {
+  it('inside select-mode, navigation and verdict keys are inert and pass through', () => {
     useReviewStore.getState().setDetections([makeDetection('a'), makeDetection('b')])
     useReviewStore.getState().enterSelectMode()
-    expect(dispatchKey('j', useReviewStore.getState())).toBe(false)
-    expect(dispatchKey('a', useReviewStore.getState())).toBe(false)
-    expect(dispatchKey('r', useReviewStore.getState())).toBe(false)
-    expect(dispatchKey('u', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('ArrowDown', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('ArrowUp', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('Delete', useReviewStore.getState())).toBe(false)
+    expect(dispatchKey('Backspace', useReviewStore.getState())).toBe(false)
     // verdicts unchanged
     expect(useReviewStore.getState().detections[0]?.status).toBe('pending')
     expect(useReviewStore.getState().focusedId).toBe('a')

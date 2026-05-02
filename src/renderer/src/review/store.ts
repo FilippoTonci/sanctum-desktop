@@ -112,6 +112,14 @@ export interface ReviewState {
   setFocused: (id: string | null) => void
   focusNext: () => void
   focusPrev: () => void
+  /**
+   * Advance focus to the next *pending* detection after the current
+   * one, wrapping around the list. If no pending detections remain,
+   * focus stays put — the caller's auto-advance UX prefers leaving
+   * the user looking at the detection they just decided over a
+   * confusing jump back to the top.
+   */
+  focusNextPending: () => void
   undoLastDecision: () => void
 
   enterSelectMode: () => void
@@ -265,6 +273,29 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         ? detections.length - 1
         : (currentIdx - 1 + detections.length) % detections.length
     set({ focusedId: detections[prevIdx]?.id ?? null })
+  },
+
+  focusNextPending: () => {
+    const { detections, focusedId } = get()
+    if (detections.length === 0) return
+    const currentIdx = detections.findIndex((d) => d.id === focusedId)
+    // Walk the list once starting from the slot after the current
+    // focus, wrapping. Skips the focused detection itself so a fresh
+    // accept/reject doesn't immediately re-focus the just-decided
+    // entry just because it's still in the list.
+    const start = currentIdx === -1 ? 0 : currentIdx + 1
+    for (let i = 0; i < detections.length; i++) {
+      const idx = (start + i) % detections.length
+      const candidate = detections[idx]
+      if (candidate === undefined) continue
+      if (candidate.id === focusedId) continue
+      if (candidate.status === 'pending') {
+        set({ focusedId: candidate.id })
+        return
+      }
+    }
+    // No pending detection left: leave focus on the just-decided one
+    // so the user can see the verdict they applied.
   },
 
   undoLastDecision: () => {
