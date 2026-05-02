@@ -256,7 +256,15 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       // backend-known id rather than a synthetic one that would 404.
       // Exit select-mode immediately so the banner dismisses; the
       // detection lands when the POST returns.
+      //
+      // Clear focus while the POST is in flight so the user doesn't see
+      // the prior (often already-accepted) detection appear to "stay
+      // selected" through the round-trip — issue #18. On POST success,
+      // appendDetection below moves focus onto the freshly-minted
+      // user-added detection so it's the one the reviewer can immediately
+      // tweak (operator, custom replacement, …).
       useReviewStore.getState().exitSelectMode()
+      useReviewStore.getState().setFocused(null)
       void (async () => {
         try {
           const response = await client.addUserAdded(sessionId, {
