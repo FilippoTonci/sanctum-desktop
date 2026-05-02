@@ -167,6 +167,27 @@ describe('useReviewStore', () => {
     expect(added.status).toBe('pending')
   })
 
+  it('addMissed focuses the new detection even when prior ones are already decided (#18)', () => {
+    // Regression for issue #18: the user marks a missed span via m → Enter.
+    // Focus must land on the freshly-added detection, not bounce back to
+    // the first item in the list (which is typically already accepted /
+    // rejected, so the reviewer would otherwise have nothing actionable
+    // selected).
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('a', { status: 'accepted' }),
+        makeDetection('b', { status: 'rejected' }),
+      ])
+    useReviewStore.getState().setFocused('a')
+    const id = useReviewStore.getState().addMissed({
+      locator: { segmentId: 'body/p1/r0', start: 0, end: 5 },
+      text: 'Smith',
+    })
+    expect(useReviewStore.getState().focusedId).toBe(id)
+    expect(useReviewStore.getState().focusedId).not.toBe('a')
+  })
+
   it('addMissed deduplicates: re-marking the same span just refocuses it', () => {
     useReviewStore.getState().setDetections([makeDetection('a')])
     const id1 = useReviewStore.getState().addMissed({

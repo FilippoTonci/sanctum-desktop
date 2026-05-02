@@ -312,6 +312,70 @@ describe('syncedActions.addMissed', () => {
     expect(useReviewStore.getState().lastSyncError?.message).toContain('session committed')
     expect(useReviewStore.getState().lastSyncError?.status).toBe(409)
   })
+
+  it('drops focus from the prior detection while the POST is in flight (#18)', async () => {
+    // Without this, the user sees the previously-focused detection (often
+    // the first item, already accepted) appear to "stay selected" through
+    // the round-trip — exactly the symptom reported in #18.
+    useReviewStore.getState().setDetections([makeDetection('p_first', { status: 'accepted' })])
+    useReviewStore.getState().setFocused('p_first')
+
+    interface AddUserAddedResolution {
+      decision: {
+        kind: 'user_added'
+        id: string
+        segment_anchor: string
+        entity_type: string
+        original: string
+        start: number
+        end: number
+      }
+      preview: string
+    }
+    let resolvePost: (value: AddUserAddedResolution) => void = () => {
+      // overwritten below before the POST settles
+    }
+    const addUserAdded = vi.fn(
+      () =>
+        new Promise<AddUserAddedResolution>((resolve) => {
+          resolvePost = resolve
+        }),
+    )
+    const actions = syncedActions({
+      client: fakeClient({ addUserAdded }),
+      sessionId: 'sess-1',
+    })
+
+    actions.addMissed({
+      locator: { segmentId: 'body/p4/r0', start: 9, end: 14 },
+      text: 'Smith',
+    })
+
+    // Synchronous slice: focus must already be cleared by the time the
+    // dispatcher returns control to the keyboard loop. Otherwise the
+    // reviewer's accept/reject keypresses during the in-flight POST would
+    // act on `p_first` (the prior focus) instead of the span they just
+    // marked.
+    expect(useReviewStore.getState().focusedId).toBeNull()
+
+    resolvePost({
+      decision: {
+        kind: 'user_added',
+        id: 'backend-uuid',
+        segment_anchor: 'body/p4/r0',
+        entity_type: 'USER_ADDED',
+        original: 'Smith',
+        start: 9,
+        end: 14,
+      },
+      preview: '<PERSON>',
+    })
+    await flushMicrotasks()
+
+    // After the POST resolves, focus lands on the new detection so the
+    // reviewer can immediately tweak its operator / replacement.
+    expect(useReviewStore.getState().focusedId).toBe('user:backend-uuid')
+  })
 })
 
 describe('syncedActions previews map', () => {
