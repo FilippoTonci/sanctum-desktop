@@ -193,5 +193,10 @@ describe('applyHighlightRegistries — sanctum-previewing', () => {
     expect(previewingTexts).toEqual(expect.arrayContaining(['Alice', 'Bob']))
     expect(previewingTexts).not.toContain('Carol')
     expect(previewingTexts).not.toContain('Dan')
+
+    expect(registries['sanctum-pending']!.ranges.map((r) => r.toString())).toEqual(
+      expect.arrayContaining(['Alice', 'Dan']),
+    )
+    expect(registries['sanctum-focused']!.ranges.map((r) => r.toString())).toEqual(['Alice'])
   })
 })
