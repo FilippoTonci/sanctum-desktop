@@ -918,13 +918,21 @@ body {
 }
 
 ::highlight(sanctum-rejected) {
+  /* Background-only — rejected means "keep the original verbatim",
+     so striking the text out reads wrong (issue #23). */
   background-color: rgba(180, 174, 162, 0.22);
-  text-decoration: line-through rgba(110, 100, 87, 0.75);
 }
 
 ::highlight(sanctum-focused) {
   background-color: rgba(124, 32, 24, 0.3);
   outline: 2px solid var(--oxblood);
+}
+
+::highlight(sanctum-previewing) {
+  /* Strikethrough + faded ink on detections whose replacement is shown
+     firmly (accepted, focused-pending). Pairs with .inline-preview-firm. */
+  text-decoration: line-through rgba(124, 32, 24, 0.6);
+  color: rgba(118, 107, 91, 0.78);
 }
 
 /* =========================================================================
