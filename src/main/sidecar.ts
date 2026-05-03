@@ -33,7 +33,7 @@ export interface SpawnOptions {
 }
 
 const READY_PATTERN = /SANCTUM_READY\s+host=(\S+)\s+port=(\d+)/
-const DEFAULT_READY_TIMEOUT_MS = 60_000
+const DEFAULT_READY_TIMEOUT_MS = 180_000
 const DEFAULT_KILL_TIMEOUT_MS = 5_000
 
 /**
@@ -67,7 +67,14 @@ export async function spawnSidecar(options: SpawnOptions = {}): Promise<SidecarH
   child.stdin.write(`${token}\n`)
   child.stdin.end()
 
-  const { host, port } = await awaitReady(child, readyTimeout)
+  let host: string
+  let port: number
+  try {
+    ;({ host, port } = await awaitReady(child, readyTimeout))
+  } catch (err) {
+    await killSidecar(child, killTimeout).catch(() => undefined)
+    throw err
+  }
 
   return {
     host,

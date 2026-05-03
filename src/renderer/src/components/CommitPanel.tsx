@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactElement } from 'react'
 import type { SessionsClient } from '../api/sessions'
 import { useReviewStore } from '../review/store'
-import { OPERATOR_NAMES, type OperatorName } from '../review/types'
 import { TypedError } from './TypedError'
 
 const ATTESTATION =
@@ -31,12 +30,9 @@ export function CommitPanel({
   const close = useReviewStore((s) => s.closeCommitPanel)
   const detections = useReviewStore((s) => s.detections)
   const buildPayload = useReviewStore((s) => s.buildCommitPayload)
-  const defaultOperator = useReviewStore((s) => s.defaultOperator)
-  const setDefaultOperator = useReviewStore((s) => s.setDefaultOperator)
   const sessionId = useReviewStore((s) => s.sessionId)
   const commitResult = useReviewStore((s) => s.commitResult)
   const setCommitResult = useReviewStore((s) => s.setCommitResult)
-  const mappingUnlocked = useReviewStore((s) => s.mappingStoreUnlocked)
 
   const [attested, setAttested] = useState(false)
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: 'form' })
@@ -161,31 +157,6 @@ export function CommitPanel({
             <dd className={pendingCount > 0 ? 'commit-panel-warn' : ''}>{String(pendingCount)}</dd>
           </div>
         </dl>
-
-        <label className="commit-panel-default-operator">
-          Default operator
-          <select
-            value={defaultOperator}
-            onChange={(e) => {
-              setDefaultOperator(e.currentTarget.value as OperatorName)
-            }}
-          >
-            {OPERATOR_NAMES.map((op) => {
-              const pseudonymizeLocked = op === 'pseudonymize' && mappingUnlocked !== true
-              return (
-                <option key={op} value={op} disabled={pseudonymizeLocked}>
-                  {op}
-                  {pseudonymizeLocked ? ' — mapping store locked' : ''}
-                </option>
-              )
-            })}
-          </select>
-          {defaultOperator === 'pseudonymize' && mappingUnlocked !== true ? (
-            <span className="detection-tooltip-operator-hint">
-              Unlock the mapping store before committing.
-            </span>
-          ) : null}
-        </label>
 
         {pendingCount > 0 ? (
           <p className="commit-panel-blocker" role="alert">
