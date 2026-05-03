@@ -1,6 +1,12 @@
-import { type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useReviewStore } from '../review/store'
-import type { Detection, DetectionStatus } from '../review/types'
+import {
+  OPERATOR_NAMES,
+  type Detection,
+  type DetectionStatus,
+  type OperatorName,
+} from '../review/types'
+import { useReviewActions } from '../review/use-actions'
 
 const STATUS_LABEL: Record<DetectionStatus, string> = {
   pending: 'Pending',
@@ -8,11 +14,45 @@ const STATUS_LABEL: Record<DetectionStatus, string> = {
   rejected: 'Rejected',
 }
 
+export interface FocusedControlsState {
+  readonly editing: boolean
+  readonly effectiveOperator: OperatorName
+  readonly pseudonymizeLocked: boolean
+}
+
+/**
+ * Pure helper deciding what shape the focused row's controls block
+ * should render in. Returns `null` for non-focused rows so callers can
+ * skip the controls entirely.
+ *
+ * Exported for unit testing — the JSX consumer below is a thin wrapper.
+ */
+export function pickFocusedControlsState(
+  detection: Detection,
+  focusedId: string | null,
+  editingReplacementId: string | null,
+  defaultOperator: OperatorName,
+  mappingUnlocked: boolean,
+): FocusedControlsState | null {
+  if (detection.id !== focusedId) return null
+  const effectiveOperator = detection.operator ?? defaultOperator
+  return {
+    editing: editingReplacementId === detection.id,
+    effectiveOperator,
+    pseudonymizeLocked: effectiveOperator === 'pseudonymize' && !mappingUnlocked,
+  }
+}
+
 export function DetectionSidebar(): ReactElement {
   const detections = useReviewStore((s) => s.detections)
   const focusedId = useReviewStore((s) => s.focusedId)
   const setFocused = useReviewStore((s) => s.setFocused)
   const openCommit = useReviewStore((s) => s.openCommitPanel)
+  const editingReplacementId = useReviewStore((s) => s.editingReplacementId)
+  const startEditingReplacement = useReviewStore((s) => s.startEditingReplacement)
+  const defaultOperator = useReviewStore((s) => s.defaultOperator)
+  const mappingUnlocked = useReviewStore((s) => s.mappingStoreUnlocked) === true
+  const actions = useReviewActions()
 
   const counts = aggregate(detections)
   const canCommit = detections.length > 0 && counts.pending === 0
@@ -33,28 +73,62 @@ export function DetectionSidebar(): ReactElement {
         <p className="sidebar-empty">No detections yet.</p>
       ) : (
         <ul className="sidebar-list">
-          {detections.map((d) => (
-            <li key={d.id}>
-              <button
-                type="button"
-                className={`sidebar-item sidebar-item-${d.status}${
-                  d.id === focusedId ? ' sidebar-item-focused' : ''
-                }`}
-                onClick={() => {
-                  setFocused(d.id)
-                }}
-                aria-pressed={d.id === focusedId}
-              >
-                <span className="sidebar-item-text">{d.text}</span>
-                <span className="sidebar-item-meta">
-                  <span className="sidebar-item-entity">{d.entityType}</span>
-                  <span className={`sidebar-item-status sidebar-item-status-${d.status}`}>
-                    {STATUS_LABEL[d.status]}
+          {detections.map((d) => {
+            const focusedState = pickFocusedControlsState(
+              d,
+              focusedId,
+              editingReplacementId,
+              defaultOperator,
+              mappingUnlocked,
+            )
+            return (
+              <li key={d.id}>
+                <button
+                  type="button"
+                  className={`sidebar-item sidebar-item-${d.status}${
+                    d.id === focusedId ? ' sidebar-item-focused' : ''
+                  }`}
+                  onClick={() => {
+                    setFocused(d.id)
+                  }}
+                  aria-pressed={d.id === focusedId}
+                >
+                  <span className="sidebar-item-text">{d.text}</span>
+                  <span className="sidebar-item-meta">
+                    <span className="sidebar-item-entity">{d.entityType}</span>
+                    <span className={`sidebar-item-status sidebar-item-status-${d.status}`}>
+                      {STATUS_LABEL[d.status]}
+                    </span>
                   </span>
-                </span>
-              </button>
-            </li>
-          ))}
+                </button>
+                {focusedState !== null ? (
+                  <FocusedControls
+                    detection={d}
+                    state={focusedState}
+                    onSetOperator={(op) => {
+                      actions.setOperator(d.id, op)
+                    }}
+                    onAccept={() => {
+                      actions.accept(d.id)
+                    }}
+                    onReject={() => {
+                      actions.reject(d.id)
+                    }}
+                    onStartEdit={() => {
+                      startEditingReplacement(d.id)
+                    }}
+                    onCancelEdit={() => {
+                      startEditingReplacement(null)
+                    }}
+                    onCommitReplacement={(value) => {
+                      actions.setCustomReplacement(d.id, value.length === 0 ? null : value)
+                      startEditingReplacement(null)
+                    }}
+                  />
+                ) : null}
+              </li>
+            )
+          })}
         </ul>
       )}
       <footer className="sidebar-footer">
@@ -73,6 +147,127 @@ export function DetectionSidebar(): ReactElement {
         </button>
       </footer>
     </aside>
+  )
+}
+
+interface FocusedControlsProps {
+  readonly detection: Detection
+  readonly state: FocusedControlsState
+  readonly onSetOperator: (op: OperatorName) => void
+  readonly onAccept: () => void
+  readonly onReject: () => void
+  readonly onStartEdit: () => void
+  readonly onCancelEdit: () => void
+  readonly onCommitReplacement: (value: string) => void
+}
+
+function FocusedControls({
+  detection,
+  state,
+  onSetOperator,
+  onAccept,
+  onReject,
+  onStartEdit,
+  onCancelEdit,
+  onCommitReplacement,
+}: FocusedControlsProps): ReactElement {
+  const [draft, setDraft] = useState('')
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (state.editing) {
+      setDraft(detection.customReplacement ?? '')
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }
+  }, [state.editing, detection.customReplacement])
+
+  return (
+    <div className="detection-sidebar-item-controls" data-testid="focused-controls">
+      <label
+        className={`detection-sidebar-item-operator${
+          detection.customReplacement !== undefined
+            ? ' detection-sidebar-item-operator-bypassed'
+            : ''
+        }`}
+      >
+        Operator
+        <select
+          value={state.effectiveOperator}
+          disabled={detection.customReplacement !== undefined}
+          onChange={(e) => {
+            onSetOperator(e.currentTarget.value as OperatorName)
+          }}
+        >
+          {OPERATOR_NAMES.map((op) => {
+            const locked = op === 'pseudonymize' && state.pseudonymizeLocked
+            return (
+              <option key={op} value={op} disabled={locked}>
+                {op}
+                {locked ? ' — mapping store locked' : ''}
+              </option>
+            )
+          })}
+        </select>
+        {state.pseudonymizeLocked && state.effectiveOperator === 'pseudonymize' ? (
+          <span className="detection-sidebar-item-hint">
+            Unlock the mapping store before committing.
+          </span>
+        ) : detection.customReplacement !== undefined ? (
+          <span className="detection-sidebar-item-hint">Bypassed by custom replacement below.</span>
+        ) : null}
+      </label>
+
+      {state.editing ? (
+        <div className="detection-sidebar-item-edit">
+          <input
+            ref={inputRef}
+            type="text"
+            value={draft}
+            placeholder="Custom replacement…"
+            onChange={(e) => {
+              setDraft(e.currentTarget.value)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                onCommitReplacement(draft)
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                onCancelEdit()
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="detection-sidebar-item-edit-cancel"
+            onClick={onCancelEdit}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : detection.customReplacement !== undefined ? (
+        <p className="detection-sidebar-item-replacement">
+          Replace with: <code>{detection.customReplacement}</code>
+          <button type="button" className="detection-sidebar-item-edit-start" onClick={onStartEdit}>
+            Edit
+          </button>
+        </p>
+      ) : (
+        <button type="button" className="detection-sidebar-item-edit-start" onClick={onStartEdit}>
+          Edit replacement
+        </button>
+      )}
+
+      <div className="detection-sidebar-item-actions">
+        <button type="button" className="detection-sidebar-item-accept" onClick={onAccept}>
+          Accept ↵
+        </button>
+        <button type="button" className="detection-sidebar-item-reject" onClick={onReject}>
+          Reject ⌫
+        </button>
+      </div>
+    </div>
   )
 }
 
