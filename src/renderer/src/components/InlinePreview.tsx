@@ -54,10 +54,10 @@ export function InlinePreview({ anchorRoot }: InlinePreviewProps): ReactElement 
 
   const visible: { detection: Detection; preview: string; variant: PreviewVariant }[] = []
   for (const detection of detections) {
-    const variant = pickPreviewVariant(detection, focusedId, previews[detection.id])
-    if (variant === null) continue
     const previewText = previews[detection.id]
     if (previewText === undefined) continue
+    const variant = pickPreviewVariant(detection, focusedId, previewText)
+    if (variant === null) continue
     visible.push({ detection, preview: previewText, variant })
   }
 
