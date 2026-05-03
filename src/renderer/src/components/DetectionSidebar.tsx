@@ -18,6 +18,7 @@ export interface FocusedControlsState {
   readonly editing: boolean
   readonly effectiveOperator: OperatorName
   readonly pseudonymizeLocked: boolean
+  readonly defaultOperator: OperatorName
 }
 
 /**
@@ -40,6 +41,7 @@ export function pickFocusedControlsState(
     editing: editingReplacementId === detection.id,
     effectiveOperator,
     pseudonymizeLocked: effectiveOperator === 'pseudonymize' && !mappingUnlocked,
+    defaultOperator,
   }
 }
 
@@ -173,6 +175,7 @@ function FocusedControls({
 }: FocusedControlsProps): ReactElement {
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const hasCustomReplacement = detection.customReplacement !== undefined
 
   useEffect(() => {
     if (state.editing) {
@@ -186,24 +189,24 @@ function FocusedControls({
     <div className="detection-sidebar-item-controls" data-testid="focused-controls">
       <label
         className={`detection-sidebar-item-operator${
-          detection.customReplacement !== undefined
-            ? ' detection-sidebar-item-operator-bypassed'
-            : ''
+          hasCustomReplacement ? ' detection-sidebar-item-operator-bypassed' : ''
         }`}
       >
         Operator
         <select
           value={state.effectiveOperator}
-          disabled={detection.customReplacement !== undefined}
+          disabled={hasCustomReplacement}
           onChange={(e) => {
             onSetOperator(e.currentTarget.value as OperatorName)
           }}
         >
           {OPERATOR_NAMES.map((op) => {
             const locked = op === 'pseudonymize' && state.pseudonymizeLocked
+            const isDefault = op === state.defaultOperator && detection.operator === undefined
             return (
               <option key={op} value={op} disabled={locked}>
                 {op}
+                {isDefault ? ' (default)' : ''}
                 {locked ? ' — mapping store locked' : ''}
               </option>
             )
@@ -213,7 +216,7 @@ function FocusedControls({
           <span className="detection-sidebar-item-hint">
             Unlock the mapping store before committing.
           </span>
-        ) : detection.customReplacement !== undefined ? (
+        ) : hasCustomReplacement ? (
           <span className="detection-sidebar-item-hint">Bypassed by custom replacement below.</span>
         ) : null}
       </label>
@@ -246,7 +249,7 @@ function FocusedControls({
             Cancel
           </button>
         </div>
-      ) : detection.customReplacement !== undefined ? (
+      ) : hasCustomReplacement ? (
         <p className="detection-sidebar-item-replacement">
           Replace with: <code>{detection.customReplacement}</code>
           <button type="button" className="detection-sidebar-item-edit-start" onClick={onStartEdit}>

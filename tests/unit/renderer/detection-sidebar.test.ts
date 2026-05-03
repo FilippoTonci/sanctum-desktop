@@ -34,6 +34,7 @@ describe('pickFocusedControlsState', () => {
     expect(state!.editing).toBe(false)
     expect(state!.effectiveOperator).toBe('mask')
     expect(state!.pseudonymizeLocked).toBe(false)
+    expect(state!.defaultOperator).toBe('replace')
   })
 
   it('falls back to the session default operator when none is set on the detection', () => {
@@ -45,11 +46,13 @@ describe('pickFocusedControlsState', () => {
       true,
     )
     expect(state!.effectiveOperator).toBe('redact')
+    expect(state!.defaultOperator).toBe('redact')
   })
 
   it('flips into edit mode when editingReplacementId matches', () => {
     const state = pickFocusedControlsState(detection({ id: 'd0' }), 'd0', 'd0', 'replace', true)
     expect(state!.editing).toBe(true)
+    expect(state!.defaultOperator).toBe('replace')
   })
 
   it('marks pseudonymize as locked when the mapping store is locked', () => {
@@ -61,5 +64,6 @@ describe('pickFocusedControlsState', () => {
       false,
     )
     expect(state!.pseudonymizeLocked).toBe(true)
+    expect(state!.defaultOperator).toBe('replace')
   })
 })
