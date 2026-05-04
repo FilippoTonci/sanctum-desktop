@@ -1873,6 +1873,39 @@ a:focus-visible {
 }
 
 /* =========================================================================
+   Inline edit substitution — wraps emitted by review/edit-wrap.ts.
+   See: docs/superpowers/specs/2026-05-04-inline-substitution-design.md
+   ========================================================================= */
+
+.sanctum-edit {
+  /* Layout no-op — surrounds the original text in document flow. */
+  display: inline;
+}
+
+.sanctum-edit-original {
+  display: inline;
+}
+
+.sanctum-edit-replacement {
+  /* Hidden by default; shown only when the wrap reaches accepted state
+     AND a replacement is available (data-status set by EditReplacement). */
+  display: none;
+  font-family: var(--font-mono);
+  font-style: italic;
+  font-size: 0.92em;
+  font-weight: 500;
+  color: var(--oxblood);
+}
+
+.sanctum-edit[data-status='accepted'] .sanctum-edit-original {
+  display: none;
+}
+
+.sanctum-edit[data-status='accepted'] .sanctum-edit-replacement {
+  display: inline;
+}
+
+/* =========================================================================
    Inline preview — replacement text floated next to each detection.
    See: docs/superpowers/specs/2026-05-03-accept-reject-ux-redesign-design.md
    ========================================================================= */
