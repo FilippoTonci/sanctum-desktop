@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { pickFocusedControlsState } from '../../../src/renderer/src/components/DetectionSidebar'
+import {
+  pickFocusedControlsState,
+  pickReplacementVariant,
+} from '../../../src/renderer/src/components/DetectionSidebar'
 import type { Detection } from '../../../src/renderer/src/review/types'
 
 function detection(overrides: Partial<Detection>): Detection {
@@ -65,5 +68,24 @@ describe('pickFocusedControlsState', () => {
     )
     expect(state!.pseudonymizeLocked).toBe(true)
     expect(state!.defaultOperator).toBe('replace')
+  })
+})
+
+describe('pickReplacementVariant', () => {
+  it('returns null when no preview is available', () => {
+    expect(pickReplacementVariant(detection({ status: 'pending' }), undefined)).toBeNull()
+    expect(pickReplacementVariant(detection({ status: 'accepted' }), undefined)).toBeNull()
+  })
+
+  it('returns "firm" for accepted detections with a preview', () => {
+    expect(pickReplacementVariant(detection({ status: 'accepted' }), '<X>')).toBe('firm')
+  })
+
+  it('returns "muted" for rejected detections with a preview', () => {
+    expect(pickReplacementVariant(detection({ status: 'rejected' }), '<X>')).toBe('muted')
+  })
+
+  it('returns "faint" for pending detections with a preview', () => {
+    expect(pickReplacementVariant(detection({ status: 'pending' }), '<X>')).toBe('faint')
   })
 })
