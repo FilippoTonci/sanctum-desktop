@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { renderAsync } from 'docx-preview'
+import { wrapDetections } from '../review/edit-wrap'
 import { applyHighlightRegistries, resolveDetections } from '../review/highlights'
 import type { Detection } from '../review/types'
 
@@ -66,6 +67,7 @@ export function DocxView({
     if (host === null) return
     const resolved = resolveDetections(host, detections)
     applyHighlightRegistries(resolved, focusedId)
+    wrapDetections(host, detections)
   }, [state.kind, detections, focusedId])
 
   return (

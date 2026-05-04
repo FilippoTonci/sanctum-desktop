@@ -6,7 +6,7 @@ import { CommitPanel } from './components/CommitPanel'
 import { DetectionSidebar } from './components/DetectionSidebar'
 import { DocxView } from './components/DocxView'
 import { DropZone } from './components/DropZone'
-import { InlinePreview } from './components/InlinePreview'
+import { EditReplacement } from './components/EditReplacement'
 import { MappingStoreChip } from './components/MappingStoreChip'
 import { RecentSessions } from './components/RecentSessions'
 import { SanctumEmblem } from './components/SanctumEmblem'
@@ -309,7 +309,7 @@ export function App(): ReactElement {
               onRendered={handleRendered}
             />
             <DetectionSidebar />
-            <InlinePreview anchorRoot={docRoot} />
+            <EditReplacement anchorRoot={docRoot} />
             <SelectModeBanner />
             <CommitPanel client={sessionsClient} sourceFileName={doc.name} onDone={handleClose} />
             <AnalysisBanner state={analysis} />

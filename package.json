@@ -17,7 +17,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "ELECTRON_DEV=1 SANCTUM_DEV_REPO=../sanctum PATH=../sanctum/.venv/bin:$PATH electron-vite dev --watch -- --remote-debugging-port=9333",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --build --force",
