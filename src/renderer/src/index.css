@@ -928,13 +928,6 @@ body {
   outline: 2px solid var(--oxblood);
 }
 
-::highlight(sanctum-previewing) {
-  /* Strikethrough + faded ink on detections whose replacement is shown
-     firmly (accepted, focused-pending). Pairs with .inline-preview-firm. */
-  text-decoration: line-through rgba(124, 32, 24, 0.6);
-  color: rgba(118, 107, 91, 0.78);
-}
-
 /* =========================================================================
    Review layout — document pane + sticky sidebar.
    ========================================================================= */

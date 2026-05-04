@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from 'vitest'
-import {
-  resolveDetections,
-  applyHighlightRegistries,
-} from '../../../src/renderer/src/review/highlights'
+import { resolveDetections } from '../../../src/renderer/src/review/highlights'
 import { seedFakeDetections } from '../../../src/renderer/src/review/fake-detections'
 import type { Detection } from '../../../src/renderer/src/review/types'
 
@@ -95,108 +92,5 @@ describe('seedFakeDetections', () => {
     const seeded = seedFakeDetections(root)
     expect(seeded).not.toHaveLength(0)
     for (const d of seeded) expect(d.status).toBe('pending')
-  })
-})
-
-interface FakeRegistry {
-  ranges: Range[]
-  clear(): void
-  add(range: Range): void
-}
-
-function installHighlightApi(): Record<string, FakeRegistry> {
-  const map: Record<string, FakeRegistry> = {}
-  // happy-dom doesn't ship the Highlight API; install a stub that the
-  // production code will treat as present.
-  ;(globalThis as unknown as { Highlight: unknown }).Highlight = class {
-    ranges: Range[] = []
-    clear(): void {
-      this.ranges = []
-    }
-    add(range: Range): void {
-      this.ranges.push(range)
-    }
-  }
-  const css = (globalThis as unknown as { CSS: unknown }).CSS ?? {}
-  ;(
-    css as unknown as {
-      highlights: {
-        get: (n: string) => FakeRegistry | undefined
-        set: (n: string, h: FakeRegistry) => void
-      }
-    }
-  ).highlights = {
-    get: (name) => map[name],
-    set: (name, h) => {
-      map[name] = h
-    },
-  }
-  ;(globalThis as unknown as { CSS: unknown }).CSS = css
-  return map
-}
-
-describe('applyHighlightRegistries — sanctum-previewing', () => {
-  beforeEach(() => {
-    document.body.innerHTML = ''
-  })
-
-  it('adds focused-pending and accepted ranges to sanctum-previewing; excludes rejected and unfocused-pending', () => {
-    const registries = installHighlightApi()
-    const root = setBody(
-      '<p><span data-segment-id="body/p0/r0">Alice and Bob and Carol and Dan.</span></p>',
-    )
-    const detections: Detection[] = [
-      {
-        id: 'a',
-        segmentId: 'body/p0/r0',
-        start: 0,
-        end: 5,
-        text: 'Alice',
-        entityType: 'PERSON',
-        status: 'pending',
-      },
-      {
-        id: 'b',
-        segmentId: 'body/p0/r0',
-        start: 10,
-        end: 13,
-        text: 'Bob',
-        entityType: 'PERSON',
-        status: 'accepted',
-      },
-      {
-        id: 'c',
-        segmentId: 'body/p0/r0',
-        start: 18,
-        end: 23,
-        text: 'Carol',
-        entityType: 'PERSON',
-        status: 'rejected',
-      },
-      {
-        id: 'd',
-        segmentId: 'body/p0/r0',
-        start: 28,
-        end: 31,
-        text: 'Dan',
-        entityType: 'PERSON',
-        status: 'pending',
-      },
-    ]
-    const resolved = resolveDetections(root, detections)
-    const ok = applyHighlightRegistries(resolved, 'a')
-    expect(ok).toBe(true)
-
-    const previewing = registries['sanctum-previewing']
-    expect(previewing).toBeDefined()
-    const previewingTexts = previewing!.ranges.map((r) => r.toString())
-    expect(previewingTexts).toEqual(expect.arrayContaining(['Alice', 'Bob']))
-    expect(previewingTexts).not.toContain('Carol')
-    expect(previewingTexts).not.toContain('Dan')
-
-    expect(registries['sanctum-pending']!.ranges.map((r) => r.toString())).toEqual(
-      expect.arrayContaining(['Alice', 'Dan']),
-    )
-    expect(registries['sanctum-focused']!.ranges.map((r) => r.toString())).toEqual(['Alice'])
   })
 })
