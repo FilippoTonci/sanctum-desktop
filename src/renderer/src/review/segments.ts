@@ -54,7 +54,7 @@ export function rangeWithinElement(el: Element, start: number, end: number): Ran
   if (start < 0 || end < start) return null
 
   const doc = el.ownerDocument
-  const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+  const walker = createSegmentTextWalker(doc, el)
 
   let consumed = 0
   let startNode: Text | null = null
@@ -152,7 +152,7 @@ function nearestSegmentAncestor(node: Node, root: ParentNode): HTMLElement | nul
 
 function textOffsetWithin(host: Element, target: Node, targetOffset: number): number | null {
   const doc = host.ownerDocument
-  const walker = doc.createTreeWalker(host, NodeFilter.SHOW_TEXT)
+  const walker = createSegmentTextWalker(doc, host)
   let consumed = 0
   for (
     let node = walker.nextNode() as Text | null;
@@ -166,7 +166,7 @@ function textOffsetWithin(host: Element, target: Node, targetOffset: number): nu
   // element node: treat the offset as positions within child nodes.
   if (target instanceof Element && target === host) {
     let acc = 0
-    const childWalker = doc.createTreeWalker(host, NodeFilter.SHOW_TEXT)
+    const childWalker = createSegmentTextWalker(doc, host)
     let child = childWalker.nextNode() as Text | null
     let i = 0
     while (child !== null && i < targetOffset) {
@@ -177,4 +177,26 @@ function textOffsetWithin(host: Element, target: Node, targetOffset: number): nu
     return acc
   }
   return null
+}
+
+/**
+ * Build a TreeWalker that visits every text node inside `host` *except*
+ * those inside `.sanctum-edit-replacement`. The replacement spans hold
+ * substituted text rendered by EditReplacement; including their
+ * characters in offset math would invalidate the (segmentId, start, end)
+ * contract on subsequent resolves. See the design spec.
+ */
+function createSegmentTextWalker(doc: Document, host: Element): TreeWalker {
+  return doc.createTreeWalker(host, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      let parent: Node | null = node.parentNode
+      while (parent !== null && parent !== host) {
+        if (parent instanceof Element && parent.classList.contains('sanctum-edit-replacement')) {
+          return NodeFilter.FILTER_REJECT
+        }
+        parent = parent.parentNode
+      }
+      return NodeFilter.FILTER_ACCEPT
+    },
+  })
 }
