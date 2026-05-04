@@ -918,13 +918,21 @@ body {
 }
 
 ::highlight(sanctum-rejected) {
+  /* Background-only — rejected means "keep the original verbatim",
+     so striking the text out reads wrong (issue #23). */
   background-color: rgba(180, 174, 162, 0.22);
-  text-decoration: line-through rgba(110, 100, 87, 0.75);
 }
 
 ::highlight(sanctum-focused) {
   background-color: rgba(124, 32, 24, 0.3);
   outline: 2px solid var(--oxblood);
+}
+
+::highlight(sanctum-previewing) {
+  /* Strikethrough + faded ink on detections whose replacement is shown
+     firmly (accepted, focused-pending). Pairs with .inline-preview-firm. */
+  text-decoration: line-through rgba(124, 32, 24, 0.6);
+  color: rgba(118, 107, 91, 0.78);
 }
 
 /* =========================================================================
@@ -1101,202 +1109,144 @@ body {
   cursor: not-allowed;
 }
 
-/* =========================================================================
-   Detection tooltip — anchored to a span; the inquisitor's loupe.
-   ========================================================================= */
-
-.detection-tooltip {
-  z-index: 30;
+/* Focused row's expanded controls — operator, edit, accept/reject. */
+.detection-sidebar-item-controls {
+  margin: 0.4rem 0 0.6rem;
+  padding: 0.7rem 0.8rem 0.8rem;
+  border-radius: var(--radius-md);
   background: var(--paper-elevated);
-  color: var(--ink);
   border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-md);
-  box-shadow:
-    0 16px 40px -12px rgba(20, 14, 8, 0.45),
-    0 2px 8px rgba(20, 14, 8, 0.12);
-  padding: 0.85rem 0.95rem;
-  min-width: 240px;
-  max-width: 360px;
-  font-family: var(--font-body);
-  font-size: 0.9rem;
-}
-
-.detection-tooltip-header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  margin-bottom: 0.55rem;
-  font-family: var(--font-mono);
-  color: var(--ink-muted);
-}
-
-.detection-tooltip-entity {
-  font-family: var(--font-mono);
-  color: var(--oxblood);
-  font-weight: 500;
-}
-
-.detection-tooltip-status {
-  color: var(--ink-muted);
-}
-
-.detection-tooltip-text {
-  margin: 0 0 0.65rem;
-  font-style: italic;
-  font-family: var(--font-display);
-  font-variation-settings: var(--fraunces-body);
-  word-break: break-word;
-  font-size: 0.95rem;
-}
-
-.detection-tooltip-actions {
-  display: flex;
-  gap: 0.45rem;
-}
-
-.detection-tooltip-accept,
-.detection-tooltip-reject {
-  flex: 1;
-  padding: 0.45rem 0.7rem;
-  border-radius: var(--radius-md);
-  font-size: 0.78rem;
-  font-family: var(--font-mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition:
-    background 160ms ease,
-    transform 160ms ease;
-}
-
-.detection-tooltip-accept {
-  background: var(--verdigris);
-  color: var(--paper);
-  border-color: var(--verdigris);
-}
-
-.detection-tooltip-accept:hover {
-  background: #2d5742;
-  transform: translateY(-1px);
-}
-
-.detection-tooltip-reject {
-  background: transparent;
-  color: var(--oxblood);
-  border-color: var(--oxblood);
-}
-
-.detection-tooltip-reject:hover {
-  background: var(--oxblood-soft);
-  transform: translateY(-1px);
-}
-
-.detection-tooltip-operator {
   display: flex;
   flex-direction: column;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  margin-bottom: 0.6rem;
-  gap: 0.25rem;
-  color: var(--ink-muted);
-  font-family: var(--font-mono);
+  gap: 0.55rem;
 }
 
-.detection-tooltip-operator select {
-  padding: 0.35rem 0.45rem;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  text-transform: none;
-  letter-spacing: normal;
-  font-family: var(--font-body);
-  background: var(--paper);
-  color: var(--ink);
-}
-
-.detection-tooltip-operator select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.detection-tooltip-operator-bypassed {
-  opacity: 0.75;
-}
-
-.detection-tooltip-operator-hint {
-  font-size: 0.7rem;
-  text-transform: none;
-  letter-spacing: normal;
-  font-style: italic;
-  color: var(--saffron);
-  margin-top: 0.2rem;
-  font-family: var(--font-display);
-  font-variation-settings: var(--fraunces-body);
-}
-
-.detection-tooltip-edit {
+.detection-sidebar-item-operator {
   display: flex;
-  gap: 0.45rem;
-  margin-bottom: 0.55rem;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
 }
 
-.detection-tooltip-edit input {
-  flex: 1;
-  padding: 0.4rem 0.55rem;
+.detection-sidebar-item-operator select {
+  padding: 0.35rem 0.5rem;
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  letter-spacing: normal;
+  text-transform: none;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.detection-sidebar-item-operator-bypassed select {
+  opacity: 0.55;
+}
+
+.detection-sidebar-item-hint {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.detection-sidebar-item-edit {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.detection-sidebar-item-edit input {
+  flex: 1;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
   font-size: 0.85rem;
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-body);
 }
 
-.detection-tooltip-edit-cancel,
-.detection-tooltip-edit-start {
+.detection-sidebar-item-edit-cancel,
+.detection-sidebar-item-edit-start {
   background: transparent;
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-sm);
-  padding: 0.32rem 0.6rem;
-  font-size: 0.75rem;
-  cursor: pointer;
-  color: var(--ink-soft);
+  padding: 0.3rem 0.55rem;
   font-family: var(--font-mono);
-  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: var(--ink-soft);
+  cursor: pointer;
 }
 
-.detection-tooltip-edit-cancel:hover,
-.detection-tooltip-edit-start:hover {
-  border-color: var(--oxblood);
-  color: var(--oxblood);
+.detection-sidebar-item-edit-cancel:hover,
+.detection-sidebar-item-edit-start:hover {
+  background: var(--paper-sunken);
+  color: var(--ink);
 }
 
-.detection-tooltip-edit-start {
-  margin-bottom: 0.55rem;
-  margin-left: 0.4rem;
-}
-
-.detection-tooltip-replacement {
-  margin: 0 0 0.55rem;
-  font-size: 0.85rem;
+.detection-sidebar-item-replacement {
+  margin: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+  font-size: 0.85rem;
   color: var(--ink-soft);
 }
 
-.detection-tooltip-replacement code {
+.detection-sidebar-item-replacement code {
   background: var(--paper-sunken);
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
   font-family: var(--font-mono);
   border: 1px solid var(--hairline);
+}
+
+.detection-sidebar-item-actions {
+  display: flex;
+  gap: 0.45rem;
+  margin-top: 0.2rem;
+}
+
+.detection-sidebar-item-accept,
+.detection-sidebar-item-reject {
+  flex: 1;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: 1px solid var(--hairline-strong);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.detection-sidebar-item-accept {
+  background: var(--oxblood);
+  color: var(--paper);
+  border-color: var(--oxblood);
+}
+
+.detection-sidebar-item-accept:hover {
+  background: var(--oxblood-hover);
+}
+
+.detection-sidebar-item-reject:hover {
+  background: var(--paper-sunken);
+  color: var(--ink);
 }
 
 /* =========================================================================
@@ -1485,40 +1435,8 @@ body {
 }
 
 /* =========================================================================
-   Preview bubble + select-mode banner.
+   Select-mode banner.
    ========================================================================= */
-
-.preview-bubble {
-  position: absolute;
-  z-index: 25;
-  display: inline-flex;
-  gap: 0.35rem;
-  align-items: baseline;
-  background: var(--verdigris);
-  color: var(--paper);
-  padding: 0.15rem 0.55rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.78rem;
-  font-style: italic;
-  font-family: var(--font-display);
-  font-variation-settings: var(--fraunces-body);
-  white-space: nowrap;
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-  box-shadow: 0 2px 8px rgba(20, 14, 8, 0.3);
-}
-
-.preview-bubble-arrow {
-  font-style: normal;
-  opacity: 0.85;
-  font-family: var(--font-mono);
-}
-
-.preview-bubble-text {
-  font-style: italic;
-}
 
 .select-mode-banner {
   position: fixed;
@@ -1958,5 +1876,45 @@ a:focus-visible {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* =========================================================================
+   Inline preview — replacement text floated next to each detection.
+   See: docs/superpowers/specs/2026-05-03-accept-reject-ux-redesign-design.md
+   ========================================================================= */
+
+.inline-preview {
+  position: absolute;
+  z-index: 25;
+  font-family: var(--font-mono);
+  font-style: italic;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--saffron);
+  opacity: 0.55;
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  /* Sit on the document text baseline, not above it. */
+  padding: 0 0.25rem;
+}
+
+.inline-preview-firm {
+  color: var(--oxblood);
+  opacity: 1;
+  font-weight: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+  .inline-preview {
+    color: var(--saffron);
+    opacity: 0.65;
+  }
+  .inline-preview-firm {
+    color: var(--oxblood);
+    opacity: 1;
   }
 }

@@ -1,13 +1,16 @@
 /**
  * Drive the CSS Custom Highlight API from a list of detections.
  *
- * Four registries are maintained:
+ * Five registries are maintained:
  *
- *   sanctum-pending   — detections the reviewer hasn't acted on
- *   sanctum-accepted  — detections the reviewer marked accept
- *   sanctum-rejected  — detections the reviewer marked reject
- *   sanctum-focused   — the single detection currently focused (overlay
- *                        on top of one of the three above)
+ *   sanctum-pending     — detections the reviewer hasn't acted on
+ *   sanctum-accepted    — detections the reviewer marked accept
+ *   sanctum-rejected    — detections the reviewer marked reject
+ *   sanctum-focused     — the single detection currently focused (overlay
+ *                          on top of one of the three above)
+ *   sanctum-previewing  — accepted + focused-pending; styled with
+ *                          strikethrough so the original reads as the
+ *                          source the proposed replacement is replacing
  *
  * The CSS in `index.css` paints each registry. The renderer just owns
  * which Range goes into which registry on every state change.
@@ -21,6 +24,7 @@ const REGISTRY_NAMES = {
   accepted: 'sanctum-accepted',
   rejected: 'sanctum-rejected',
   focused: 'sanctum-focused',
+  previewing: 'sanctum-previewing',
 } as const
 
 type RegistryName = (typeof REGISTRY_NAMES)[keyof typeof REGISTRY_NAMES]
@@ -52,7 +56,7 @@ export function resolveDetections(
 }
 
 /**
- * Push the resolved ranges into the four CSS Custom Highlight
+ * Push the resolved ranges into the five CSS Custom Highlight
  * registries. Idempotent — call this on every detection or focus
  * change. Returns `false` when the platform lacks Highlight API
  * support (older browsers, happy-dom under unit test); callers should
@@ -69,6 +73,7 @@ export function applyHighlightRegistries(
     [REGISTRY_NAMES.accepted]: ensureRegistry(REGISTRY_NAMES.accepted),
     [REGISTRY_NAMES.rejected]: ensureRegistry(REGISTRY_NAMES.rejected),
     [REGISTRY_NAMES.focused]: ensureRegistry(REGISTRY_NAMES.focused),
+    [REGISTRY_NAMES.previewing]: ensureRegistry(REGISTRY_NAMES.previewing),
   }
 
   for (const name of Object.values(REGISTRY_NAMES)) {
@@ -79,6 +84,15 @@ export function applyHighlightRegistries(
     registry[REGISTRY_NAMES[detection.status]].add(range)
     if (detection.id === focusedId) {
       registry[REGISTRY_NAMES.focused].add(range)
+    }
+    // Strikethrough source text whenever the proposed replacement is
+    // shown firmly: accepted detections, and the single focused-pending
+    // one. See the design spec (§ User-visible behaviour).
+    const showsFirmPreview =
+      detection.status === 'accepted' ||
+      (detection.status === 'pending' && detection.id === focusedId)
+    if (showsFirmPreview) {
+      registry[REGISTRY_NAMES.previewing].add(range)
     }
   }
 

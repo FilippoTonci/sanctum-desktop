@@ -4,11 +4,10 @@ import { clientFromCredentials, type SessionsClient } from './api/sessions'
 import { ApiError } from './api/types'
 import { CommitPanel } from './components/CommitPanel'
 import { DetectionSidebar } from './components/DetectionSidebar'
-import { DetectionTooltip } from './components/DetectionTooltip'
 import { DocxView } from './components/DocxView'
 import { DropZone } from './components/DropZone'
+import { InlinePreview } from './components/InlinePreview'
 import { MappingStoreChip } from './components/MappingStoreChip'
-import { PreviewOverlay } from './components/PreviewOverlay'
 import { RecentSessions } from './components/RecentSessions'
 import { SanctumEmblem } from './components/SanctumEmblem'
 import { SelectModeBanner } from './components/SelectModeBanner'
@@ -310,8 +309,7 @@ export function App(): ReactElement {
               onRendered={handleRendered}
             />
             <DetectionSidebar />
-            <DetectionTooltip anchorRoot={docRoot} />
-            <PreviewOverlay anchorRoot={docRoot} />
+            <InlinePreview anchorRoot={docRoot} />
             <SelectModeBanner />
             <CommitPanel client={sessionsClient} sourceFileName={doc.name} onDone={handleClose} />
             <AnalysisBanner state={analysis} />
