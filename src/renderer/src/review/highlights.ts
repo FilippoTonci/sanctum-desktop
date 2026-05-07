@@ -34,6 +34,22 @@ export interface ResolvedDetection {
  * Resolve every detection to a DOM Range against `root`. Returns the
  * subset that hit (a detection whose run is not currently rendered is
  * silently dropped — common during async docx-preview render warmup).
+ *
+ * When a `.sanctum-edit` wrap already exists for a detection (inserted
+ * by review/edit-wrap.ts), the range is built to surround the wrap
+ * element rather than its inner text node. Two reasons:
+ *
+ *   - Stability: text-node ranges are invalidated by neighbouring
+ *     `Range.surroundContents` calls (the CSS Custom Highlight API in
+ *     Chromium does not re-render when stored Range endpoints
+ *     live-update through DOM mutations). A range surrounding an
+ *     element child is unaffected by mutations inside that element.
+ *
+ *   - Visibility: an accepted detection has CSS that hides
+ *     `.sanctum-edit-original` (display:none) and shows
+ *     `.sanctum-edit-replacement`. A range surrounding the wrap paints
+ *     over whichever child is currently visible — so focus + status
+ *     highlights follow the substitution automatically.
  */
 export function resolveDetections(
   root: ParentNode,
@@ -41,6 +57,14 @@ export function resolveDetections(
 ): ResolvedDetection[] {
   const out: ResolvedDetection[] = []
   for (const detection of detections) {
+    const wrap = findEditWrap(root, detection.id)
+    if (wrap !== null) {
+      const range = rangeAroundElement(wrap)
+      if (range !== null) {
+        out.push({ detection, range })
+        continue
+      }
+    }
     const range = findSegmentRange(root, {
       segmentId: detection.segmentId,
       start: detection.start,
@@ -49,6 +73,25 @@ export function resolveDetections(
     if (range !== null) out.push({ detection, range })
   }
   return out
+}
+
+function findEditWrap(root: ParentNode, detectionId: string): HTMLElement | null {
+  return root.querySelector<HTMLElement>(
+    `.sanctum-edit[data-detection-id="${escapeAttr(detectionId)}"]`,
+  )
+}
+
+function rangeAroundElement(element: Element): Range | null {
+  const parent = element.parentNode
+  if (parent === null) return null
+  const ownerDoc = element.ownerDocument
+  const range = ownerDoc.createRange()
+  range.selectNode(element)
+  return range
+}
+
+function escapeAttr(value: string): string {
+  return value.replace(/["\\]/g, (m) => `\\${m}`)
 }
 
 /**

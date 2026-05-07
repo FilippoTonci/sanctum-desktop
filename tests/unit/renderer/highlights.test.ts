@@ -46,6 +46,60 @@ describe('resolveDetections', () => {
     const root = setBody('<p><span data-segment-id="body/p0/r0">Hi.</span></p>')
     expect(resolveDetections(root, [])).toEqual([])
   })
+
+  it('returns a range surrounding the .sanctum-edit wrap when one exists', () => {
+    // After wrapDetections runs, each detection lives inside a wrap.
+    // Highlights must paint via a range over the wrap (not its inner
+    // text) so CSS swaps between original and replacement keep working
+    // and Range.surroundContents on neighbours doesn't invalidate it.
+    const root = setBody(
+      '<p><span data-segment-id="body/p0/r0">Hi ' +
+        '<span class="sanctum-edit" data-detection-id="a">' +
+        '<span class="sanctum-edit-original">Alice</span>' +
+        '</span>' +
+        '.</span></p>',
+    )
+    const detections: Detection[] = [
+      {
+        id: 'a',
+        segmentId: 'body/p0/r0',
+        start: 3,
+        end: 8,
+        text: 'Alice',
+        entityType: 'PERSON',
+        status: 'pending',
+      },
+    ]
+    const resolved = resolveDetections(root, detections)
+    expect(resolved).toHaveLength(1)
+    const range = resolved[0]!.range
+    expect(range.toString()).toBe('Alice')
+    expect(range.startContainer.nodeType).toBe(Node.ELEMENT_NODE)
+    const wrap = root.querySelector('.sanctum-edit[data-detection-id="a"]')
+    expect(range.startContainer).toBe(wrap?.parentNode)
+    expect(range.endContainer).toBe(wrap?.parentNode)
+    // The range should span exactly the wrap element (one child).
+    expect(range.endOffset - range.startOffset).toBe(1)
+  })
+
+  it('falls back to findSegmentRange when no wrap exists for the detection', () => {
+    const root = setBody('<p><span data-segment-id="body/p0/r0">Hi Alice.</span></p>')
+    const detections: Detection[] = [
+      {
+        id: 'a',
+        segmentId: 'body/p0/r0',
+        start: 3,
+        end: 8,
+        text: 'Alice',
+        entityType: 'PERSON',
+        status: 'pending',
+      },
+    ]
+    const resolved = resolveDetections(root, detections)
+    expect(resolved).toHaveLength(1)
+    expect(resolved[0]?.range.toString()).toBe('Alice')
+    expect(resolved[0]?.range.startContainer.nodeType).toBe(Node.TEXT_NODE)
+  })
 })
 
 describe('seedFakeDetections', () => {

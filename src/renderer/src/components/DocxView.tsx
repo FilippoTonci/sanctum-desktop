@@ -65,9 +65,13 @@ export function DocxView({
     if (state.kind !== 'ready') return
     const host = bodyRef.current
     if (host === null) return
+    // Order matters: wrap first so resolveDetections builds ranges
+    // against the wrap elements (stable across surroundContents) and
+    // the highlight Ranges paint over whichever child the CSS shows
+    // (original when pending/rejected, replacement when accepted).
+    wrapDetections(host, detections)
     const resolved = resolveDetections(host, detections)
     applyHighlightRegistries(resolved, focusedId)
-    wrapDetections(host, detections)
   }, [state.kind, detections, focusedId])
 
   return (
