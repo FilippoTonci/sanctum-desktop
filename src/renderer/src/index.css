@@ -928,13 +928,6 @@ body {
   outline: 2px solid var(--oxblood);
 }
 
-::highlight(sanctum-previewing) {
-  /* Strikethrough + faded ink on detections whose replacement is shown
-     firmly (accepted, focused-pending). Pairs with .inline-preview-firm. */
-  text-decoration: line-through rgba(124, 32, 24, 0.6);
-  color: rgba(118, 107, 91, 0.78);
-}
-
 /* =========================================================================
    Review layout — document pane + sticky sidebar.
    ========================================================================= */
@@ -1040,6 +1033,43 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: -0.005em;
+}
+
+.sidebar-item-replacement {
+  display: block;
+  margin-top: 0.18rem;
+  font-family: var(--font-mono);
+  font-style: italic;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--oxblood);
+}
+
+.sidebar-item-replacement-firm {
+  opacity: 1;
+  font-weight: 500;
+}
+
+.sidebar-item-replacement-faint {
+  opacity: 0.65;
+}
+
+.sidebar-item-replacement-muted {
+  opacity: 0.5;
+  color: var(--ink-muted);
+  text-decoration: line-through;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sidebar-item-replacement {
+    color: var(--oxblood);
+  }
+  .sidebar-item-replacement-faint {
+    opacity: 0.7;
+  }
 }
 
 .sidebar-item-meta {
@@ -1880,41 +1910,34 @@ a:focus-visible {
 }
 
 /* =========================================================================
-   Inline preview — replacement text floated next to each detection.
-   See: docs/superpowers/specs/2026-05-03-accept-reject-ux-redesign-design.md
+   Inline edit substitution — wraps emitted by review/edit-wrap.ts.
+   See: docs/superpowers/specs/2026-05-04-inline-substitution-design.md
    ========================================================================= */
 
-.inline-preview {
-  position: absolute;
-  z-index: 25;
+.sanctum-edit {
+  /* Layout no-op — surrounds the original text in document flow. */
+  display: inline;
+}
+
+.sanctum-edit-original {
+  display: inline;
+}
+
+.sanctum-edit-replacement {
+  /* Hidden by default; shown only when the wrap reaches accepted state
+     AND a replacement is available (data-status set by EditReplacement). */
+  display: none;
   font-family: var(--font-mono);
   font-style: italic;
-  font-size: 0.78rem;
-  letter-spacing: 0.02em;
-  color: var(--saffron);
-  opacity: 0.55;
-  white-space: nowrap;
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-  /* Sit on the document text baseline, not above it. */
-  padding: 0 0.25rem;
-}
-
-.inline-preview-firm {
-  color: var(--oxblood);
-  opacity: 1;
+  font-size: 0.92em;
   font-weight: 500;
+  color: var(--oxblood);
 }
 
-@media (prefers-color-scheme: dark) {
-  .inline-preview {
-    color: var(--saffron);
-    opacity: 0.65;
-  }
-  .inline-preview-firm {
-    color: var(--oxblood);
-    opacity: 1;
-  }
+.sanctum-edit[data-status='accepted'] .sanctum-edit-original {
+  display: none;
+}
+
+.sanctum-edit[data-status='accepted'] .sanctum-edit-replacement {
+  display: inline;
 }

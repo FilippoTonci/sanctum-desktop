@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from 'vitest'
-import {
-  resolveDetections,
-  applyHighlightRegistries,
-} from '../../../src/renderer/src/review/highlights'
+import { resolveDetections } from '../../../src/renderer/src/review/highlights'
 import { seedFakeDetections } from '../../../src/renderer/src/review/fake-detections'
 import type { Detection } from '../../../src/renderer/src/review/types'
 
@@ -48,6 +45,60 @@ describe('resolveDetections', () => {
   it('returns an empty list for an empty detection set', () => {
     const root = setBody('<p><span data-segment-id="body/p0/r0">Hi.</span></p>')
     expect(resolveDetections(root, [])).toEqual([])
+  })
+
+  it('returns a range surrounding the .sanctum-edit wrap when one exists', () => {
+    // After wrapDetections runs, each detection lives inside a wrap.
+    // Highlights must paint via a range over the wrap (not its inner
+    // text) so CSS swaps between original and replacement keep working
+    // and Range.surroundContents on neighbours doesn't invalidate it.
+    const root = setBody(
+      '<p><span data-segment-id="body/p0/r0">Hi ' +
+        '<span class="sanctum-edit" data-detection-id="a">' +
+        '<span class="sanctum-edit-original">Alice</span>' +
+        '</span>' +
+        '.</span></p>',
+    )
+    const detections: Detection[] = [
+      {
+        id: 'a',
+        segmentId: 'body/p0/r0',
+        start: 3,
+        end: 8,
+        text: 'Alice',
+        entityType: 'PERSON',
+        status: 'pending',
+      },
+    ]
+    const resolved = resolveDetections(root, detections)
+    expect(resolved).toHaveLength(1)
+    const range = resolved[0]!.range
+    expect(range.toString()).toBe('Alice')
+    expect(range.startContainer.nodeType).toBe(Node.ELEMENT_NODE)
+    const wrap = root.querySelector('.sanctum-edit[data-detection-id="a"]')
+    expect(range.startContainer).toBe(wrap?.parentNode)
+    expect(range.endContainer).toBe(wrap?.parentNode)
+    // The range should span exactly the wrap element (one child).
+    expect(range.endOffset - range.startOffset).toBe(1)
+  })
+
+  it('falls back to findSegmentRange when no wrap exists for the detection', () => {
+    const root = setBody('<p><span data-segment-id="body/p0/r0">Hi Alice.</span></p>')
+    const detections: Detection[] = [
+      {
+        id: 'a',
+        segmentId: 'body/p0/r0',
+        start: 3,
+        end: 8,
+        text: 'Alice',
+        entityType: 'PERSON',
+        status: 'pending',
+      },
+    ]
+    const resolved = resolveDetections(root, detections)
+    expect(resolved).toHaveLength(1)
+    expect(resolved[0]?.range.toString()).toBe('Alice')
+    expect(resolved[0]?.range.startContainer.nodeType).toBe(Node.TEXT_NODE)
   })
 })
 
@@ -95,108 +146,5 @@ describe('seedFakeDetections', () => {
     const seeded = seedFakeDetections(root)
     expect(seeded).not.toHaveLength(0)
     for (const d of seeded) expect(d.status).toBe('pending')
-  })
-})
-
-interface FakeRegistry {
-  ranges: Range[]
-  clear(): void
-  add(range: Range): void
-}
-
-function installHighlightApi(): Record<string, FakeRegistry> {
-  const map: Record<string, FakeRegistry> = {}
-  // happy-dom doesn't ship the Highlight API; install a stub that the
-  // production code will treat as present.
-  ;(globalThis as unknown as { Highlight: unknown }).Highlight = class {
-    ranges: Range[] = []
-    clear(): void {
-      this.ranges = []
-    }
-    add(range: Range): void {
-      this.ranges.push(range)
-    }
-  }
-  const css = (globalThis as unknown as { CSS: unknown }).CSS ?? {}
-  ;(
-    css as unknown as {
-      highlights: {
-        get: (n: string) => FakeRegistry | undefined
-        set: (n: string, h: FakeRegistry) => void
-      }
-    }
-  ).highlights = {
-    get: (name) => map[name],
-    set: (name, h) => {
-      map[name] = h
-    },
-  }
-  ;(globalThis as unknown as { CSS: unknown }).CSS = css
-  return map
-}
-
-describe('applyHighlightRegistries — sanctum-previewing', () => {
-  beforeEach(() => {
-    document.body.innerHTML = ''
-  })
-
-  it('adds focused-pending and accepted ranges to sanctum-previewing; excludes rejected and unfocused-pending', () => {
-    const registries = installHighlightApi()
-    const root = setBody(
-      '<p><span data-segment-id="body/p0/r0">Alice and Bob and Carol and Dan.</span></p>',
-    )
-    const detections: Detection[] = [
-      {
-        id: 'a',
-        segmentId: 'body/p0/r0',
-        start: 0,
-        end: 5,
-        text: 'Alice',
-        entityType: 'PERSON',
-        status: 'pending',
-      },
-      {
-        id: 'b',
-        segmentId: 'body/p0/r0',
-        start: 10,
-        end: 13,
-        text: 'Bob',
-        entityType: 'PERSON',
-        status: 'accepted',
-      },
-      {
-        id: 'c',
-        segmentId: 'body/p0/r0',
-        start: 18,
-        end: 23,
-        text: 'Carol',
-        entityType: 'PERSON',
-        status: 'rejected',
-      },
-      {
-        id: 'd',
-        segmentId: 'body/p0/r0',
-        start: 28,
-        end: 31,
-        text: 'Dan',
-        entityType: 'PERSON',
-        status: 'pending',
-      },
-    ]
-    const resolved = resolveDetections(root, detections)
-    const ok = applyHighlightRegistries(resolved, 'a')
-    expect(ok).toBe(true)
-
-    const previewing = registries['sanctum-previewing']
-    expect(previewing).toBeDefined()
-    const previewingTexts = previewing!.ranges.map((r) => r.toString())
-    expect(previewingTexts).toEqual(expect.arrayContaining(['Alice', 'Bob']))
-    expect(previewingTexts).not.toContain('Carol')
-    expect(previewingTexts).not.toContain('Dan')
-
-    expect(registries['sanctum-pending']!.ranges.map((r) => r.toString())).toEqual(
-      expect.arrayContaining(['Alice', 'Dan']),
-    )
-    expect(registries['sanctum-focused']!.ranges.map((r) => r.toString())).toEqual(['Alice'])
   })
 })

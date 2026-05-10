@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, session, shell, type WebContents } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pollHealth } from './health'
@@ -191,9 +191,53 @@ ipcMain.handle(
   },
 )
 
+/**
+ * In dev the renderer is served by Vite at http://localhost:5173 and the
+ * sidecar binds to 127.0.0.1:<dynamic-port>. Two CORS-related problems
+ * appear that production doesn't have (file:// renderer sends no Origin
+ * and isn't CORS-checked):
+ *
+ * 1. The sidecar's Flask before_request guard rejects any cross-origin
+ *    request whose Origin isn't in its bind-address allowlist. We strip
+ *    the Origin header on outbound requests so the guard's
+ *    `if origin is not None` short-circuit kicks in.
+ *
+ * 2. The Authorization: Bearer header makes our POST a non-simple
+ *    cross-origin request, so the browser sends an OPTIONS preflight.
+ *    The sidecar answers 200 but without Access-Control-Allow-* reply
+ *    headers, so the browser blocks the follow-up POST. We inject the
+ *    allow headers on inbound responses from the sidecar.
+ *
+ * Bearer-token auth still gates every request; the airgap webRequest
+ * filter (when it lands in WS6) will still cap destinations at
+ * 127.0.0.1. Production bypasses both of these entirely.
+ */
+function installDevCorsShim(): void {
+  if (process.env.ELECTRON_DEV !== '1') return
+  const wr = session.defaultSession.webRequest
+
+  wr.onBeforeSendHeaders((details, callback) => {
+    const headers = { ...details.requestHeaders }
+    delete headers.Origin
+    delete headers.origin
+    callback({ requestHeaders: headers })
+  })
+
+  wr.onHeadersReceived({ urls: ['http://127.0.0.1:*/*'] }, (details, callback) => {
+    const responseHeaders = { ...(details.responseHeaders ?? {}) }
+    responseHeaders['Access-Control-Allow-Origin'] = ['*']
+    responseHeaders['Access-Control-Allow-Methods'] = [
+      'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD',
+    ]
+    responseHeaders['Access-Control-Allow-Headers'] = ['Authorization, Content-Type']
+    callback({ responseHeaders })
+  })
+}
+
 void app.whenReady().then(() => {
   settingsStore = new SettingsStore(join(app.getPath('userData'), 'settings.json'))
 
+  installDevCorsShim()
   createWindow()
 
   app.on('activate', () => {

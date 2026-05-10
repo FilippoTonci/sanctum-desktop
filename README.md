@@ -233,6 +233,8 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [x] Error surfaces (409 / 413 / 415 / 503)
 - [x] Session abandonment keeps the manifest so terminal sessions stay in Recent Sessions
 - [x] Session resume from a Recent Sessions row (`GET /review-sessions/{id}/input` returns pinned bytes for OPEN sessions; terminal rows render disabled)
+- [x] Accept/Reject UX redesign — sidebar-driven controls, no floating tooltip (issue #23)
+- [x] Inline substitution on accept — replacement substitutes the original in document flow; sidebar always shows the proposed change (issue #27)
 
 ### WS6 — Polish, signing, release
 

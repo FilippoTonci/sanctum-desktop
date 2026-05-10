@@ -45,12 +45,34 @@ export function pickFocusedControlsState(
   }
 }
 
+export type ReplacementVariant = 'firm' | 'faint' | 'muted'
+
+/**
+ * Decide the visual tier for the sidebar's "→ replacement" line:
+ *
+ *   accepted → firm   (the decision is made; the replacement matters)
+ *   rejected → muted  (greyed; user opted out, replacement is now history)
+ *   pending  → faint  (preview hint, not yet decided)
+ *
+ * Returns `null` when there's no preview to render.
+ */
+export function pickReplacementVariant(
+  detection: Detection,
+  preview: string | undefined,
+): ReplacementVariant | null {
+  if (preview === undefined) return null
+  if (detection.status === 'accepted') return 'firm'
+  if (detection.status === 'rejected') return 'muted'
+  return 'faint'
+}
+
 export function DetectionSidebar(): ReactElement {
   const detections = useReviewStore((s) => s.detections)
   const focusedId = useReviewStore((s) => s.focusedId)
   const setFocused = useReviewStore((s) => s.setFocused)
   const openCommit = useReviewStore((s) => s.openCommitPanel)
   const editingReplacementId = useReviewStore((s) => s.editingReplacementId)
+  const previews = useReviewStore((s) => s.previews)
   const startEditingReplacement = useReviewStore((s) => s.startEditingReplacement)
   const defaultOperator = useReviewStore((s) => s.defaultOperator)
   const mappingUnlocked = useReviewStore((s) => s.mappingStoreUnlocked) === true
@@ -96,6 +118,7 @@ export function DetectionSidebar(): ReactElement {
                   aria-pressed={d.id === focusedId}
                 >
                   <span className="sidebar-item-text">{d.text}</span>
+                  <SidebarReplacementLine detection={d} preview={previews[d.id]} />
                   <span className="sidebar-item-meta">
                     <span className="sidebar-item-entity">{d.entityType}</span>
                     <span className={`sidebar-item-status sidebar-item-status-${d.status}`}>
@@ -271,6 +294,27 @@ function FocusedControls({
         </button>
       </div>
     </div>
+  )
+}
+
+interface SidebarReplacementLineProps {
+  readonly detection: Detection
+  readonly preview: string | undefined
+}
+
+function SidebarReplacementLine({
+  detection,
+  preview,
+}: SidebarReplacementLineProps): ReactElement | null {
+  const variant = pickReplacementVariant(detection, preview)
+  if (variant === null) return null
+  return (
+    <span
+      className={`sidebar-item-replacement sidebar-item-replacement-${variant}`}
+      data-testid="sidebar-replacement"
+    >
+      → {preview}
+    </span>
   )
 }
 

@@ -180,3 +180,35 @@ describe('locatorKey', () => {
     )
   })
 })
+
+describe('findSegmentRange — replacement-aware walker', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('ignores .sanctum-edit-replacement text when computing offsets', () => {
+    // Mimics the post-wrap DOM state: original text inside
+    // .sanctum-edit-original, replacement inside a sibling span.
+    const root = setBody(
+      '<span data-segment-id="body/p0/r0">' +
+        'Alice met ' +
+        '<span class="sanctum-edit" data-detection-id="b">' +
+        '<span class="sanctum-edit-original">Bob</span>' +
+        '<span class="sanctum-edit-replacement">[PERSON_001]</span>' +
+        '</span>' +
+        ' today.' +
+        '</span>',
+    )
+    // Original textContent of the segment: "Alice met Bob today."
+    //                                       0         1         2
+    //                                       0123456789012345678901
+    // "Bob" starts at 10, ends at 13.
+    const range = findSegmentRange(root, { segmentId: 'body/p0/r0', start: 10, end: 13 })
+    expect(range?.toString()).toBe('Bob')
+
+    // And "today" starts at 14, ends at 19 — the walker must skip the
+    // replacement span when counting characters.
+    const todayRange = findSegmentRange(root, { segmentId: 'body/p0/r0', start: 14, end: 19 })
+    expect(todayRange?.toString()).toBe('today')
+  })
+})
