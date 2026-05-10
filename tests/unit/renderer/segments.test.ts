@@ -6,6 +6,7 @@ import {
   locatorKey,
   rangeToLocator,
   rangeWithinElement,
+  sliceSegmentText,
   type SegmentLocator,
 } from '../../../src/renderer/src/review/segments'
 
@@ -210,5 +211,56 @@ describe('findSegmentRange — replacement-aware walker', () => {
     // replacement span when counting characters.
     const todayRange = findSegmentRange(root, { segmentId: 'body/p0/r0', start: 14, end: 19 })
     expect(todayRange?.toString()).toBe('today')
+  })
+})
+
+describe('sliceSegmentText', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('returns the segment slice excluding .sanctum-edit-replacement children', () => {
+    const root = setBody(
+      '<p><span data-segment-id="seg/0">until ' +
+        '<span class="sanctum-edit" data-detection-id="d1">' +
+        '<span class="sanctum-edit-original">May 13, 2027</span>' +
+        '<span class="sanctum-edit-replacement">&lt;DATE_TIME&gt;</span>' +
+        '</span>, unless</span></p>',
+    )
+    expect(sliceSegmentText(root, { segmentId: 'seg/0', start: 0, end: 26 })).toBe(
+      'until May 13, 2027, unless',
+    )
+  })
+
+  it('returns a slice inside the wrapped original substring', () => {
+    const root = setBody(
+      '<p><span data-segment-id="seg/0">until ' +
+        '<span class="sanctum-edit" data-detection-id="d1">' +
+        '<span class="sanctum-edit-original">May 13, 2027</span>' +
+        '<span class="sanctum-edit-replacement">&lt;DATE_TIME&gt;</span>' +
+        '</span>, unless</span></p>',
+    )
+    expect(sliceSegmentText(root, { segmentId: 'seg/0', start: 6, end: 18 })).toBe('May 13, 2027')
+  })
+
+  it('returns null when the segment is missing', () => {
+    const root = setBody('<p><span data-segment-id="seg/0">hello</span></p>')
+    expect(sliceSegmentText(root, { segmentId: 'seg/missing', start: 0, end: 5 })).toBeNull()
+  })
+
+  it('returns null when the offsets exceed the filtered text length', () => {
+    const root = setBody('<p><span data-segment-id="seg/0">hello</span></p>')
+    expect(sliceSegmentText(root, { segmentId: 'seg/0', start: 0, end: 99 })).toBeNull()
+  })
+
+  it('returns null for negative or inverted offsets', () => {
+    const root = setBody('<p><span data-segment-id="seg/0">hello</span></p>')
+    expect(sliceSegmentText(root, { segmentId: 'seg/0', start: -1, end: 3 })).toBeNull()
+    expect(sliceSegmentText(root, { segmentId: 'seg/0', start: 4, end: 2 })).toBeNull()
+  })
+
+  it('returns the empty string when start === end', () => {
+    const root = setBody('<p><span data-segment-id="seg/0">hello</span></p>')
+    expect(sliceSegmentText(root, { segmentId: 'seg/0', start: 2, end: 2 })).toBe('')
   })
 })
