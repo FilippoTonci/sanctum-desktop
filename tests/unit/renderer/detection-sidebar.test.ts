@@ -1,9 +1,33 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import React from 'react'
 import {
+  DetectionSidebar,
   pickFocusedControlsState,
   pickReplacementVariant,
 } from '../../../src/renderer/src/components/DetectionSidebar'
+import { useReviewStore } from '../../../src/renderer/src/review/store'
 import type { Detection } from '../../../src/renderer/src/review/types'
+import type { ReviewActions } from '../../../src/renderer/src/review/actions'
+
+// Mock useReviewActions so component tests can inject spies without spinning
+// up a real ReviewActionsProvider + SessionsClient.
+vi.mock('../../../src/renderer/src/review/use-actions', () => {
+  const mockActions: ReviewActions = {
+    accept: vi.fn(),
+    reject: vi.fn(),
+    setOperator: vi.fn(),
+    setCustomReplacement: vi.fn(),
+    addMissed: vi.fn(),
+    undoLastDecision: vi.fn(),
+  }
+  return {
+    useReviewActions: () => mockActions,
+    ReviewActionsProvider: ({ children }: { children: React.ReactNode }) => children,
+  }
+})
 
 function detection(overrides: Partial<Detection>): Detection {
   return {
@@ -87,5 +111,48 @@ describe('pickReplacementVariant', () => {
 
   it('returns "faint" for pending detections with a preview', () => {
     expect(pickReplacementVariant(detection({ status: 'pending' }), '<X>')).toBe('faint')
+  })
+})
+
+describe('+ Mark missed PII button', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('is disabled when pendingMissedSelection is null', () => {
+    const { getByRole } = render(React.createElement(DetectionSidebar))
+    const btn = getByRole('button', { name: /Mark missed PII/i }) as HTMLButtonElement
+    expect(btn.disabled).toBe(true)
+  })
+
+  it('is enabled when a pendingMissedSelection is set', () => {
+    useReviewStore.getState().setPendingMissedSelection({
+      locator: { segmentId: 'seg/0', start: 0, end: 5 },
+      text: 'hello',
+    })
+    const { getByRole } = render(React.createElement(DetectionSidebar))
+    const btn = getByRole('button', { name: /Mark missed PII/i }) as HTMLButtonElement
+    expect(btn.disabled).toBe(false)
+  })
+
+  it('calls actions.addMissed with the pending value when clicked', async () => {
+    const pending = {
+      locator: { segmentId: 'seg/0', start: 0, end: 5 },
+      text: 'hello',
+    }
+    useReviewStore.getState().setPendingMissedSelection(pending)
+    const { getByRole } = render(React.createElement(DetectionSidebar))
+    const btn = getByRole('button', { name: /Mark missed PII/i })
+    await userEvent.click(btn)
+    // Get the mocked actions from the module
+    const { useReviewActions } = await import('../../../src/renderer/src/review/use-actions')
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const { addMissed } = useReviewActions()
+    expect(vi.mocked(addMissed)).toHaveBeenCalledWith(pending)
   })
 })

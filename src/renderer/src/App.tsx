@@ -10,13 +10,13 @@ import { EditReplacement } from './components/EditReplacement'
 import { MappingStoreChip } from './components/MappingStoreChip'
 import { RecentSessions } from './components/RecentSessions'
 import { SanctumEmblem } from './components/SanctumEmblem'
-import { SelectModeBanner } from './components/SelectModeBanner'
 import { SettingsModal } from './components/SettingsModal'
 import { Splash } from './components/Splash'
 import { TypedError } from './components/TypedError'
 import { seedFakeDetections } from './review/fake-detections'
 import { previewsForStore, sessionToDetections } from './review/from-session'
 import { useReviewKeyboard } from './review/keyboard'
+import { useMissedSelectionTracker } from './review/selection-tracker'
 import { useReviewStore } from './review/store'
 import { OPERATOR_NAMES, type OperatorName } from './review/types'
 import { localActions, syncedActions, type ReviewActions } from './review/actions'
@@ -107,6 +107,7 @@ export function App(): ReactElement {
   }, [sessionsClient, sessionId])
 
   useReviewKeyboard(reviewMode, docRoot, reviewActions)
+  useMissedSelectionTracker(reviewMode ? docRoot : null)
 
   const handleFile = useCallback(
     (file: File) => {
@@ -310,7 +311,6 @@ export function App(): ReactElement {
             />
             <DetectionSidebar />
             <EditReplacement anchorRoot={docRoot} />
-            <SelectModeBanner />
             <CommitPanel client={sessionsClient} sourceFileName={doc.name} onDone={handleClose} />
             <AnalysisBanner state={analysis} />
             <SyncErrorToast />

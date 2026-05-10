@@ -251,11 +251,9 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
 
     addMissed(span) {
       // Real mode is POST-then-add: the user sees a brief delay between
-      // pressing Enter and the highlight appearing, but accept/reject
-      // shortcuts pressed immediately afterwards land on a real
-      // backend-known id rather than a synthetic one that would 404.
-      // Exit select-mode immediately so the banner dismisses; the
-      // detection lands when the POST returns.
+      // clicking the button (or pressing m) and the highlight appearing,
+      // but accept/reject shortcuts pressed immediately afterwards land on
+      // a real backend-known id rather than a synthetic one that would 404.
       //
       // Clear focus while the POST is in flight so the user doesn't see
       // the prior (often already-accepted) detection appear to "stay
@@ -263,7 +261,6 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       // appendDetection below moves focus onto the freshly-minted
       // user-added detection so it's the one the reviewer can immediately
       // tweak (operator, custom replacement, …).
-      useReviewStore.getState().exitSelectMode()
       useReviewStore.getState().setFocused(null)
       void (async () => {
         try {

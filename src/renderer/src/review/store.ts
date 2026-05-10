@@ -2,6 +2,11 @@ import { create } from 'zustand'
 import type { SegmentLocator } from './segments'
 import type { Detection, DetectionStatus, OperatorName } from './types'
 
+export interface PendingMissedSelection {
+  readonly locator: SegmentLocator
+  readonly text: string
+}
+
 interface StatusEdit {
   readonly id: string
   readonly previous: DetectionStatus
@@ -53,7 +58,7 @@ export interface ReviewState {
   readonly detections: readonly Detection[]
   readonly focusedId: string | null
   readonly undoStack: readonly StatusEdit[]
-  readonly selectMode: boolean
+  readonly pendingMissedSelection: PendingMissedSelection | null
   readonly defaultOperator: OperatorName
   readonly commitPanelOpen: boolean
   /** Backend session id once a real `/review-sessions` round-trip lands. */
@@ -122,9 +127,9 @@ export interface ReviewState {
   focusNextPending: () => void
   undoLastDecision: () => void
 
-  enterSelectMode: () => void
-  exitSelectMode: () => void
   addMissed: (span: MissedSpan) => string
+
+  setPendingMissedSelection: (value: PendingMissedSelection | null) => void
 
   setOperator: (id: string, operator: OperatorName) => void
   setCustomReplacement: (id: string, replacement: string | null) => void
@@ -141,7 +146,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   detections: [],
   focusedId: null,
   undoStack: [],
-  selectMode: false,
+  pendingMissedSelection: null,
   defaultOperator: 'replace',
   commitPanelOpen: false,
   editingReplacementId: null,
@@ -156,7 +161,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       detections,
       focusedId: detections[0]?.id ?? null,
       undoStack: [],
-      selectMode: false,
+      pendingMissedSelection: null,
       commitPanelOpen: false,
       editingReplacementId: null,
     })
@@ -231,7 +236,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       detections: [],
       focusedId: null,
       undoStack: [],
-      selectMode: false,
+      pendingMissedSelection: null,
       commitPanelOpen: false,
       editingReplacementId: null,
       sessionId: null,
@@ -312,20 +317,15 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     })
   },
 
-  enterSelectMode: () => {
-    set({ selectMode: true })
-  },
-
-  exitSelectMode: () => {
-    set({ selectMode: false })
+  setPendingMissedSelection: (value) => {
+    set({ pendingMissedSelection: value })
   },
 
   addMissed: (span) => {
     const id = `user:${span.locator.segmentId}:${String(span.locator.start)}-${String(span.locator.end)}`
     set((state) => {
-      // If the same span has already been marked, just refocus it.
       if (state.detections.some((d) => d.id === id)) {
-        return { selectMode: false, focusedId: id }
+        return { focusedId: id }
       }
       const detection: Detection = {
         id,
@@ -339,7 +339,6 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       return {
         detections: [...state.detections, detection],
         focusedId: id,
-        selectMode: false,
       }
     })
     return id

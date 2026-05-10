@@ -172,9 +172,9 @@ Signed release builds run only from the tag-driven release workflow on the self-
 | `Enter`                | Accept the focused detection (auto-advances) |
 | `Delete` / `Backspace` | Reject the focused detection (auto-advances) |
 | `e`                    | Edit the replacement text                    |
-| `m`                    | Mark a missed span (enter select-mode)       |
+| `m`                    | Mark selected text as missed PII             |
 | `Ctrl/Cmd + Z`         | Undo the last decision                       |
-| `Esc`                  | Close tooltip / cancel select-mode           |
+| `Esc`                  | Close tooltip / clear focus                  |
 | `Ctrl/Cmd + Enter`     | Open the commit panel                        |
 
 After Accept or Reject, focus jumps to the next still-pending detection — keep your hands on the home row and a long document reviews in one continuous flow. All shortcuts are suspended while an input is focused. `Tab` / `Shift+Tab` only step through detections when no other element holds focus, so native focus traversal in the sidebar / modals keeps working.

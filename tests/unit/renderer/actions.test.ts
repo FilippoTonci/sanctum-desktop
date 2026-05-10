@@ -293,8 +293,7 @@ describe('syncedActions.addMissed', () => {
     })
   })
 
-  it('exits select-mode and surfaces an error when the POST fails', async () => {
-    useReviewStore.getState().enterSelectMode()
+  it('surfaces an error when the addMissed POST fails', async () => {
     const addUserAdded = vi.fn(() => Promise.reject(new ApiError(409, null, 'session committed')))
     const actions = syncedActions({
       client: fakeClient({ addUserAdded }),
@@ -307,7 +306,6 @@ describe('syncedActions.addMissed', () => {
     })
     await flushMicrotasks()
 
-    expect(useReviewStore.getState().selectMode).toBe(false)
     expect(useReviewStore.getState().detections).toHaveLength(0)
     expect(useReviewStore.getState().lastSyncError?.message).toContain('session committed')
     expect(useReviewStore.getState().lastSyncError?.status).toBe(409)

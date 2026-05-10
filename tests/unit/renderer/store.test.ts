@@ -143,22 +143,13 @@ describe('useReviewStore', () => {
     expect(useReviewStore.getState().undoStack).toHaveLength(0)
   })
 
-  it('enterSelectMode flips the flag, exitSelectMode unflips', () => {
-    useReviewStore.getState().enterSelectMode()
-    expect(useReviewStore.getState().selectMode).toBe(true)
-    useReviewStore.getState().exitSelectMode()
-    expect(useReviewStore.getState().selectMode).toBe(false)
-  })
-
-  it('addMissed appends a USER_ADDED detection, exits select-mode, focuses it', () => {
+  it('addMissed appends a USER_ADDED detection and focuses it', () => {
     useReviewStore.getState().setDetections([makeDetection('a')])
-    useReviewStore.getState().enterSelectMode()
     const id = useReviewStore.getState().addMissed({
       locator: { segmentId: 'body/p1/r0', start: 0, end: 5 },
       text: 'Smith',
     })
     const state = useReviewStore.getState()
-    expect(state.selectMode).toBe(false)
     expect(state.focusedId).toBe(id)
     expect(state.detections).toHaveLength(2)
     const added = state.detections[1]!
@@ -357,5 +348,42 @@ describe('useReviewStore', () => {
     useReviewStore.getState().setMappingStoreUnlocked(true)
     useReviewStore.getState().clear()
     expect(useReviewStore.getState().mappingStoreUnlocked).toBe(true)
+  })
+})
+
+describe('pendingMissedSelection', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+
+  it('starts as null', () => {
+    expect(useReviewStore.getState().pendingMissedSelection).toBeNull()
+  })
+
+  it('setPendingMissedSelection writes the value', () => {
+    const value = {
+      locator: { segmentId: 'seg/0', start: 0, end: 5 },
+      text: 'hello',
+    }
+    useReviewStore.getState().setPendingMissedSelection(value)
+    expect(useReviewStore.getState().pendingMissedSelection).toEqual(value)
+  })
+
+  it('setPendingMissedSelection(null) clears the value', () => {
+    useReviewStore.getState().setPendingMissedSelection({
+      locator: { segmentId: 'seg/0', start: 0, end: 5 },
+      text: 'hello',
+    })
+    useReviewStore.getState().setPendingMissedSelection(null)
+    expect(useReviewStore.getState().pendingMissedSelection).toBeNull()
+  })
+
+  it('clear() resets pendingMissedSelection to null', () => {
+    useReviewStore.getState().setPendingMissedSelection({
+      locator: { segmentId: 'seg/0', start: 0, end: 5 },
+      text: 'hello',
+    })
+    useReviewStore.getState().clear()
+    expect(useReviewStore.getState().pendingMissedSelection).toBeNull()
   })
 })
