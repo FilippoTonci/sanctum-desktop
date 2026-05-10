@@ -148,3 +148,7 @@ validated on `ubuntu-latest` runners in CI, which is what real users hit.
 - `CONTRIBUTING.md` — workflow, commits, tests.
 - `electron-builder.yml` — packaging config (extraResources path → sidecar).
 - `scripts/build-sidecar.sh` — PyInstaller flag rationale.
+
+> **Internal working docs.** `docs/superpowers/` (specs and plans for in-flight
+> work) is git-ignored — those files are local artefacts for the
+> brainstorm/plan/execute workflow and are not part of the shipped repo.
