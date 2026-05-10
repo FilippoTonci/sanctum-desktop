@@ -7,10 +7,22 @@ export interface PendingMissedSelection {
   readonly text: string
 }
 
-interface StatusEdit {
-  readonly id: string
-  readonly previous: DetectionStatus
-}
+export type UndoEntry =
+  | {
+      readonly kind: 'status'
+      readonly id: string
+      readonly previous: DetectionStatus
+    }
+  | {
+      readonly kind: 'user-add'
+      readonly id: string
+      readonly segmentId: string
+      readonly start: number
+      readonly end: number
+      readonly text: string
+      readonly entityType: string
+      readonly preview?: string
+    }
 
 export interface MissedSpan {
   readonly locator: SegmentLocator
@@ -57,7 +69,7 @@ export interface CommitPayload {
 export interface ReviewState {
   readonly detections: readonly Detection[]
   readonly focusedId: string | null
-  readonly undoStack: readonly StatusEdit[]
+  readonly undoStack: readonly UndoEntry[]
   readonly pendingMissedSelection: PendingMissedSelection | null
   readonly defaultOperator: OperatorName
   readonly commitPanelOpen: boolean
@@ -126,6 +138,7 @@ export interface ReviewState {
    */
   focusNextPending: () => void
   undoLastDecision: () => void
+  pushUserAddUndo: (entry: Extract<UndoEntry, { kind: 'user-add' }>) => void
 
   addMissed: (span: MissedSpan) => string
 
@@ -252,7 +265,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       if (target === undefined || target.status === status) return state
       return {
         detections: state.detections.map((d) => (d.id === id ? { ...d, status } : d)),
-        undoStack: [...state.undoStack, { id, previous: target.status }],
+        undoStack: [...state.undoStack, { kind: 'status', id, previous: target.status }],
       }
     })
   },
@@ -307,14 +320,33 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     set((state) => {
       const last = state.undoStack[state.undoStack.length - 1]
       if (last === undefined) return state
+      if (last.kind === 'status') {
+        return {
+          detections: state.detections.map((d) =>
+            d.id === last.id ? { ...d, status: last.previous } : d,
+          ),
+          undoStack: state.undoStack.slice(0, -1),
+          focusedId: last.id,
+        }
+      }
+      // last.kind === 'user-add'
+      const removedId = last.id
+      const nextPreviews = Object.fromEntries(
+        Object.entries(state.previews).filter(([k]) => k !== removedId),
+      )
       return {
-        detections: state.detections.map((d) =>
-          d.id === last.id ? { ...d, status: last.previous } : d,
-        ),
+        detections: state.detections.filter((d) => d.id !== removedId),
+        previews: nextPreviews,
         undoStack: state.undoStack.slice(0, -1),
-        focusedId: last.id,
+        focusedId: null,
       }
     })
+  },
+
+  pushUserAddUndo: (entry) => {
+    set((state) => ({
+      undoStack: [...state.undoStack, entry],
+    }))
   },
 
   setPendingMissedSelection: (value) => {

@@ -351,6 +351,90 @@ describe('useReviewStore', () => {
   })
 })
 
+describe('undo of user-added detections', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+
+  it('pushUserAddUndo stores a user-add entry on the stack', () => {
+    useReviewStore.getState().setDetections([
+      makeDetection('user:seg/0:0-5', {
+        id: 'user:seg/0:0-5',
+        text: 'hello',
+        entityType: 'USER_ADDED',
+        status: 'accepted',
+      }),
+    ])
+    useReviewStore.getState().pushUserAddUndo({
+      kind: 'user-add',
+      id: 'user:seg/0:0-5',
+      segmentId: 'seg/0',
+      start: 0,
+      end: 5,
+      text: 'hello',
+      entityType: 'USER_ADDED',
+      preview: '[REDACTED]',
+    })
+    const top = useReviewStore.getState().undoStack[0]
+    expect(top?.kind).toBe('user-add')
+  })
+
+  it('undoLastDecision on a user-add entry removes the detection and pops the stack', () => {
+    useReviewStore.getState().setDetections([
+      makeDetection('a', { status: 'accepted' }),
+      makeDetection('user:seg/0:0-5', {
+        id: 'user:seg/0:0-5',
+        text: 'hello',
+        entityType: 'USER_ADDED',
+        status: 'accepted',
+      }),
+    ])
+    useReviewStore.getState().setPreview('user:seg/0:0-5', '[REDACTED]')
+    useReviewStore.getState().pushUserAddUndo({
+      kind: 'user-add',
+      id: 'user:seg/0:0-5',
+      segmentId: 'seg/0',
+      start: 0,
+      end: 5,
+      text: 'hello',
+      entityType: 'USER_ADDED',
+      preview: '[REDACTED]',
+    })
+    useReviewStore.getState().undoLastDecision()
+    const state = useReviewStore.getState()
+    expect(state.detections.find((d) => d.id === 'user:seg/0:0-5')).toBeUndefined()
+    expect(state.previews['user:seg/0:0-5']).toBeUndefined()
+    expect(state.undoStack.length).toBe(0)
+    expect(state.focusedId).toBeNull()
+  })
+
+  it('mixed sequence: accept A → user-add B → undo leaves A accepted and B gone', () => {
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    useReviewStore.getState().setStatus('a', 'accepted')
+    useReviewStore.getState().appendDetection(
+      makeDetection('user:seg/0:0-5', {
+        id: 'user:seg/0:0-5',
+        text: 'hello',
+        entityType: 'USER_ADDED',
+        status: 'accepted',
+      }),
+    )
+    useReviewStore.getState().pushUserAddUndo({
+      kind: 'user-add',
+      id: 'user:seg/0:0-5',
+      segmentId: 'seg/0',
+      start: 0,
+      end: 5,
+      text: 'hello',
+      entityType: 'USER_ADDED',
+    })
+    useReviewStore.getState().undoLastDecision()
+    const state = useReviewStore.getState()
+    expect(state.detections.find((d) => d.id === 'a')?.status).toBe('accepted')
+    expect(state.detections.find((d) => d.id === 'user:seg/0:0-5')).toBeUndefined()
+  })
+})
+
 describe('pendingMissedSelection', () => {
   beforeEach(() => {
     useReviewStore.getState().clear()
