@@ -16,17 +16,17 @@ import { useReviewStore } from './store'
  *   - the captured text — taken with the filtered tree-walker that
  *     skips `.sanctum-edit-replacement` — is non-empty after `trim()`.
  *
- * Updates are coalesced with `requestAnimationFrame` so drag-selection
- * doesn't thrash the store.
+ * Each `selectionchange` runs the validity check synchronously. The
+ * native event already fires at most a few times per pointer-move, the
+ * check is O(n) over a single segment's text, and synchronous updates
+ * keep the unit tests deterministic without happy-dom rAF polyfills.
  */
 export function useMissedSelectionTracker(docRoot: HTMLElement | null): void {
   useEffect(() => {
     if (docRoot === null) return undefined
     const doc = docRoot.ownerDocument
-    let rafId: number | null = null
 
     const compute = (): void => {
-      rafId = null
       const selection = doc.defaultView?.getSelection()
       if (selection === null || selection === undefined || selection.rangeCount === 0) {
         useReviewStore.getState().setPendingMissedSelection(null)
@@ -54,25 +54,11 @@ export function useMissedSelectionTracker(docRoot: HTMLElement | null): void {
       useReviewStore.getState().setPendingMissedSelection({ locator, text })
     }
 
-    const onChange = (): void => {
-      // Cancel any pending rAF so we don't double-compute.
-      if (rafId !== null) {
-        doc.defaultView?.cancelAnimationFrame(rafId)
-        rafId = null
-      }
-      // Always compute synchronously for test determinism (happy-dom's
-      // requestAnimationFrame is async and never fires during unit tests).
-      // In a real browser this is also fine — selectionchange fires at most
-      // a few times per pointer-move, so the sync overhead is negligible.
-      compute()
-    }
-
-    doc.addEventListener('selectionchange', onChange)
+    doc.addEventListener('selectionchange', compute)
     compute()
 
     return () => {
-      doc.removeEventListener('selectionchange', onChange)
-      if (rafId !== null) doc.defaultView?.cancelAnimationFrame(rafId)
+      doc.removeEventListener('selectionchange', compute)
       useReviewStore.getState().setPendingMissedSelection(null)
     }
   }, [docRoot])
