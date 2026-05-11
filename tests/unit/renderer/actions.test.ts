@@ -293,8 +293,7 @@ describe('syncedActions.addMissed', () => {
     })
   })
 
-  it('exits select-mode and surfaces an error when the POST fails', async () => {
-    useReviewStore.getState().enterSelectMode()
+  it('surfaces an error when the addMissed POST fails', async () => {
     const addUserAdded = vi.fn(() => Promise.reject(new ApiError(409, null, 'session committed')))
     const actions = syncedActions({
       client: fakeClient({ addUserAdded }),
@@ -307,7 +306,6 @@ describe('syncedActions.addMissed', () => {
     })
     await flushMicrotasks()
 
-    expect(useReviewStore.getState().selectMode).toBe(false)
     expect(useReviewStore.getState().detections).toHaveLength(0)
     expect(useReviewStore.getState().lastSyncError?.message).toContain('session committed')
     expect(useReviewStore.getState().lastSyncError?.status).toBe(409)
@@ -446,6 +444,120 @@ describe('syncedActions previews map', () => {
   })
 })
 
+describe('syncedActions undo of user-added', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+
+  it('addMissed pushes a user-add undo entry on POST success', async () => {
+    const addUserAdded = vi.fn(() =>
+      Promise.resolve({
+        decision: {
+          kind: 'user_added' as const,
+          id: 'ua-1',
+          segment_anchor: 'seg/0',
+          entity_type: 'USER_ADDED',
+          original: 'hello',
+          start: 0,
+          end: 5,
+        },
+        preview: '[REDACTED]',
+        removed_proposal_ids: [],
+      }),
+    )
+    const actions = syncedActions({
+      client: fakeClient({ addUserAdded }),
+      sessionId: 'sess-1',
+    })
+    actions.addMissed({
+      locator: { segmentId: 'seg/0', start: 0, end: 5 },
+      text: 'hello',
+    })
+    await flushMicrotasks()
+    const top = useReviewStore.getState().undoStack.at(-1)
+    expect(top?.kind).toBe('user-add')
+    expect(top).toMatchObject({
+      kind: 'user-add',
+      id: 'user:ua-1',
+      segmentId: 'seg/0',
+      start: 0,
+      end: 5,
+      text: 'hello',
+      preview: '[REDACTED]',
+    })
+  })
+
+  it('undoLastDecision on a user-add entry calls deleteUserAdded', async () => {
+    const deleteUserAdded = vi.fn(() => Promise.resolve())
+    const actions = syncedActions({
+      client: fakeClient({ deleteUserAdded }),
+      sessionId: 'sess-1',
+    })
+
+    useReviewStore.getState().appendDetection({
+      id: 'user:ua-1',
+      segmentId: 'seg/0',
+      start: 0,
+      end: 5,
+      text: 'hello',
+      entityType: 'USER_ADDED',
+      status: 'accepted',
+    })
+    useReviewStore.getState().setPreview('user:ua-1', '[REDACTED]')
+    useReviewStore.getState().pushUserAddUndo({
+      kind: 'user-add',
+      id: 'user:ua-1',
+      segmentId: 'seg/0',
+      start: 0,
+      end: 5,
+      text: 'hello',
+      entityType: 'USER_ADDED',
+      preview: '[REDACTED]',
+    })
+
+    actions.undoLastDecision()
+    await flushMicrotasks()
+    expect(deleteUserAdded).toHaveBeenCalledWith('sess-1', 'ua-1')
+    expect(useReviewStore.getState().detections.find((d) => d.id === 'user:ua-1')).toBeUndefined()
+  })
+
+  it('undoLastDecision on a user-add restores the detection if DELETE fails', async () => {
+    const deleteUserAdded = vi.fn(() => Promise.reject(new Error('boom')))
+    const actions = syncedActions({
+      client: fakeClient({ deleteUserAdded }),
+      sessionId: 'sess-1',
+    })
+
+    useReviewStore.getState().appendDetection({
+      id: 'user:ua-1',
+      segmentId: 'seg/0',
+      start: 0,
+      end: 5,
+      text: 'hello',
+      entityType: 'USER_ADDED',
+      status: 'accepted',
+    })
+    useReviewStore.getState().setPreview('user:ua-1', '[REDACTED]')
+    useReviewStore.getState().pushUserAddUndo({
+      kind: 'user-add',
+      id: 'user:ua-1',
+      segmentId: 'seg/0',
+      start: 0,
+      end: 5,
+      text: 'hello',
+      entityType: 'USER_ADDED',
+      preview: '[REDACTED]',
+    })
+
+    actions.undoLastDecision()
+    await flushMicrotasks()
+    const state = useReviewStore.getState()
+    expect(state.detections.find((d) => d.id === 'user:ua-1')).toBeDefined()
+    expect(state.previews['user:ua-1']).toBe('[REDACTED]')
+    expect(state.lastSyncError?.message).toContain('boom')
+  })
+})
+
 describe('syncedActions.undoLastDecision', () => {
   beforeEach(() => {
     useReviewStore.getState().clear()
@@ -455,7 +567,10 @@ describe('syncedActions.undoLastDecision', () => {
     useReviewStore.getState().setDetections([makeDetection('det-1', { status: 'rejected' })])
     // Push an undoStack entry that says det-1 was previously accepted.
     useReviewStore.setState((s) => ({
-      undoStack: [...s.undoStack, { id: 'det-1', previous: 'accepted' }],
+      undoStack: [
+        ...s.undoStack,
+        { kind: 'status' as const, id: 'det-1', previous: 'accepted' as const },
+      ],
     }))
     const patchDecision = vi.fn(() => Promise.resolve({ decision: {} as never, preview: '' }))
     const actions = syncedActions({
@@ -477,7 +592,10 @@ describe('syncedActions.undoLastDecision', () => {
   it('skips the PATCH when the previous status was pending (no DELETE endpoint yet)', async () => {
     useReviewStore.getState().setDetections([makeDetection('det-1', { status: 'accepted' })])
     useReviewStore.setState((s) => ({
-      undoStack: [...s.undoStack, { id: 'det-1', previous: 'pending' }],
+      undoStack: [
+        ...s.undoStack,
+        { kind: 'status' as const, id: 'det-1', previous: 'pending' as const },
+      ],
     }))
     const patchDecision = vi.fn()
     const actions = syncedActions({

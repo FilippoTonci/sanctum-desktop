@@ -76,6 +76,7 @@ export function DetectionSidebar(): ReactElement {
   const startEditingReplacement = useReviewStore((s) => s.startEditingReplacement)
   const defaultOperator = useReviewStore((s) => s.defaultOperator)
   const mappingUnlocked = useReviewStore((s) => s.mappingStoreUnlocked) === true
+  const pendingMissedSelection = useReviewStore((s) => s.pendingMissedSelection)
   const actions = useReviewActions()
 
   const counts = aggregate(detections)
@@ -84,7 +85,26 @@ export function DetectionSidebar(): ReactElement {
   return (
     <aside className="detection-sidebar" aria-label="Detection list">
       <header className="sidebar-header">
-        <h2>Detections</h2>
+        <div className="sidebar-header-row">
+          <h2>Detections</h2>
+          <button
+            type="button"
+            className="sidebar-mark-missed"
+            disabled={pendingMissedSelection === null}
+            onClick={() => {
+              if (pendingMissedSelection !== null) {
+                actions.addMissed(pendingMissedSelection)
+              }
+            }}
+            title={
+              pendingMissedSelection === null
+                ? 'Select text in the document to mark missed PII'
+                : 'Mark selection as missed PII · M'
+            }
+          >
+            + Mark missed PII
+          </button>
+        </div>
         <p className="sidebar-counts">
           <span>{String(counts.pending)} pending</span>
           {' · '}

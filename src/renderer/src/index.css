@@ -967,6 +967,48 @@ body {
   color: var(--ink);
 }
 
+.sidebar-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0 0 0.35rem;
+}
+
+.sidebar-header-row h2 {
+  margin: 0;
+}
+
+.sidebar-mark-missed {
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.sidebar-mark-missed:hover:not(:disabled) {
+  background: var(--oxblood);
+  border-color: var(--oxblood);
+  box-shadow: 0 6px 16px -10px var(--oxblood);
+}
+
+.sidebar-mark-missed:disabled {
+  background: var(--paper-sunken);
+  border-color: var(--hairline-strong);
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
 .sidebar-counts {
   margin: 0;
   font-size: 0.78rem;
@@ -1462,58 +1504,6 @@ body {
   .typed-error-dismiss:hover {
     background: rgba(255, 240, 210, 0.08);
   }
-}
-
-/* =========================================================================
-   Select-mode banner.
-   ========================================================================= */
-
-.select-mode-banner {
-  position: fixed;
-  top: 1.25rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 50;
-  background: var(--ink);
-  color: var(--paper);
-  padding: 0.65rem 1.15rem;
-  border-radius: 999px;
-  box-shadow: 0 16px 50px -16px rgba(20, 14, 8, 0.55);
-  display: flex;
-  gap: 1.1rem;
-  align-items: center;
-  font-size: 0.9rem;
-  font-family: var(--font-body);
-  border: 1px solid var(--ink-soft);
-}
-
-.select-mode-banner kbd {
-  background: rgba(255, 240, 210, 0.12);
-  border: 1px solid rgba(255, 240, 210, 0.28);
-  border-radius: var(--radius-sm);
-  padding: 0.08rem 0.45rem;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-}
-
-.select-mode-banner-cancel {
-  background: transparent;
-  border: 1px solid rgba(255, 240, 210, 0.5);
-  color: var(--paper);
-  padding: 0.25rem 0.7rem;
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: 0.72rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-family: var(--font-mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.select-mode-banner-cancel:hover {
-  background: rgba(255, 240, 210, 0.16);
 }
 
 /* =========================================================================

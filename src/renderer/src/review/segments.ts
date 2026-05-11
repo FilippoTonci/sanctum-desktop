@@ -19,6 +19,22 @@ export interface SegmentLocator {
 }
 
 /**
+ * Snapshot the rendered segment ids in document order. Used by the
+ * review store to insert user-added detections (and re-sort resumed
+ * sessions where backend ships proposals first / user-added last) into
+ * the right spot in the sidebar, so arrow-down keeps marching forward
+ * through the document instead of jumping to a trailing USER_ADDED row.
+ */
+export function extractSegmentOrder(root: ParentNode): string[] {
+  const out: string[] = []
+  for (const el of root.querySelectorAll<HTMLElement>('[data-segment-id]')) {
+    const id = el.getAttribute('data-segment-id')
+    if (id !== null) out.push(id)
+  }
+  return out
+}
+
+/**
  * Look up the rendered run for `segmentId` and return a Range covering
  * `[start, end]` within its textContent. Returns `null` when the segment
  * is not present (e.g. detection arrived for a run that is not currently
@@ -177,6 +193,63 @@ function textOffsetWithin(host: Element, target: Node, targetOffset: number): nu
     return acc
   }
   return null
+}
+
+/**
+ * Return the substring of `segmentId`'s textContent covering
+ * `[locator.start, locator.end)`, using the same filtered tree-walker
+ * that `rangeWithinElement` uses (i.e. skipping
+ * `.sanctum-edit-replacement` children). This is the canonical way to
+ * extract the raw text behind a locator regardless of which detections
+ * have been wrapped or accepted.
+ *
+ * Returns `null` if the segment is missing, the offsets fall outside
+ * the segment's filtered text length, or `start`/`end` are malformed.
+ * Returns `''` when `start === end` (collapsed locator).
+ */
+export function sliceSegmentText(root: ParentNode, locator: SegmentLocator): string | null {
+  if (locator.start < 0 || locator.end < locator.start) return null
+  const segEl = findSegmentElement(root, locator.segmentId)
+  if (segEl === null) return null
+
+  const doc = segEl.ownerDocument
+
+  // Pass 1: compute total filtered length so we can validate offsets.
+  let totalLength = 0
+  const lengthWalker = createSegmentTextWalker(doc, segEl)
+  for (
+    let node = lengthWalker.nextNode() as Text | null;
+    node !== null;
+    node = lengthWalker.nextNode() as Text | null
+  ) {
+    totalLength += node.data.length
+  }
+  if (locator.end > totalLength) return null
+  if (locator.start === locator.end) return ''
+
+  // Pass 2: slice.
+  const walker = createSegmentTextWalker(doc, segEl)
+  let consumed = 0
+  let out = ''
+  for (
+    let node = walker.nextNode() as Text | null;
+    node !== null;
+    node = walker.nextNode() as Text | null
+  ) {
+    const len = node.data.length
+    const nodeStart = consumed
+    const nodeEnd = consumed + len
+    if (nodeEnd <= locator.start) {
+      consumed = nodeEnd
+      continue
+    }
+    if (nodeStart >= locator.end) break
+    const a = Math.max(0, locator.start - nodeStart)
+    const b = Math.min(len, locator.end - nodeStart)
+    out += node.data.slice(a, b)
+    consumed = nodeEnd
+  }
+  return out
 }
 
 /**

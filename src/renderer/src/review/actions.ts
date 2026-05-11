@@ -251,11 +251,9 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
 
     addMissed(span) {
       // Real mode is POST-then-add: the user sees a brief delay between
-      // pressing Enter and the highlight appearing, but accept/reject
-      // shortcuts pressed immediately afterwards land on a real
-      // backend-known id rather than a synthetic one that would 404.
-      // Exit select-mode immediately so the banner dismisses; the
-      // detection lands when the POST returns.
+      // clicking the button (or pressing m) and the highlight appearing,
+      // but accept/reject shortcuts pressed immediately afterwards land on
+      // a real backend-known id rather than a synthetic one that would 404.
       //
       // Clear focus while the POST is in flight so the user doesn't see
       // the prior (often already-accepted) detection appear to "stay
@@ -263,7 +261,6 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       // appendDetection below moves focus onto the freshly-minted
       // user-added detection so it's the one the reviewer can immediately
       // tweak (operator, custom replacement, …).
-      useReviewStore.getState().exitSelectMode()
       useReviewStore.getState().setFocused(null)
       void (async () => {
         try {
@@ -295,6 +292,16 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
             status: 'accepted',
           })
           useReviewStore.getState().setPreview(detectionId, response.preview)
+          useReviewStore.getState().pushUserAddUndo({
+            kind: 'user-add',
+            id: detectionId,
+            segmentId: ua.segment_anchor,
+            start: ua.start,
+            end: ua.end,
+            text: ua.original,
+            entityType: 'USER_ADDED',
+            preview: response.preview,
+          })
         } catch (err) {
           reportError('addMissed', err)
         }
@@ -305,33 +312,58 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       const state = useReviewStore.getState()
       const last = state.undoStack[state.undoStack.length - 1]
       if (last === undefined) return
+
+      // Snapshot the detection before the local revert pops the entry and
+      // (for a user-add) removes the detection.
       const detection = detectionById(last.id)
 
-      // Local revert always happens — the user expects undo to be snappy.
+      // Local revert always runs first — the user expects undo to be snappy.
+      // The store's undoLastDecision applies the local change appropriate
+      // to the entry's kind and pops the stack.
       useReviewStore.getState().undoLastDecision()
 
-      if (detection === undefined) return
-      if (isUserAdded(last.id)) return
-      if (last.previous === 'pending') {
-        // Backend has no DELETE for proposal decisions yet; we leave the
-        // server-side verdict in place. On resume the backend will show
-        // the prior decision. Documented gap.
+      if (last.kind === 'status') {
+        if (detection === undefined) return
+        if (isUserAdded(last.id)) return
+        if (last.previous === 'pending') {
+          // Backend has no DELETE for proposal decisions yet; we leave the
+          // server-side verdict in place. Documented gap (unchanged).
+          return
+        }
+        const reverted: Detection = { ...detection, status: last.previous }
+        void (async () => {
+          try {
+            const response = await patchProposal(reverted, {
+              status: last.previous === 'accepted' ? 'accept' : 'reject',
+            })
+            recordPreview(last.id, response)
+          } catch (err) {
+            useReviewStore.getState().setStatus(last.id, detection.status)
+            reportError('undo', err)
+          }
+        })()
         return
       }
 
-      const reverted: Detection = { ...detection, status: last.previous }
+      // last.kind === 'user-add' — DELETE on the backend, restore on failure.
+      const uaId = last.id.slice('user:'.length)
       void (async () => {
         try {
-          const response = await patchProposal(reverted, {
-            status: last.previous === 'accepted' ? 'accept' : 'reject',
-          })
-          recordPreview(last.id, response)
+          await client.deleteUserAdded(sessionId, uaId)
         } catch (err) {
-          // Re-apply the change we just undid by re-pushing it onto the
-          // undo stack semantics: forcibly set status back to what the
-          // backend still reports.
-          useReviewStore.getState().setStatus(last.id, detection.status)
-          reportError('undo', err)
+          useReviewStore.getState().appendDetection({
+            id: last.id,
+            segmentId: last.segmentId,
+            start: last.start,
+            end: last.end,
+            text: last.text,
+            entityType: last.entityType,
+            status: 'accepted',
+          })
+          if (last.preview !== undefined) {
+            useReviewStore.getState().setPreview(last.id, last.preview)
+          }
+          reportError('undo (user-added)', err)
         }
       })()
     },

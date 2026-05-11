@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
 import { localActions, type ReviewActions } from './actions'
-import { rangeToLocator } from './segments'
 import { useReviewStore, type ReviewState } from './store'
 
 /**
@@ -78,7 +77,7 @@ export function useReviewKeyboard(
         event.preventDefault()
         return
       }
-      const handled = dispatchKey(event.key, useReviewStore.getState(), docRoot, actionsRef.current)
+      const handled = dispatchKey(event.key, useReviewStore.getState(), actionsRef.current)
       if (handled) event.preventDefault()
     }
 
@@ -102,26 +101,8 @@ export function useReviewKeyboard(
 export function dispatchKey(
   key: string,
   store: ReviewState,
-  docRoot: HTMLElement | null = null,
   actions: ReviewActions = localActions,
 ): boolean {
-  // While select-mode is active, the only bindings are Enter (commit
-  // the selection) and Escape (cancel). Everything else passes through
-  // so the user can still scroll, reach standard browser shortcuts, etc.
-  if (store.selectMode) {
-    if (key === 'Enter') {
-      const span = readSelection(docRoot)
-      if (span === null) return false
-      actions.addMissed(span)
-      return true
-    }
-    if (key === 'Escape') {
-      store.exitSelectMode()
-      return true
-    }
-    return false
-  }
-
   switch (key) {
     case 'ArrowDown':
       if (store.detections.length === 0) return false
@@ -146,9 +127,12 @@ export function dispatchKey(
       actions.reject(store.focusedId)
       useReviewStore.getState().focusNextPending()
       return true
-    case 'm':
-      store.enterSelectMode()
+    case 'm': {
+      const pending = store.pendingMissedSelection
+      if (pending === null) return false
+      actions.addMissed(pending)
       return true
+    }
     case 'e':
       if (store.focusedId === null) return false
       store.startEditingReplacement(store.focusedId)
@@ -160,28 +144,6 @@ export function dispatchKey(
     default:
       return false
   }
-}
-
-/**
- * Read the current document selection and project it onto a locator.
- * Returns null if there is no selection, the selection lies outside
- * the docx body, the selection straddles two segments, or the captured
- * text is empty.
- */
-function readSelection(docRoot: HTMLElement | null): {
-  readonly locator: NonNullable<ReturnType<typeof rangeToLocator>>
-  readonly text: string
-} | null {
-  if (docRoot === null) return null
-  const selection = docRoot.ownerDocument.defaultView?.getSelection()
-  if (selection === null || selection === undefined || selection.rangeCount === 0) return null
-  const range = selection.getRangeAt(0)
-  if (!docRoot.contains(range.commonAncestorContainer)) return null
-  const locator = rangeToLocator(range, docRoot)
-  if (locator === null) return null
-  const text = range.toString()
-  if (text.length === 0) return null
-  return { locator, text }
 }
 
 /**

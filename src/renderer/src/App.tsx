@@ -10,13 +10,14 @@ import { EditReplacement } from './components/EditReplacement'
 import { MappingStoreChip } from './components/MappingStoreChip'
 import { RecentSessions } from './components/RecentSessions'
 import { SanctumEmblem } from './components/SanctumEmblem'
-import { SelectModeBanner } from './components/SelectModeBanner'
 import { SettingsModal } from './components/SettingsModal'
 import { Splash } from './components/Splash'
 import { TypedError } from './components/TypedError'
 import { seedFakeDetections } from './review/fake-detections'
 import { previewsForStore, sessionToDetections } from './review/from-session'
 import { useReviewKeyboard } from './review/keyboard'
+import { useMissedSelectionTracker } from './review/selection-tracker'
+import { extractSegmentOrder } from './review/segments'
 import { useReviewStore } from './review/store'
 import { OPERATOR_NAMES, type OperatorName } from './review/types'
 import { localActions, syncedActions, type ReviewActions } from './review/actions'
@@ -39,6 +40,7 @@ export function App(): ReactElement {
   const detections = useReviewStore((s) => s.detections)
   const focusedId = useReviewStore((s) => s.focusedId)
   const setStoreDetections = useReviewStore((s) => s.setDetections)
+  const setSegmentOrder = useReviewStore((s) => s.setSegmentOrder)
   const setSessionId = useReviewStore((s) => s.setSessionId)
   const setDefaultOperator = useReviewStore((s) => s.setDefaultOperator)
   const setPreviews = useReviewStore((s) => s.setPreviews)
@@ -107,6 +109,7 @@ export function App(): ReactElement {
   }, [sessionsClient, sessionId])
 
   useReviewKeyboard(reviewMode, docRoot, reviewActions)
+  useMissedSelectionTracker(reviewMode ? docRoot : null)
 
   const handleFile = useCallback(
     (file: File) => {
@@ -142,6 +145,12 @@ export function App(): ReactElement {
   const handleRendered = useCallback(
     (root: HTMLElement) => {
       setDocRoot(root)
+      // Snapshot segment DOM order before any detections land in the
+      // store; appendDetection / addMissed / setDetections sort against
+      // this so a freshly user-added row slots into its document-order
+      // position (arrow-down then steps to the next PII downstream
+      // instead of jumping to the trailing USER_ADDED slot).
+      setSegmentOrder(extractSegmentOrder(root))
       // The seedFakeDetections fallback only fires when we're not
       // talking to a real backend. Real-mode detections arrive via the
       // POST round-trip the effect below kicks off.
@@ -149,7 +158,7 @@ export function App(): ReactElement {
         setStoreDetections(seedFakeDetections(root))
       }
     },
-    [analysis.kind, setStoreDetections],
+    [analysis.kind, setSegmentOrder, setStoreDetections],
   )
 
   // Drive the create-session round-trip whenever the dropped file
@@ -310,7 +319,6 @@ export function App(): ReactElement {
             />
             <DetectionSidebar />
             <EditReplacement anchorRoot={docRoot} />
-            <SelectModeBanner />
             <CommitPanel client={sessionsClient} sourceFileName={doc.name} onDone={handleClose} />
             <AnalysisBanner state={analysis} />
             <SyncErrorToast />

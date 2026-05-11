@@ -2,10 +2,27 @@ import { create } from 'zustand'
 import type { SegmentLocator } from './segments'
 import type { Detection, DetectionStatus, OperatorName } from './types'
 
-interface StatusEdit {
-  readonly id: string
-  readonly previous: DetectionStatus
+export interface PendingMissedSelection {
+  readonly locator: SegmentLocator
+  readonly text: string
 }
+
+export type UndoEntry =
+  | {
+      readonly kind: 'status'
+      readonly id: string
+      readonly previous: DetectionStatus
+    }
+  | {
+      readonly kind: 'user-add'
+      readonly id: string
+      readonly segmentId: string
+      readonly start: number
+      readonly end: number
+      readonly text: string
+      readonly entityType: string
+      readonly preview?: string
+    }
 
 export interface MissedSpan {
   readonly locator: SegmentLocator
@@ -52,16 +69,32 @@ export interface CommitPayload {
 export interface ReviewState {
   readonly detections: readonly Detection[]
   readonly focusedId: string | null
-  readonly undoStack: readonly StatusEdit[]
-  readonly selectMode: boolean
+  readonly undoStack: readonly UndoEntry[]
+  readonly pendingMissedSelection: PendingMissedSelection | null
   readonly defaultOperator: OperatorName
   readonly commitPanelOpen: boolean
   /** Backend session id once a real `/review-sessions` round-trip lands. */
   readonly sessionId: string | null
 
+  /**
+   * Rendered segment ids in document order, captured from the
+   * `[data-segment-id]` DOM nodes by `extractSegmentOrder`. Used to sort
+   * detections (including freshly user-added ones) into the same order
+   * the reader sees, so arrow-down marches forward through the document
+   * instead of jumping to the trailing USER_ADDED slot. Empty until the
+   * docx-preview render fires `handleRendered`; while empty the store
+   * falls back to stable insertion order.
+   */
+  readonly segmentOrder: readonly string[]
+  setSegmentOrder: (order: readonly string[]) => void
+
   setDetections: (detections: readonly Detection[]) => void
   setSessionId: (id: string | null) => void
-  /** Append a single detection (used by the synced addMissed flow). */
+  /**
+   * Add a single detection. Inserted in document order when the segment
+   * order snapshot is known; otherwise appended (stable). Used by the
+   * synced addMissed flow + the undo restore-on-failure path.
+   */
   appendDetection: (detection: Detection) => void
   /** Remove a single detection (used by reject-on-user-added DELETE). */
   removeDetection: (id: string) => void
@@ -121,10 +154,11 @@ export interface ReviewState {
    */
   focusNextPending: () => void
   undoLastDecision: () => void
+  pushUserAddUndo: (entry: Extract<UndoEntry, { kind: 'user-add' }>) => void
 
-  enterSelectMode: () => void
-  exitSelectMode: () => void
   addMissed: (span: MissedSpan) => string
+
+  setPendingMissedSelection: (value: PendingMissedSelection | null) => void
 
   setOperator: (id: string, operator: OperatorName) => void
   setCustomReplacement: (id: string, replacement: string | null) => void
@@ -137,11 +171,37 @@ export interface ReviewState {
   buildCommitPayload: (attestation: string) => CommitPayload
 }
 
+/**
+ * Sort detections by document order: primary key is the segment's
+ * position in the rendered DOM (via the captured `segmentOrder`
+ * snapshot), secondary key is the detection's `start` offset within
+ * its segment. Segments not yet in the snapshot (e.g. detections set
+ * before the doc renders) sort to the end — stable, so insertion order
+ * is preserved among them.
+ */
+function sortByDocumentOrder(
+  detections: readonly Detection[],
+  segmentOrder: readonly string[],
+): Detection[] {
+  if (segmentOrder.length === 0) return [...detections]
+  const index = new Map<string, number>()
+  for (let i = 0; i < segmentOrder.length; i++) {
+    const seg = segmentOrder[i]
+    if (seg !== undefined) index.set(seg, i)
+  }
+  return [...detections].sort((a, b) => {
+    const ai = index.get(a.segmentId) ?? Number.POSITIVE_INFINITY
+    const bi = index.get(b.segmentId) ?? Number.POSITIVE_INFINITY
+    if (ai !== bi) return ai - bi
+    return a.start - b.start
+  })
+}
+
 export const useReviewStore = create<ReviewState>((set, get) => ({
   detections: [],
   focusedId: null,
   undoStack: [],
-  selectMode: false,
+  pendingMissedSelection: null,
   defaultOperator: 'replace',
   commitPanelOpen: false,
   editingReplacementId: null,
@@ -150,13 +210,22 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   previews: {},
   commitResult: null,
   mappingStoreUnlocked: null,
+  segmentOrder: [],
+
+  setSegmentOrder: (order) => {
+    set((state) => ({
+      segmentOrder: order,
+      detections: sortByDocumentOrder(state.detections, order),
+    }))
+  },
 
   setDetections: (detections) => {
+    const sorted = sortByDocumentOrder(detections, get().segmentOrder)
     set({
-      detections,
-      focusedId: detections[0]?.id ?? null,
+      detections: sorted,
+      focusedId: sorted[0]?.id ?? null,
       undoStack: [],
-      selectMode: false,
+      pendingMissedSelection: null,
       commitPanelOpen: false,
       editingReplacementId: null,
     })
@@ -172,7 +241,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         return { focusedId: detection.id }
       }
       return {
-        detections: [...state.detections, detection],
+        detections: sortByDocumentOrder([...state.detections, detection], state.segmentOrder),
         focusedId: detection.id,
       }
     })
@@ -231,13 +300,14 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       detections: [],
       focusedId: null,
       undoStack: [],
-      selectMode: false,
+      pendingMissedSelection: null,
       commitPanelOpen: false,
       editingReplacementId: null,
       sessionId: null,
       lastSyncError: null,
       previews: {},
       commitResult: null,
+      segmentOrder: [],
     })
   },
 
@@ -247,7 +317,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       if (target === undefined || target.status === status) return state
       return {
         detections: state.detections.map((d) => (d.id === id ? { ...d, status } : d)),
-        undoStack: [...state.undoStack, { id, previous: target.status }],
+        undoStack: [...state.undoStack, { kind: 'status', id, previous: target.status }],
       }
     })
   },
@@ -302,30 +372,44 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     set((state) => {
       const last = state.undoStack[state.undoStack.length - 1]
       if (last === undefined) return state
+      if (last.kind === 'status') {
+        return {
+          detections: state.detections.map((d) =>
+            d.id === last.id ? { ...d, status: last.previous } : d,
+          ),
+          undoStack: state.undoStack.slice(0, -1),
+          focusedId: last.id,
+        }
+      }
+      // last.kind === 'user-add'
+      const removedId = last.id
+      const nextPreviews = Object.fromEntries(
+        Object.entries(state.previews).filter(([k]) => k !== removedId),
+      )
       return {
-        detections: state.detections.map((d) =>
-          d.id === last.id ? { ...d, status: last.previous } : d,
-        ),
+        detections: state.detections.filter((d) => d.id !== removedId),
+        previews: nextPreviews,
         undoStack: state.undoStack.slice(0, -1),
-        focusedId: last.id,
+        focusedId: null,
       }
     })
   },
 
-  enterSelectMode: () => {
-    set({ selectMode: true })
+  pushUserAddUndo: (entry) => {
+    set((state) => ({
+      undoStack: [...state.undoStack, entry],
+    }))
   },
 
-  exitSelectMode: () => {
-    set({ selectMode: false })
+  setPendingMissedSelection: (value) => {
+    set({ pendingMissedSelection: value })
   },
 
   addMissed: (span) => {
     const id = `user:${span.locator.segmentId}:${String(span.locator.start)}-${String(span.locator.end)}`
     set((state) => {
-      // If the same span has already been marked, just refocus it.
       if (state.detections.some((d) => d.id === id)) {
-        return { selectMode: false, focusedId: id }
+        return { focusedId: id }
       }
       const detection: Detection = {
         id,
@@ -337,9 +421,8 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         status: 'pending',
       }
       return {
-        detections: [...state.detections, detection],
+        detections: sortByDocumentOrder([...state.detections, detection], state.segmentOrder),
         focusedId: id,
-        selectMode: false,
       }
     })
     return id
