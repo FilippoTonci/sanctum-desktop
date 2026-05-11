@@ -76,9 +76,25 @@ export interface ReviewState {
   /** Backend session id once a real `/review-sessions` round-trip lands. */
   readonly sessionId: string | null
 
+  /**
+   * Rendered segment ids in document order, captured from the
+   * `[data-segment-id]` DOM nodes by `extractSegmentOrder`. Used to sort
+   * detections (including freshly user-added ones) into the same order
+   * the reader sees, so arrow-down marches forward through the document
+   * instead of jumping to the trailing USER_ADDED slot. Empty until the
+   * docx-preview render fires `handleRendered`; while empty the store
+   * falls back to stable insertion order.
+   */
+  readonly segmentOrder: readonly string[]
+  setSegmentOrder: (order: readonly string[]) => void
+
   setDetections: (detections: readonly Detection[]) => void
   setSessionId: (id: string | null) => void
-  /** Append a single detection (used by the synced addMissed flow). */
+  /**
+   * Add a single detection. Inserted in document order when the segment
+   * order snapshot is known; otherwise appended (stable). Used by the
+   * synced addMissed flow + the undo restore-on-failure path.
+   */
   appendDetection: (detection: Detection) => void
   /** Remove a single detection (used by reject-on-user-added DELETE). */
   removeDetection: (id: string) => void
@@ -155,6 +171,32 @@ export interface ReviewState {
   buildCommitPayload: (attestation: string) => CommitPayload
 }
 
+/**
+ * Sort detections by document order: primary key is the segment's
+ * position in the rendered DOM (via the captured `segmentOrder`
+ * snapshot), secondary key is the detection's `start` offset within
+ * its segment. Segments not yet in the snapshot (e.g. detections set
+ * before the doc renders) sort to the end — stable, so insertion order
+ * is preserved among them.
+ */
+function sortByDocumentOrder(
+  detections: readonly Detection[],
+  segmentOrder: readonly string[],
+): Detection[] {
+  if (segmentOrder.length === 0) return [...detections]
+  const index = new Map<string, number>()
+  for (let i = 0; i < segmentOrder.length; i++) {
+    const seg = segmentOrder[i]
+    if (seg !== undefined) index.set(seg, i)
+  }
+  return [...detections].sort((a, b) => {
+    const ai = index.get(a.segmentId) ?? Number.POSITIVE_INFINITY
+    const bi = index.get(b.segmentId) ?? Number.POSITIVE_INFINITY
+    if (ai !== bi) return ai - bi
+    return a.start - b.start
+  })
+}
+
 export const useReviewStore = create<ReviewState>((set, get) => ({
   detections: [],
   focusedId: null,
@@ -168,11 +210,20 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   previews: {},
   commitResult: null,
   mappingStoreUnlocked: null,
+  segmentOrder: [],
+
+  setSegmentOrder: (order) => {
+    set((state) => ({
+      segmentOrder: order,
+      detections: sortByDocumentOrder(state.detections, order),
+    }))
+  },
 
   setDetections: (detections) => {
+    const sorted = sortByDocumentOrder(detections, get().segmentOrder)
     set({
-      detections,
-      focusedId: detections[0]?.id ?? null,
+      detections: sorted,
+      focusedId: sorted[0]?.id ?? null,
       undoStack: [],
       pendingMissedSelection: null,
       commitPanelOpen: false,
@@ -190,7 +241,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         return { focusedId: detection.id }
       }
       return {
-        detections: [...state.detections, detection],
+        detections: sortByDocumentOrder([...state.detections, detection], state.segmentOrder),
         focusedId: detection.id,
       }
     })
@@ -256,6 +307,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       lastSyncError: null,
       previews: {},
       commitResult: null,
+      segmentOrder: [],
     })
   },
 
@@ -369,7 +421,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
         status: 'pending',
       }
       return {
-        detections: [...state.detections, detection],
+        detections: sortByDocumentOrder([...state.detections, detection], state.segmentOrder),
         focusedId: id,
       }
     })

@@ -19,6 +19,22 @@ export interface SegmentLocator {
 }
 
 /**
+ * Snapshot the rendered segment ids in document order. Used by the
+ * review store to insert user-added detections (and re-sort resumed
+ * sessions where backend ships proposals first / user-added last) into
+ * the right spot in the sidebar, so arrow-down keeps marching forward
+ * through the document instead of jumping to a trailing USER_ADDED row.
+ */
+export function extractSegmentOrder(root: ParentNode): string[] {
+  const out: string[] = []
+  for (const el of root.querySelectorAll<HTMLElement>('[data-segment-id]')) {
+    const id = el.getAttribute('data-segment-id')
+    if (id !== null) out.push(id)
+  }
+  return out
+}
+
+/**
  * Look up the rendered run for `segmentId` and return a Range covering
  * `[start, end]` within its textContent. Returns `null` when the segment
  * is not present (e.g. detection arrived for a run that is not currently

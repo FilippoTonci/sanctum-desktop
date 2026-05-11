@@ -435,6 +435,100 @@ describe('undo of user-added detections', () => {
   })
 })
 
+describe('document-order sorting', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+
+  it('setDetections sorts incoming list by (segment-in-DOM, start) when segmentOrder is set', () => {
+    useReviewStore.getState().setSegmentOrder(['seg/a', 'seg/b', 'seg/c'])
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('c1', { segmentId: 'seg/c', start: 0 }),
+        makeDetection('a2', { segmentId: 'seg/a', start: 10 }),
+        makeDetection('a1', { segmentId: 'seg/a', start: 2 }),
+        makeDetection('b1', { segmentId: 'seg/b', start: 0 }),
+      ])
+    expect(useReviewStore.getState().detections.map((d) => d.id)).toEqual(['a1', 'a2', 'b1', 'c1'])
+    expect(useReviewStore.getState().focusedId).toBe('a1')
+  })
+
+  it('setSegmentOrder re-sorts detections that were set before the doc rendered', () => {
+    // Resume path: setDetections fires first (with backend ordering —
+    // proposals then user-added at the bottom), then handleRendered
+    // captures DOM order and re-sorts.
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('p1', { segmentId: 'seg/a', start: 5 }),
+        makeDetection('p2', { segmentId: 'seg/c', start: 0 }),
+        makeDetection('user:x', { segmentId: 'seg/b', start: 1, entityType: 'USER_ADDED' }),
+      ])
+    useReviewStore.getState().setSegmentOrder(['seg/a', 'seg/b', 'seg/c'])
+    expect(useReviewStore.getState().detections.map((d) => d.id)).toEqual(['p1', 'user:x', 'p2'])
+  })
+
+  it('appendDetection slots a user-add into its document-order position', () => {
+    useReviewStore.getState().setSegmentOrder(['seg/a', 'seg/b', 'seg/c'])
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('p1', { segmentId: 'seg/a', start: 0 }),
+        makeDetection('p2', { segmentId: 'seg/c', start: 0 }),
+      ])
+    useReviewStore.getState().appendDetection({
+      id: 'user:mid',
+      segmentId: 'seg/b',
+      start: 3,
+      end: 8,
+      text: 'mid',
+      entityType: 'USER_ADDED',
+      status: 'accepted',
+    })
+    expect(useReviewStore.getState().detections.map((d) => d.id)).toEqual(['p1', 'user:mid', 'p2'])
+    // Focus still lands on the freshly-added row — the user expects to
+    // interact with what they just marked, not whatever happens to sit
+    // at the trailing end of the list.
+    expect(useReviewStore.getState().focusedId).toBe('user:mid')
+  })
+
+  it('addMissed slots into its document-order position', () => {
+    useReviewStore.getState().setSegmentOrder(['seg/a', 'seg/b', 'seg/c'])
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('p1', { segmentId: 'seg/a', start: 0 }),
+        makeDetection('p2', { segmentId: 'seg/c', start: 0 }),
+      ])
+    const id = useReviewStore.getState().addMissed({
+      locator: { segmentId: 'seg/b', start: 4, end: 9 },
+      text: 'Smith',
+    })
+    expect(useReviewStore.getState().detections.map((d) => d.id)).toEqual(['p1', id, 'p2'])
+  })
+
+  it('appendDetection falls back to stable append when segmentOrder is empty', () => {
+    // Standalone-browser / pre-render path: no DOM snapshot yet, so the
+    // store can't know document order — preserve the existing
+    // insertion-order behaviour.
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('a', { segmentId: 'seg/z' }),
+        makeDetection('b', { segmentId: 'seg/a' }),
+      ])
+    useReviewStore.getState().appendDetection(makeDetection('c', { segmentId: 'seg/m' }))
+    expect(useReviewStore.getState().detections.map((d) => d.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('clear() resets the segmentOrder snapshot', () => {
+    useReviewStore.getState().setSegmentOrder(['seg/a'])
+    useReviewStore.getState().clear()
+    expect(useReviewStore.getState().segmentOrder).toEqual([])
+  })
+})
+
 describe('pendingMissedSelection', () => {
   beforeEach(() => {
     useReviewStore.getState().clear()

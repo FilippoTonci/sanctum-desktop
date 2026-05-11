@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
+  extractSegmentOrder,
   findSegmentRange,
   findSegmentRanges,
   locatorKey,
@@ -211,6 +212,26 @@ describe('findSegmentRange — replacement-aware walker', () => {
     // replacement span when counting characters.
     const todayRange = findSegmentRange(root, { segmentId: 'body/p0/r0', start: 14, end: 19 })
     expect(todayRange?.toString()).toBe('today')
+  })
+})
+
+describe('extractSegmentOrder', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('returns ids in DOM order across multiple paragraphs', () => {
+    const root = setBody(`
+      <p><span data-segment-id="body/p0/r0">first</span></p>
+      <p><span data-segment-id="body/p1/r0">second</span></p>
+      <p><span data-segment-id="body/p2/r0">third</span></p>
+    `)
+    expect(extractSegmentOrder(root)).toEqual(['body/p0/r0', 'body/p1/r0', 'body/p2/r0'])
+  })
+
+  it('returns an empty array when no tagged segments exist', () => {
+    const root = setBody('<p>Untagged.</p>')
+    expect(extractSegmentOrder(root)).toEqual([])
   })
 })
 
