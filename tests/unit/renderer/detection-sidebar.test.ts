@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
 import {
@@ -154,5 +154,46 @@ describe('+ Mark missed PII button', () => {
     // eslint-disable-next-line @typescript-eslint/unbound-method
     const { addMissed } = useReviewActions()
     expect(vi.mocked(addMissed)).toHaveBeenCalledWith(pending)
+  })
+})
+
+describe('DetectionSidebar focus scrolling', () => {
+  const scrollIntoView = vi.fn()
+
+  beforeEach(() => {
+    scrollIntoView.mockClear()
+    // happy-dom does not implement scrollIntoView; install a spy.
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    useReviewStore.getState().clear()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('scrolls the focused row into view when focus changes', () => {
+    useReviewStore
+      .getState()
+      .setDetections([detection({ id: 'a' }), detection({ id: 'b' }), detection({ id: 'c' })])
+    render(React.createElement(DetectionSidebar))
+    scrollIntoView.mockClear()
+
+    act(() => {
+      useReviewStore.getState().setFocused('c')
+    })
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+  })
+
+  it('does not scroll when there is no focused row', () => {
+    useReviewStore.getState().setDetections([detection({ id: 'a' })])
+    render(React.createElement(DetectionSidebar))
+    scrollIntoView.mockClear()
+
+    act(() => {
+      useReviewStore.getState().setFocused(null)
+    })
+
+    expect(scrollIntoView).not.toHaveBeenCalled()
   })
 })
