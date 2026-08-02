@@ -89,12 +89,16 @@ export interface ReviewState {
   setSegmentOrder: (order: readonly string[]) => void
 
   /**
-   * Detection ids that `wrapDetections` could not wrap because their text
-   * straddles element boundaries (e.g. half of it is bold). Those
-   * detections are painted only by the CSS Custom Highlight API, which is
-   * not hit-testable — so click-to-focus cannot reach them and they never
-   * show an inline replacement. The sidebar marks them so the limitation
-   * is visible instead of silent.
+   * Detection ids that `wrapDetections` skipped because
+   * `Range.surroundContents` threw — see review/edit-wrap.ts for when
+   * that can happen. Such detections cannot be clicked (the CSS Custom
+   * Highlight API is not hit-testable) and show no inline replacement.
+   *
+   * Deliberately has no UI consumer. Manual testing (issue #29) could
+   * not produce a single skipped detection, so shipping an affordance
+   * for it would be speculative. This slice exists so the condition is
+   * observable in devtools if it ever does occur — if you find real
+   * input that populates it, that is the signal to build the UI.
    */
   readonly unwrappableIds: readonly string[]
   setUnwrappableIds: (ids: readonly string[]) => void

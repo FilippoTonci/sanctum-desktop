@@ -77,11 +77,9 @@ export function DetectionSidebar(): ReactElement {
   const defaultOperator = useReviewStore((s) => s.defaultOperator)
   const mappingUnlocked = useReviewStore((s) => s.mappingStoreUnlocked) === true
   const pendingMissedSelection = useReviewStore((s) => s.pendingMissedSelection)
-  const unwrappableIds = useReviewStore((s) => s.unwrappableIds)
   const actions = useReviewActions()
 
   const focusedRowRef = useRef<HTMLLIElement | null>(null)
-  const unwrappable = new Set(unwrappableIds)
 
   // Keyboard navigation and click-to-focus both move focusedId; keep the
   // matching row on screen so its Accept/Reject/Edit controls are reachable.
@@ -159,15 +157,6 @@ export function DetectionSidebar(): ReactElement {
                     <span className={`sidebar-item-status sidebar-item-status-${d.status}`}>
                       {STATUS_LABEL[d.status]}
                     </span>
-                    {unwrappable.has(d.id) ? (
-                      <span
-                        className="sidebar-item-unwrappable"
-                        title="This text spans formatting in the document, so it can't be clicked or previewed inline — review it from this list."
-                      >
-                        <span aria-hidden="true">⚠</span>
-                        <span className="visually-hidden">Not clickable in the document</span>
-                      </span>
-                    ) : null}
                   </span>
                 </button>
                 {focusedState !== null ? (
