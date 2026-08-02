@@ -88,6 +88,17 @@ export interface ReviewState {
   readonly segmentOrder: readonly string[]
   setSegmentOrder: (order: readonly string[]) => void
 
+  /**
+   * Detection ids that `wrapDetections` could not wrap because their text
+   * straddles element boundaries (e.g. half of it is bold). Those
+   * detections are painted only by the CSS Custom Highlight API, which is
+   * not hit-testable — so click-to-focus cannot reach them and they never
+   * show an inline replacement. The sidebar marks them so the limitation
+   * is visible instead of silent.
+   */
+  readonly unwrappableIds: readonly string[]
+  setUnwrappableIds: (ids: readonly string[]) => void
+
   setDetections: (detections: readonly Detection[]) => void
   setSessionId: (id: string | null) => void
   /**
@@ -211,12 +222,28 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   commitResult: null,
   mappingStoreUnlocked: null,
   segmentOrder: [],
+  unwrappableIds: [],
 
   setSegmentOrder: (order) => {
     set((state) => ({
       segmentOrder: order,
       detections: sortByDocumentOrder(state.detections, order),
     }))
+  },
+
+  setUnwrappableIds: (ids) => {
+    set((state) => {
+      // Identity-stable when nothing changed: the wrap effect re-runs on
+      // every focus change, and a fresh array each time would re-render
+      // every sidebar row on each arrow keypress.
+      if (
+        state.unwrappableIds.length === ids.length &&
+        state.unwrappableIds.every((id, i) => id === ids[i])
+      ) {
+        return state
+      }
+      return { unwrappableIds: [...ids] }
+    })
   },
 
   setDetections: (detections) => {
@@ -228,6 +255,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       pendingMissedSelection: null,
       commitPanelOpen: false,
       editingReplacementId: null,
+      unwrappableIds: [],
     })
   },
 
@@ -308,6 +336,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       previews: {},
       commitResult: null,
       segmentOrder: [],
+      unwrappableIds: [],
     })
   },
 

@@ -197,3 +197,33 @@ describe('DetectionSidebar focus scrolling', () => {
     expect(scrollIntoView).not.toHaveBeenCalled()
   })
 })
+
+describe('DetectionSidebar unwrappable marker', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('marks only the rows reported as unwrappable', () => {
+    // Distinct `text` per row: the factory defaults every detection to
+    // 'Alice', and the assertion below matches on rendered row text.
+    useReviewStore
+      .getState()
+      .setDetections([detection({ id: 'a', text: 'Alice' }), detection({ id: 'b', text: 'Bob' })])
+    useReviewStore.getState().setUnwrappableIds(['b'])
+    const { container } = render(React.createElement(DetectionSidebar))
+
+    const markers = container.querySelectorAll('.sidebar-item-unwrappable')
+    expect(markers).toHaveLength(1)
+    expect(markers[0]?.closest('li')?.textContent).toContain('Bob')
+  })
+
+  it('renders no marker when every detection wrapped cleanly', () => {
+    useReviewStore.getState().setDetections([detection({ id: 'a' })])
+    const { container } = render(React.createElement(DetectionSidebar))
+    expect(container.querySelectorAll('.sidebar-item-unwrappable')).toHaveLength(0)
+  })
+})

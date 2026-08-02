@@ -24,6 +24,11 @@
  * still paint over the cross-boundary range, the sidebar still carries
  * the proposed replacement, and Accept still records the decision; only
  * the in-document substitution is unavailable for those detections.
+ *
+ * The ids of detections that could not be wrapped are returned, so the
+ * UI can mark them: those detections cannot be clicked (the CSS Custom
+ * Highlight API is not hit-testable) and never show an inline
+ * replacement.
  */
 
 import { findSegmentRange } from './segments'
@@ -38,7 +43,11 @@ const DATA_DETECTION_ID = 'data-detection-id'
  * Idempotent: existing wraps with matching detection ids are left alone,
  * and stale wraps (id not in `detections`) are unwrapped.
  */
-export function wrapDetections(root: ParentNode, detections: readonly Detection[]): void {
+export function wrapDetections(
+  root: ParentNode,
+  detections: readonly Detection[],
+): readonly string[] {
+  const unwrappable: string[] = []
   const wantedIds = new Set(detections.map((d) => d.id))
 
   // Unwrap stale wraps first — clears the way for fresh ones.
@@ -80,7 +89,8 @@ export function wrapDetections(root: ParentNode, detections: readonly Detection[
       range.surroundContents(outer)
     } catch {
       // Range.surroundContents throws InvalidStateError when the range
-      // straddles element boundaries. Skip — see module-level JSDoc.
+      // straddles element boundaries. Report it — see module-level JSDoc.
+      unwrappable.push(detection.id)
       continue
     }
 
@@ -94,6 +104,8 @@ export function wrapDetections(root: ParentNode, detections: readonly Detection[
     }
     outer.appendChild(inner)
   }
+
+  return unwrappable
 }
 
 /**

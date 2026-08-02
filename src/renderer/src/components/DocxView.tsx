@@ -12,6 +12,7 @@ interface DocxViewProps {
   readonly focusedId: string | null
   readonly onRendered?: (root: HTMLElement) => void
   readonly onFocusDetection?: (id: string) => void
+  readonly onUnwrappable?: (ids: readonly string[]) => void
 }
 
 type RenderState = { kind: 'rendering' } | { kind: 'ready' } | { kind: 'error'; message: string }
@@ -23,6 +24,7 @@ export function DocxView({
   focusedId,
   onRendered,
   onFocusDetection,
+  onUnwrappable,
 }: DocxViewProps): ReactElement {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const [state, setState] = useState<RenderState>({ kind: 'rendering' })
@@ -72,10 +74,11 @@ export function DocxView({
     // against the wrap elements (stable across surroundContents) and
     // the highlight Ranges paint over whichever child the CSS shows
     // (original when pending/rejected, replacement when accepted).
-    wrapDetections(host, detections)
+    const unwrappable = wrapDetections(host, detections)
+    onUnwrappable?.(unwrappable)
     const resolved = resolveDetections(host, detections)
     applyHighlightRegistries(resolved, focusedId)
-  }, [state.kind, detections, focusedId])
+  }, [state.kind, detections, focusedId, onUnwrappable])
 
   // Native listener rather than an onClick prop: the docx body is a
   // document surface, not a control, so an onClick on the <div> trips

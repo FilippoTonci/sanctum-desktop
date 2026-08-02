@@ -40,6 +40,7 @@ export function App(): ReactElement {
   const detections = useReviewStore((s) => s.detections)
   const focusedId = useReviewStore((s) => s.focusedId)
   const setFocused = useReviewStore((s) => s.setFocused)
+  const setUnwrappableIds = useReviewStore((s) => s.setUnwrappableIds)
   const setStoreDetections = useReviewStore((s) => s.setDetections)
   const setSegmentOrder = useReviewStore((s) => s.setSegmentOrder)
   const setSessionId = useReviewStore((s) => s.setSessionId)
@@ -318,6 +319,7 @@ export function App(): ReactElement {
               focusedId={focusedId}
               onRendered={handleRendered}
               onFocusDetection={setFocused}
+              onUnwrappable={setUnwrappableIds}
             />
             <DetectionSidebar />
             <EditReplacement anchorRoot={docRoot} />
