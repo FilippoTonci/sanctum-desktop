@@ -144,8 +144,8 @@ clients via props.
 
 - `store.ts` — Zustand store: detections, focused id, undo stack, select
   mode, default operator, commit panel open, session id, last sync error,
-  commit result, mapping-store lock state, previews, editing replacement.
-  **The single in-memory model for the review surface.**
+  commit result, mapping-store lock state, previews, editing replacement,
+  unwrappable ids. **The single in-memory model for the review surface.**
 - `actions.ts` — `ReviewActions` interface with two factories:
   `localActions` (fake-detection mode) and `syncedActions(client, sessionId)`
   (real backend with optimistic+rollback). The keyboard handler and
@@ -168,6 +168,11 @@ clients via props.
 - `selection-tracker.ts` — mirrors the live text selection into
   `store.pendingMissedSelection`, so the sidebar button and the `m`
   shortcut share one definition of "valid selection".
+- `click-focus.ts` — maps a click in the rendered document onto the
+  detection it hit, walking up from the event target through the
+  `edit-wrap.ts` wraps. Returns null on a drag-select or a click on blank
+  space, so a selection in progress isn't stolen and `Esc` stays the only
+  way to clear focus (issue #29).
 - `fake-detections.ts` — local seeder used when no backend session exists
   (browser preview, unit tests).
 - `types.ts` — renderer-side review enums (`OperatorName`, `Detection`,
