@@ -349,6 +349,30 @@ describe('useReviewStore', () => {
     useReviewStore.getState().clear()
     expect(useReviewStore.getState().mappingStoreUnlocked).toBe(true)
   })
+
+  it('setUnwrappableIds stores the reported ids', () => {
+    useReviewStore.getState().setUnwrappableIds(['a', 'b'])
+    expect(useReviewStore.getState().unwrappableIds).toEqual(['a', 'b'])
+  })
+
+  it('setUnwrappableIds keeps the same array identity when the content is unchanged', () => {
+    useReviewStore.getState().setUnwrappableIds(['a'])
+    const first = useReviewStore.getState().unwrappableIds
+    useReviewStore.getState().setUnwrappableIds(['a'])
+    expect(useReviewStore.getState().unwrappableIds).toBe(first)
+  })
+
+  it('setDetections resets the unwrappable ids', () => {
+    useReviewStore.getState().setUnwrappableIds(['a'])
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    expect(useReviewStore.getState().unwrappableIds).toEqual([])
+  })
+
+  it('clear resets the unwrappable ids', () => {
+    useReviewStore.getState().setUnwrappableIds(['a'])
+    useReviewStore.getState().clear()
+    expect(useReviewStore.getState().unwrappableIds).toEqual([])
+  })
 })
 
 describe('undo of user-added detections', () => {

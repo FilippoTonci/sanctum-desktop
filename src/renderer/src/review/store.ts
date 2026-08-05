@@ -88,6 +88,21 @@ export interface ReviewState {
   readonly segmentOrder: readonly string[]
   setSegmentOrder: (order: readonly string[]) => void
 
+  /**
+   * Detection ids that `wrapDetections` skipped because
+   * `Range.surroundContents` threw — see review/edit-wrap.ts for when
+   * that can happen. Such detections cannot be clicked (the CSS Custom
+   * Highlight API is not hit-testable) and show no inline replacement.
+   *
+   * Deliberately has no UI consumer. Manual testing (issue #29) could
+   * not produce a single skipped detection, so shipping an affordance
+   * for it would be speculative. This slice exists so the condition is
+   * observable in devtools if it ever does occur — if you find real
+   * input that populates it, that is the signal to build the UI.
+   */
+  readonly unwrappableIds: readonly string[]
+  setUnwrappableIds: (ids: readonly string[]) => void
+
   setDetections: (detections: readonly Detection[]) => void
   setSessionId: (id: string | null) => void
   /**
@@ -211,12 +226,28 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   commitResult: null,
   mappingStoreUnlocked: null,
   segmentOrder: [],
+  unwrappableIds: [],
 
   setSegmentOrder: (order) => {
     set((state) => ({
       segmentOrder: order,
       detections: sortByDocumentOrder(state.detections, order),
     }))
+  },
+
+  setUnwrappableIds: (ids) => {
+    set((state) => {
+      // Identity-stable when nothing changed: the wrap effect re-runs on
+      // every focus change, and a fresh array each time would re-render
+      // every sidebar row on each arrow keypress.
+      if (
+        state.unwrappableIds.length === ids.length &&
+        state.unwrappableIds.every((id, i) => id === ids[i])
+      ) {
+        return state
+      }
+      return { unwrappableIds: [...ids] }
+    })
   },
 
   setDetections: (detections) => {
@@ -228,6 +259,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       pendingMissedSelection: null,
       commitPanelOpen: false,
       editingReplacementId: null,
+      unwrappableIds: [],
     })
   },
 
@@ -308,6 +340,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       previews: {},
       commitResult: null,
       segmentOrder: [],
+      unwrappableIds: [],
     })
   },
 

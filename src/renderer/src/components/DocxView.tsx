@@ -3,6 +3,7 @@ import { renderAsync } from 'docx-preview'
 import { wrapDetections } from '../review/edit-wrap'
 import { applyHighlightRegistries, resolveDetections } from '../review/highlights'
 import type { Detection } from '../review/types'
+import { detectionIdFromClick } from '../review/click-focus'
 
 interface DocxViewProps {
   readonly file: File
@@ -10,6 +11,8 @@ interface DocxViewProps {
   readonly detections: readonly Detection[]
   readonly focusedId: string | null
   readonly onRendered?: (root: HTMLElement) => void
+  readonly onFocusDetection?: (id: string) => void
+  readonly onUnwrappable?: (ids: readonly string[]) => void
 }
 
 type RenderState = { kind: 'rendering' } | { kind: 'ready' } | { kind: 'error'; message: string }
@@ -20,6 +23,8 @@ export function DocxView({
   detections,
   focusedId,
   onRendered,
+  onFocusDetection,
+  onUnwrappable,
 }: DocxViewProps): ReactElement {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const [state, setState] = useState<RenderState>({ kind: 'rendering' })
@@ -69,10 +74,33 @@ export function DocxView({
     // against the wrap elements (stable across surroundContents) and
     // the highlight Ranges paint over whichever child the CSS shows
     // (original when pending/rejected, replacement when accepted).
-    wrapDetections(host, detections)
+    const unwrappable = wrapDetections(host, detections)
+    onUnwrappable?.(unwrappable)
     const resolved = resolveDetections(host, detections)
     applyHighlightRegistries(resolved, focusedId)
-  }, [state.kind, detections, focusedId])
+  }, [state.kind, detections, focusedId, onUnwrappable])
+
+  // Native listener rather than an onClick prop: the docx body is a
+  // document surface, not a control, so an onClick on the <div> trips
+  // jsx-a11y's click-events-have-key-events / no-static-element-interactions.
+  // Keyboard access to the same behaviour already exists via the arrow keys
+  // (see review/keyboard.ts).
+  useEffect(() => {
+    const host = bodyRef.current
+    if (host === null) return undefined
+    if (onFocusDetection === undefined) return undefined
+
+    const handleClick = (event: MouseEvent): void => {
+      const collapsed = host.ownerDocument.defaultView?.getSelection()?.isCollapsed ?? true
+      const id = detectionIdFromClick(event.target, collapsed)
+      if (id !== null) onFocusDetection(id)
+    }
+
+    host.addEventListener('click', handleClick)
+    return () => {
+      host.removeEventListener('click', handleClick)
+    }
+  }, [onFocusDetection])
 
   return (
     <section className="docx-view" aria-busy={state.kind === 'rendering'}>

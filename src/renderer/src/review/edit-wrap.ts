@@ -18,12 +18,30 @@
  * can split text nodes and invalidate pre-built Range objects for
  * later detections in the same batch.
  *
- * Detections whose Range crosses element boundaries (e.g. straddling
- * a <b>) cannot be wrapped via Range.surroundContents — those throw
- * InvalidStateError, which we catch and skip. The highlight registries
- * still paint over the cross-boundary range, the sidebar still carries
- * the proposed replacement, and Accept still records the decision; only
- * the in-document substitution is unavailable for those detections.
+ * Range.surroundContents throws InvalidStateError when the range's two
+ * endpoints do not share a parent node. We catch that and skip, and the
+ * skipped ids are returned so callers can tell the difference between
+ * "wrapped everything" and "silently gave up on some".
+ *
+ * When can that actually happen? Not on formatting alone: a segment is
+ * one docx run (ids look like `body/p2/r1`), so a bold span *ends* the
+ * segment rather than splitting one. A detection's [start, end) is
+ * always inside a single run, and a range inside one run's text node
+ * has one parent. The reachable case is a range that spans a
+ * `.sanctum-edit` wrap inserted earlier in the same pass — i.e. a
+ * detection overlapping one already wrapped in that segment.
+ *
+ * Manual testing against a real .docx (2026-08-03, issue #29) could not
+ * produce a throw: 33 detections across 13 segments all wrapped, six in
+ * a single segment, including a deliberately constructed user-added
+ * span crossing an existing wrap. Treat this as a safety net, not a
+ * routine path — and if you find input that trips it, record it here.
+ *
+ * A skipped detection still gets painted by the highlight registries,
+ * still carries its proposed replacement in the sidebar, and Accept
+ * still records the decision. What it loses is the in-document
+ * substitution and click-to-focus, since the CSS Custom Highlight API
+ * is not hit-testable.
  */
 
 import { findSegmentRange } from './segments'
@@ -38,7 +56,11 @@ const DATA_DETECTION_ID = 'data-detection-id'
  * Idempotent: existing wraps with matching detection ids are left alone,
  * and stale wraps (id not in `detections`) are unwrapped.
  */
-export function wrapDetections(root: ParentNode, detections: readonly Detection[]): void {
+export function wrapDetections(
+  root: ParentNode,
+  detections: readonly Detection[],
+): readonly string[] {
+  const unwrappable: string[] = []
   const wantedIds = new Set(detections.map((d) => d.id))
 
   // Unwrap stale wraps first — clears the way for fresh ones.
@@ -80,7 +102,8 @@ export function wrapDetections(root: ParentNode, detections: readonly Detection[
       range.surroundContents(outer)
     } catch {
       // Range.surroundContents throws InvalidStateError when the range
-      // straddles element boundaries. Skip — see module-level JSDoc.
+      // straddles element boundaries. Report it — see module-level JSDoc.
+      unwrappable.push(detection.id)
       continue
     }
 
@@ -94,6 +117,8 @@ export function wrapDetections(root: ParentNode, detections: readonly Detection[
     }
     outer.appendChild(inner)
   }
+
+  return unwrappable
 }
 
 /**

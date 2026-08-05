@@ -79,6 +79,19 @@ export function DetectionSidebar(): ReactElement {
   const pendingMissedSelection = useReviewStore((s) => s.pendingMissedSelection)
   const actions = useReviewActions()
 
+  const focusedRowRef = useRef<HTMLLIElement | null>(null)
+
+  // Keyboard navigation and click-to-focus both move focusedId; keep the
+  // matching row on screen so its Accept/Reject/Edit controls are reachable.
+  // `block: 'nearest'` is a no-op when the row is already visible, so
+  // clicking a row directly does not jolt the list.
+  useEffect(() => {
+    const row = focusedRowRef.current
+    if (row === null) return
+    if (typeof row.scrollIntoView !== 'function') return
+    row.scrollIntoView({ block: 'nearest' })
+  }, [focusedId])
+
   const counts = aggregate(detections)
   const canCommit = detections.length > 0 && counts.pending === 0
 
@@ -126,7 +139,7 @@ export function DetectionSidebar(): ReactElement {
               mappingUnlocked,
             )
             return (
-              <li key={d.id}>
+              <li key={d.id} ref={d.id === focusedId ? focusedRowRef : null}>
                 <button
                   type="button"
                   className={`sidebar-item sidebar-item-${d.status}${

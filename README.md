@@ -179,6 +179,8 @@ Signed release builds run only from the tag-driven release workflow on the self-
 
 After Accept or Reject, focus jumps to the next still-pending detection — keep your hands on the home row and a long document reviews in one continuous flow. All shortcuts are suspended while an input is focused. `Tab` / `Shift+Tab` only step through detections when no other element holds focus, so native focus traversal in the sidebar / modals keeps working.
 
+Clicking a detection in the document focuses it too — on the highlighted text or on its inline replacement preview — and the matching sidebar row scrolls into view. Clicking blank space leaves focus where it is; `Esc` is the way to clear it.
+
 ---
 
 ## 🗺️ Roadmap

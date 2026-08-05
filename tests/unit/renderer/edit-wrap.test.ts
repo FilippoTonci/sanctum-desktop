@@ -86,6 +86,35 @@ describe('wrapDetections', () => {
     // Untouched, original text intact.
     expect(root.textContent).toContain('Alice and Bob.')
   })
+
+  it('returns an empty list when every detection wraps cleanly', () => {
+    const root = setBody('<p><span data-segment-id="body/p0/r0">Alice met Bob today.</span></p>')
+    const skipped = wrapDetections(root, [
+      detection({ id: 'a', start: 0, end: 5, text: 'Alice' }),
+      detection({ id: 'b', start: 10, end: 13, text: 'Bob' }),
+    ])
+    expect(skipped).toEqual([])
+  })
+
+  it('reports detections whose range straddles element boundaries', () => {
+    // "Alice Smith" spans the <b>, so Range.surroundContents throws and the
+    // detection gets no wrap — it can never be clicked in the document.
+    const root = setBody(
+      '<p><span data-segment-id="body/p0/r0">Alice <b>Smith</b> called.</span></p>',
+    )
+    const skipped = wrapDetections(root, [
+      detection({ id: 'straddle', start: 0, end: 11, text: 'Alice Smith' }),
+    ])
+    expect(skipped).toEqual(['straddle'])
+    expect(root.querySelector('.sanctum-edit[data-detection-id="straddle"]')).toBeNull()
+  })
+
+  it('does not report detections whose segment is not rendered yet', () => {
+    // Transient docx-preview warmup, not a structural gap — must stay quiet.
+    const root = setBody('<p><span data-segment-id="body/p0/r0">Alice.</span></p>')
+    const skipped = wrapDetections(root, [detection({ id: 'absent', segmentId: 'body/p9/r9' })])
+    expect(skipped).toEqual([])
+  })
 })
 
 describe('unwrapAll', () => {
