@@ -187,8 +187,9 @@ clients via props.
    - `release/*.AppImage` / `*.deb` / `*.dmg` / `*.exe` (installers)
 
 `electron-builder.yml::extraResources` is the bridge:
-`sidecar-build/${os}-${arch}` → `resources/sidecar/` inside the app.
-`src/main/paths.ts` reads from there at runtime.
+`sidecar-build/${os}-${arch}` → the app's resources directory, where
+`src/main/paths.ts` finds it at runtime as
+`process.resourcesPath/sidecar/sanctum-sidecar[.exe]`.
 
 The sidecar bundle itself is built separately by `scripts/build-sidecar.sh`
 — see its docstring for the PyInstaller flag rationale (in particular

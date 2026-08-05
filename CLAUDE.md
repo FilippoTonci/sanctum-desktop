@@ -34,6 +34,40 @@ Mirror that structure onto git the same way the backend does:
 - If a substep surfaces unrelated cleanup, split it into its own commit
   (or its own PR if it crosses WS boundaries) — don't smuggle it in.
 
+## Keep the docs true
+
+The docs drift because the same fact gets written in four places and only
+the copy someone happens to be reading gets updated. A cleanup pass in
+Aug 2026 found twelve of these — a keyboard map that named keys the code
+no longer binds, a component list naming three deleted files, a guardrail
+demanding `react-i18next` that was never installed. Rules, in order of
+how much drift they prevent:
+
+1. **One fact, one home.** Before writing a fact into a doc, check
+   whether another doc already owns it, and link instead of restating.
+   Current owners:
+
+   | Fact                                        | Owner                    |
+   | ------------------------------------------- | ------------------------ |
+   | What the app is, roadmap, keyboard bindings | `README.md`              |
+   | Module map, invariants, build pipeline      | `ARCHITECTURE.md`        |
+   | Human workflow, PR rules, guardrails        | `CONTRIBUTING.md`        |
+   | Agent operating rules, platform gotchas     | `CLAUDE.md`              |
+   | The sidecar HTTP contract                   | `sanctum` (backend repo) |
+
+2. **Docs land in the commit that changes the behaviour** — not a
+   follow-up. If you rename or delete a file, `grep` its basename across
+   `*.md` in the same breath.
+3. **Never write a plan in the present tense.** If it isn't in the tree
+   today, it belongs in the README roadmap as `[ ]` or in CONTRIBUTING's
+   "not yet guardrails" list — never as an instruction that reads as
+   enforced. An agent will obey it and install things nobody asked for.
+4. **Verify before you write.** Every claim about a path, flag, script,
+   or command should be something you just read in the tree. If you can't
+   check it, don't state it.
+5. **Suspect the docs when they disagree with the code.** The code is
+   what runs. Fix the doc in place rather than working around it.
+
 ## Keep the README roadmap in sync
 
 When a substep / WS / Phase item lands, **edit the matching `[ ]` →
