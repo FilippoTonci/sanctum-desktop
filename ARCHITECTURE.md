@@ -20,7 +20,7 @@ patches/                ← patch-package patches (e.g. docx-preview)
 tests/
   unit/                 ← Vitest (renderer + main, isolated)
   integration/          ← Vitest with real backends
-  e2e/                  ← Playwright drives a packaged Electron build
+  e2e/                  ← Playwright drives the out/ Electron build
 out/                    ← electron-vite build output
 release/                ← electron-builder installer + unpacked tree
 ```
@@ -115,15 +115,18 @@ Wraps the sidecar's REST API. Both clients are constructed once per
 #### `src/renderer/src/components/` — React components
 
 One file per visible surface; all consume the Zustand store and the API
-clients via props. The non-obvious ones:
+clients via props.
 
 - `DocxView.tsx` — wraps `docx-preview` (with a `patches/` patch that
   emits `data-segment-id`), exposes the rendered root for highlight
   registration.
-- `DetectionSidebar.tsx` + `DetectionTooltip.tsx` — paired: sidebar drives
-  navigation; tooltip floats on the focused span.
-- `PreviewOverlay.tsx` — ghost-text overlay rendered from
-  `store.previews`.
+- `DetectionSidebar.tsx` — the review surface's only navigation and
+  verdict control: list, per-detection operator picker, proposed
+  replacement line, and the "mark missed PII" trigger. There is no
+  floating tooltip (removed in issue #23).
+- `EditReplacement.tsx` — decorates the `.sanctum-edit` wrappers emitted
+  by `review/edit-wrap.ts` with `data-status`, and inserts the
+  replacement text inline when a preview exists.
 - `MappingStoreChip.tsx` — header chip showing lock state; opens
   `UnlockModal` when clicked.
 - `Splash.tsx` — pre-ready surface (idle / starting / waiting-for-health
@@ -132,9 +135,10 @@ clients via props. The non-obvious ones:
   status code (409, 413, 415, 503).
 - `RecentSessions.tsx` — landing-page list backed by
   `GET /review-sessions`.
-- `CommitPanel.tsx`, `SettingsModal.tsx`, `UnlockModal.tsx`,
-  `SelectModeBanner.tsx` — modal/bottom-panel flows; all dismiss via
-  Cancel button.
+- `DropZone.tsx` — landing-page `.docx` drop target + file picker.
+- `SanctumEmblem.tsx` — decorative header wordmark (`aria-hidden`).
+- `CommitPanel.tsx`, `SettingsModal.tsx`, `UnlockModal.tsx` —
+  modal/bottom-panel flows; all dismiss via Cancel button.
 
 #### `src/renderer/src/review/` — Review-surface state
 
@@ -148,13 +152,22 @@ clients via props. The non-obvious ones:
   components see one uniform interface.
 - `use-actions.tsx` — React context provider for the chosen actions
   factory; switches based on whether a session is open.
-- `keyboard.ts` — global keyboard map (`a`/`r`/`m`/`u`/arrow nav/etc.).
-  Reads actions through a ref so keys always hit the freshest closure.
+- `keyboard.ts` — global keyboard map, suspended while an input holds
+  focus. Reads actions through a ref so keys always hit the freshest
+  closure. **The bindings themselves are specified in README
+  "⌨️ Keyboard Reference"** — that table is the source of truth; don't
+  restate the keys here.
 - `from-session.ts` — projector: backend `ReviewSessionResponse` →
   renderer `Detection[]` + previews.
 - `segments.ts` + `highlights.ts` — DOM-side helpers: locate
   `data-segment-id` ranges, register CSS Custom Highlight API entries
   (pending / accepted / rejected / focused).
+- `edit-wrap.ts` — idempotent DOM pass wrapping each detection's Range in
+  `<span class="sanctum-edit">` so accepted replacements can substitute
+  inline and survive re-resolution (issue #27).
+- `selection-tracker.ts` — mirrors the live text selection into
+  `store.pendingMissedSelection`, so the sidebar button and the `m`
+  shortcut share one definition of "valid selection".
 - `fake-detections.ts` — local seeder used when no backend session exists
   (browser preview, unit tests).
 - `types.ts` — renderer-side review enums (`OperatorName`, `Detection`,
@@ -180,7 +193,8 @@ clients via props. The non-obvious ones:
 The sidecar bundle itself is built separately by `scripts/build-sidecar.sh`
 — see its docstring for the PyInstaller flag rationale (in particular
 `--onedir` and the `--collect-all` chain). Run that **before** `npm run
-make` if any backend code or config changed.
+make`; `scripts/before-pack.cjs` aborts the package step if the bundle for
+the target `<os>-<arch>` isn't there.
 
 ## Tests
 
@@ -190,16 +204,20 @@ tests/
     main/           ← per-module Vitest (sidecar lifecycle, paths, settings, …)
     renderer/       ← happy-dom Vitest for components, store, actions, keyboard
   integration/      ← Vitest with a real spawned sidecar
-  e2e/              ← Playwright + `_electron.launch` against the packaged build
+  e2e/              ← Playwright + `_electron.launch` against the out/ build
 ```
 
 - Unit tests stub IPC and `fetch`. Renderer specs use happy-dom and the
   `@vitest-environment` directive.
 - Integration tests spawn the real Python sidecar (the dev-mode path)
   and exercise `src/main/` against it. They fail loudly if `sanctum` isn't
-  installed in the sibling repo.
-- E2E tests build, then launch the packaged Electron app and drive its
-  renderer. Slow; not run in pre-commit.
+  installed in the sibling repo. CI does not run this lane.
+- E2E tests launch `out/main/index.js` with `SANCTUM_SKIP_SIDECAR=1` —
+  the electron-vite build, **not** the packaged `.app`/`.dmg`, and with no
+  backend behind it. Slow; not run in pre-commit.
+- **Nothing automated exercises a packaged artifact.** Verifying that an
+  installer actually contains and can spawn its sidecar is still a manual
+  step.
 
 ## Where to start when adding…
 
@@ -231,12 +249,15 @@ tests/
   old sidecar, projects the new settings to env vars, spawns a fresh
   one. The renderer's existing splash UX handles the transient
   `starting` / `waiting-for-health` states for free.
-- **Local packaging is host-arch only.** PyInstaller can't cross-compile,
-  so `sidecar-build/` only ever holds the arch you built on. The
-  `mac.target[].arch: [x64, arm64]` in `electron-builder.yml` still runs
-  the other pass, finds no sidecar to copy, logs `file source doesn't
-exist` and **exits 0** — producing a DMG with no backend inside. On
-  macOS take the `-arm64.dmg`. See CLAUDE.md "Platform notes".
+- **Packaging is host-arch only, and now fails loudly about it.**
+  PyInstaller can't cross-compile, so `sidecar-build/` only ever holds
+  the arch you built on. `extraResources` treats a missing `from:` as
+  informational — it logs `file source doesn't exist` and exits 0, which
+  once produced a plausible sidecar-less DMG. `scripts/before-pack.cjs`
+  now asserts the target's sidecar binary exists and throws otherwise, and
+  `electron-builder.yml` declares macOS as `arch: [arm64]` only. Adding an
+  arch means adding a runner that builds that arch's sidecar — change
+  `electron-builder.yml` and `.github/workflows/release.yml` together.
 - **AppImage doesn't run on WSL2.** FUSE isn't available; use
   `release/linux-unpacked/sanctum-desktop` for local end-to-end testing.
   CI's `ubuntu-latest` runner is the AppImage's actual validation environment.

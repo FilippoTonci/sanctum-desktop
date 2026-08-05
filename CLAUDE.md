@@ -170,23 +170,19 @@ Developer ID that does not exist yet (issues #2/#3). The result is
 unsigned — fine locally, never distributable. If Gatekeeper blocks it:
 `xattr -dr com.apple.quarantine "/Applications/Sanctum Desktop.app"`.
 
-**Take the `-arm64.dmg`, not the other one.** `electron-builder.yml`
-declares `mac.target[].arch: [x64, arm64]`, and that target-level `arch`
-beats the CLI — `npm run make -- --mac --arm64` does _not_ restrict it.
-PyInstaller only builds for the host arch, so the x64 pass finds no
-`sidecar-build/mac-x64`, logs `file source doesn't exist`, **continues,
-and exits 0**. You get a plausible ~111 MB Intel DMG with no sidecar in
-it. Verify before trusting any DMG:
+**One DMG, Apple Silicon only.** `electron-builder.yml` declares
+`mac.target[].arch: [arm64]`. PyInstaller can't cross-compile, so an
+Intel DMG would need an Intel runner building its own sidecar; declaring
+the arch without one is what once produced a plausible ~111 MB Intel DMG
+with no backend inside, at exit 0. Two guards now stand there —
+`scripts/before-pack.cjs` throws when the target's sidecar bundle is
+missing, and `.github/workflows/release.yml` builds a sidecar on every
+runner before packaging. Adding an arch means changing both files
+together. Spot-check anyway:
 
 ```bash
 ls "release/mac-arm64/Sanctum Desktop.app/Contents/Resources/sidecar"
 ```
-
-**Before the first real release:** no CI workflow runs
-`build-sidecar.sh`, and `sidecar-build/` is gitignored — so
-`release.yml` as written would publish sidecar-less DMGs for both
-arches, silently. WS6 needs both a sidecar build step and something that
-makes a missing `extraResources` source fail the build.
 
 ### Other platforms
 

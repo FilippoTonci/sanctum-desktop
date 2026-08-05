@@ -18,7 +18,7 @@
 
 **Drag in a document. Review the detections. Export a clean copy. All on your machine.**
 
-Sanctum Desktop is the end-user GUI for [Sanctum](https://github.com/FilippoTonci/sanctum) — a local-first, air-gapped PII anonymization engine for legal and consulting professionals. This repository ships the Electron shell: a signed, installable desktop app that spawns the Sanctum Python backend as a loopback-only sidecar and drives it through a keyboard-first review workflow.
+Sanctum Desktop is the end-user GUI for [Sanctum](https://github.com/FilippoTonci/sanctum) — a local-first, air-gapped PII anonymization engine for legal and consulting professionals. This repository ships the Electron shell: an installable desktop app (signing lands in WS6) that spawns the Sanctum Python backend as a loopback-only sidecar and drives it through a keyboard-first review workflow.
 
 [Getting Started](#-getting-started) · [How It Works](#-how-it-works) · [Architecture](#-architecture) · [Roadmap](#-roadmap) · [Contributing](#-contributing)
 
@@ -58,7 +58,7 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 - **Loopback-only backend.** The Electron main process spawns the Python sidecar on `127.0.0.1`, generates a random bearer token, and pipes it over stdin. The token never touches disk, never appears in `ps auxf`.
 - **Zero network calls at runtime.** `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` are set in the sidecar's environment so a missing model fails fast instead of silently downloading.
 - **`webRequest` filter** blocks any network destination other than `127.0.0.1` — a belt for the airgap suspenders.
-- **Signed installers only.** No unsigned `.dmg` / `.msi` / `.AppImage` ever ships to users, even in pre-release channels.
+- **Signed installers before any release.** Signing and notarization are WS6 work and not done yet; the builds you can make today are unsigned, local-only, and explicitly not distributable.
 
 ### 📄 Fidelity-Preserving Renderer
 
@@ -83,7 +83,7 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │ Renderer  (sandboxed, contextIsolation=true)              │  │
 │  │   docx-preview  +  CSS Custom Highlight API overlay       │  │
-│  │   Detection tooltip  +  sidebar  +  keyboard map          │  │
+│  │   Detection sidebar  +  keyboard map  +  inline edits     │  │
 │  └────────────────────────┬──────────────────────────────────┘  │
 │                           │ preload: window.sanctum             │
 │  ┌────────────────────────▼──────────────────────────────────┐  │
@@ -104,27 +104,27 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 
 ### Sidecar lifecycle
 
-1. **Spawn.** Main picks a free port via `net.createServer().listen(0)`, generates a 32-byte token, spawns `sanctum-sidecar --port <n> --token-stdin`.
-2. **Handshake.** Main reads a single machine-readable line from the sidecar's stdout: `SANCTUM_READY host=127.0.0.1 port=<N> token_path=<…>`.
+1. **Spawn.** Main generates a 32-byte token and spawns `sanctum-sidecar serve --port 0 --token-stdin` — the sidecar picks its own free port and reads the token from stdin.
+2. **Handshake.** Main reads a single machine-readable line from the sidecar's stdout: `SANCTUM_READY host=127.0.0.1 port=<N> token_source=stdin`. `src/main/sidecar.ts` parses the host and port out of it.
 3. **Health poll.** Main hits `GET /health` with the bearer token until 200 OK — models may still be loading after HTTP is up. A splash screen covers the wait.
 4. **Expose.** `contextBridge.exposeInMainWorld('sanctum', { baseUrl, token })`. The renderer builds its own `fetch` calls from there.
 5. **Shutdown.** `app.on('before-quit')` sends SIGTERM to the sidecar and waits up to 5 s before SIGKILL.
 
 ### Renderer → Backend contract
 
-The renderer is generated from `schema/openapi.json` in the `sanctum` repo (pinned to a specific commit per release). The pin is atomic: a desktop installer always ships the sidecar built from the same commit it was tested against. `/health` returns both `sanctum_commit` and `openapi_digest`, which the app verifies at startup — any mismatch means the installer is corrupt or the sidecar was swapped manually, and the app fails fast with an actionable error.
+The renderer's wire types (`src/renderer/src/api/types.ts`) are hand-written today, mirroring `schema/openapi.json` in the `sanctum` repo (pinned to a specific commit per release). The pin is atomic: a desktop installer always ships the sidecar built from the same commit it was tested against. `/health` reports `sanctum_commit` and `openapi_digest`, and the main process surfaces both — but **nothing verifies them yet**. Failing fast on a mismatched or manually swapped sidecar is a WS6 item.
 
 ---
 
 ## 🚀 Getting Started
 
-> **Status:** Workstreams 1–5 of Phase 3 are shipped — backend contract hardening (`sanctum`), Electron scaffold, sidecar integration, the `.docx` review surface, and the full session workflow UI (landing page, real session create/commit/abandon with sync, mapping-store unlock, settings + sidecar respawn, typed error surfaces, and resume from a Recent Sessions row). A packaged unsigned build runs end-to-end on Linux. WS6 (signing, notarization, release pipeline) is the next major milestone — no signed installers yet.
+> **Status:** Workstreams 1–5 of Phase 3 are shipped — backend contract hardening (`sanctum`), Electron scaffold, sidecar integration, the `.docx` review surface, and the full session workflow UI (landing page, real session create/commit/abandon with sync, mapping-store unlock, settings + sidecar respawn, typed error surfaces, and resume from a Recent Sessions row). Packaged unsigned builds run end-to-end on Linux and macOS (Apple Silicon). WS6 (signing, notarization, release pipeline) is the next major milestone — no signed installers yet.
 
 ### Prerequisites
 
 - Node 20 LTS or newer
-- A local checkout of [`sanctum`](https://github.com/FilippoTonci/sanctum) with `pip install -e .` for dev-mode sidecar spawning (see below)
-- Python 3.10+ (for the sidecar)
+- A sibling checkout of [`sanctum`](https://github.com/FilippoTonci/sanctum) at `../sanctum`, with `pip install -e '.[security,api,documents]'` inside its `.venv`, for dev-mode sidecar spawning (see below)
+- Python 3.10+ (for the sidecar — macOS's built-in `python3` is 3.9 and will not work; see [CLAUDE.md](CLAUDE.md) "Platform notes")
 
 ### Developer install
 
@@ -136,30 +136,29 @@ npm install
 
 ### Dev mode
 
-In dev mode the Electron main process spawns the sidecar from a sibling `../sanctum` checkout instead of the packaged binary. This unblocks backend iteration without rebuilding PyInstaller output on every change.
-
-```bash
-# .env.local
-ELECTRON_DEV=1
-SANCTUM_DEV_REPO=../sanctum
-```
+In dev mode the Electron main process spawns the sidecar from a sibling `../sanctum` checkout instead of the packaged binary. This unblocks backend iteration without rebuilding PyInstaller output on every change. `npm run dev` sets `ELECTRON_DEV=1`, `SANCTUM_DEV_REPO=../sanctum`, and the venv `PATH` inline — there is no `.env` loading in the main process, so export them yourself if you launch Electron some other way.
 
 ```bash
 npm run dev        # launches Electron with the Vite renderer in HMR mode
-npm run typecheck  # tsc --noEmit
-npm run lint       # eslint + prettier
-npm run test       # Vitest unit tests
-npm run test:e2e   # Playwright end-to-end tests against a dev build
+npm run typecheck  # tsc --build --force
+npm run lint       # eslint, zero warnings tolerated
+npm run test       # Vitest unit lane
+npm run test:e2e   # Playwright against the built out/ bundle, sidecar skipped
 ```
 
 ### Production build (unsigned, for local sanity checks)
 
+The sidecar bundle is built separately and is **not** produced by `npm run make` — build it first, or `scripts/before-pack.cjs` refuses to package:
+
 ```bash
-npm run build      # electron-vite build
-npm run make       # electron-builder — produces installers under dist/
+PYTHON=python3.12 SANCTUM_REPO=../sanctum bash scripts/build-sidecar.sh
+npm run build      # electron-vite build → out/
+npm run make       # build + electron-builder → release/
 ```
 
-Signed release builds run only from the tag-driven release workflow on the self-hosted Windows runner and GitHub-hosted macOS/Linux runners. See `RELEASE.md` (coming with WS6).
+On macOS prefix `npm run make` with `CSC_IDENTITY_AUTO_DISCOVERY=false` so electron-builder stops hunting for a Developer ID that doesn't exist yet. Packaging targets Apple Silicon only — PyInstaller can't cross-compile, so an Intel DMG needs an Intel runner building its own sidecar. [CLAUDE.md](CLAUDE.md) "Platform notes" has the details.
+
+`.github/workflows/release.yml` builds the sidecar on each runner before packaging, pinned to a `sanctum` ref. Signing and notarization are still WS6 placeholders in that workflow — no signed installer has been produced yet.
 
 ---
 
@@ -243,6 +242,7 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [ ] i18n (English + French, human-translated)
 - [ ] Accessibility audit (WCAG AA, screen-reader labels, focus management)
 - [ ] Diagnostic bundle export (no automated upload)
+- [ ] Verify `/health`'s `sanctum_commit` + `openapi_digest` against the pinned backend at startup, and fail fast on a mismatch
 - [ ] macOS signing + notarization (Apple Developer ID)
 - [ ] Windows signing (Azure Trusted Signing or Sectigo/DigiCert EV + YubiKey)
 - [ ] Linux AppImage + deb with GPG signatures
@@ -261,20 +261,20 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 
 ## 🧰 Tech Stack
 
-| Layer             | Technology                                                                                                 |
-| ----------------- | ---------------------------------------------------------------------------------------------------------- |
-| Shell             | Electron (latest stable)                                                                                   |
-| Build             | [`electron-vite`](https://electron-vite.org/) + `electron-builder`                                         |
-| UI                | React 19 + TypeScript                                                                                      |
-| State             | Zustand                                                                                                    |
-| Renderer          | [`docx-preview`](https://github.com/VolodymyrBaydalka/docxjs) + CSS Custom Highlight API                   |
-| Floating UI       | `@floating-ui/react`                                                                                       |
-| Schema validation | Zod (generated from OpenAPI)                                                                               |
-| i18n              | `react-i18next`                                                                                            |
-| Unit tests        | Vitest                                                                                                     |
-| E2E tests         | `@playwright/test` with Electron launch                                                                    |
-| Linters           | ESLint (`@typescript-eslint`, `react-hooks`, `jsx-a11y`) + Prettier                                        |
-| Backend           | Python sidecar (packaged from [`sanctum`](https://github.com/FilippoTonci/sanctum) via PyInstaller onedir) |
+| Layer       | Technology                                                                                                 |
+| ----------- | ---------------------------------------------------------------------------------------------------------- |
+| Shell       | Electron (latest stable)                                                                                   |
+| Build       | [`electron-vite`](https://electron-vite.org/) + `electron-builder`                                         |
+| UI          | React 19 + TypeScript                                                                                      |
+| State       | Zustand                                                                                                    |
+| Renderer    | [`docx-preview`](https://github.com/VolodymyrBaydalka/docxjs) + CSS Custom Highlight API                   |
+| Floating UI | `@floating-ui/react`                                                                                       |
+| Wire types  | Hand-written in `src/renderer/src/api/types.ts`, mirroring the pinned `schema/openapi.json`                |
+| i18n        | _Not wired yet_ — `react-i18next` is a WS6 item                                                            |
+| Unit tests  | Vitest                                                                                                     |
+| E2E tests   | `@playwright/test` with Electron launch                                                                    |
+| Linters     | ESLint (`@typescript-eslint`, `react-hooks`, `jsx-a11y`) + Prettier                                        |
+| Backend     | Python sidecar (packaged from [`sanctum`](https://github.com/FilippoTonci/sanctum) via PyInstaller onedir) |
 
 ---
 
@@ -311,7 +311,7 @@ git push origin feature/your-feature
 # Open a Pull Request
 ```
 
-See `CONTRIBUTING.md` (coming with WS2) for the full ground rules.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full ground rules — branch naming, commit granularity, and the architectural guardrails a PR has to hold.
 
 ---
 
