@@ -4,6 +4,10 @@ copyright: Copyright © 2026 Filippo Tonci
 directories:
   output: release
   buildResources: resources
+# Hard-fails when the target's sidecar bundle is absent. Without it,
+# extraResources logs "file source doesn't exist" and ships a
+# backend-less installer with exit 0. See scripts/before-pack.cjs.
+beforePack: scripts/before-pack.cjs
 files:
   - out/**/*
   - package.json
@@ -23,7 +27,12 @@ extraResources:
 mac:
   target:
     - target: dmg
-      arch: [x64, arm64]
+      # Apple Silicon only. PyInstaller cannot cross-compile, so an x64
+      # DMG needs its own Intel runner building its own sidecar — see the
+      # macos-13 matrix note in .github/workflows/release.yml. Add x64
+      # back (here and in that workflow, together) when an Intel user
+      # actually needs it.
+      arch: [arm64]
   category: public.app-category.productivity
   hardenedRuntime: true
   gatekeeperAssess: false
