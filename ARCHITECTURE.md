@@ -231,6 +231,12 @@ tests/
   old sidecar, projects the new settings to env vars, spawns a fresh
   one. The renderer's existing splash UX handles the transient
   `starting` / `waiting-for-health` states for free.
+- **Local packaging is host-arch only.** PyInstaller can't cross-compile,
+  so `sidecar-build/` only ever holds the arch you built on. The
+  `mac.target[].arch: [x64, arm64]` in `electron-builder.yml` still runs
+  the other pass, finds no sidecar to copy, logs `file source doesn't
+exist` and **exits 0** — producing a DMG with no backend inside. On
+  macOS take the `-arm64.dmg`. See CLAUDE.md "Platform notes".
 - **AppImage doesn't run on WSL2.** FUSE isn't available; use
   `release/linux-unpacked/sanctum-desktop` for local end-to-end testing.
   CI's `ubuntu-latest` runner is the AppImage's actual validation environment.

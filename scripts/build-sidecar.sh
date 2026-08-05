@@ -59,6 +59,34 @@ if [ ! -d "$SANCTUM_REPO" ]; then
   exit 1
 fi
 
+# The venv below is created from $PYTHON, so its interpreter version is
+# what every later pip install and the PyInstaller freeze inherit.
+# sanctum declares requires-python = ">=3.10". macOS still ships 3.9 as
+# /usr/bin/python3, which is what bare `python3` resolves to there — and
+# the resulting failure surfaces deep inside a pip resolver backtrack
+# with no mention of Python versions. Check up front instead.
+if ! command -v "$PYTHON" >/dev/null 2>&1; then
+  echo "ERROR: PYTHON=$PYTHON not found on PATH" >&2
+  exit 2
+fi
+
+PY_VERSION="$("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+if ! "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
+  echo "ERROR: $PYTHON is Python $PY_VERSION; sanctum requires >= 3.10." >&2
+  echo "       Set PYTHON to a newer interpreter and re-run, e.g.:" >&2
+  for candidate in python3.13 python3.12 python3.11 python3.10; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      echo "         PYTHON=$candidate SANCTUM_REPO=$SANCTUM_REPO $0" >&2
+      exit 2
+    fi
+  done
+  echo "         PYTHON=/path/to/python3.12 SANCTUM_REPO=$SANCTUM_REPO $0" >&2
+  echo "       No python3.10+ found on PATH; install one first." >&2
+  exit 2
+fi
+
+echo "[build-sidecar] python:       $PYTHON ($PY_VERSION)"
+
 if [ ! -d "$VENV" ]; then
   "$PYTHON" -m venv "$VENV"
 fi

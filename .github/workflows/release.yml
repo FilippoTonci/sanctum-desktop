@@ -10,17 +10,41 @@ on:
       - 'v*'
   workflow_dispatch:
 
+env:
+  # Which sanctum commit gets frozen into the sidecar. Pin this to a tag
+  # before cutting a real release — the desktop artifact and the backend
+  # inside it must be a known pair, not "whatever main was that morning".
+  SANCTUM_REF: main
+
 jobs:
   build-macos:
-    # Both Intel and Apple Silicon DMGs.
+    # Apple Silicon only — see electron-builder.yml `mac.target[].arch`.
+    # Supporting Intel means adding a second job on `macos-13` (an x64
+    # runner) that builds its own sidecar, because PyInstaller cannot
+    # cross-compile. Both places must change together.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check out the sanctum backend
+        uses: actions/checkout@v4
+        with:
+          repository: FilippoTonci/sanctum
+          ref: ${{ env.SANCTUM_REF }}
+          path: sanctum-src
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # Must precede `npm run make`: sidecar-build/ is gitignored, so a
+      # fresh checkout has no bundle and electron-builder would otherwise
+      # ship an installer with no backend in it. beforePack now hard-fails
+      # if this step is missing or produced the wrong arch.
+      - name: Build the Python sidecar
+        run: PYTHON=python SANCTUM_REPO=sanctum-src bash scripts/build-sidecar.sh
       - name: Build + sign + notarize (WS6)
         env:
           # Developer ID Application certificate (base64-encoded .p12).
@@ -46,11 +70,25 @@ jobs:
     runs-on: [self-hosted, Windows, signing]
     steps:
       - uses: actions/checkout@v4
+      - name: Check out the sanctum backend
+        uses: actions/checkout@v4
+        with:
+          repository: FilippoTonci/sanctum
+          ref: ${{ env.SANCTUM_REF }}
+          path: sanctum-src
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # build-sidecar.sh detects MINGW/MSYS and emits win-x64; Git Bash
+      # ships with the Windows runners, hence the explicit bash shell.
+      - name: Build the Python sidecar
+        shell: bash
+        run: PYTHON=python SANCTUM_REPO=sanctum-src bash scripts/build-sidecar.sh
       - name: Build + sign (WS6)
         env:
           # Azure Trusted Signing — US/Canada entities only.
@@ -72,11 +110,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check out the sanctum backend
+        uses: actions/checkout@v4
+        with:
+          repository: FilippoTonci/sanctum
+          ref: ${{ env.SANCTUM_REF }}
+          path: sanctum-src
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # The AppImage inherits this runner's glibc as its floor: built on
+      # ubuntu-latest it will not start on materially older distros.
+      - name: Build the Python sidecar
+        run: PYTHON=python SANCTUM_REPO=sanctum-src bash scripts/build-sidecar.sh
       - name: Build + GPG sign (WS6)
         env:
           # GPG key material for AppImage + deb signatures.

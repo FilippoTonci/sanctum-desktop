@@ -93,8 +93,9 @@ SHA-256 verification).
   union narrowing must be exhaustive.
 - Vitest unit suites must pass; renderer specs use happy-dom (mark
   with `@vitest-environment happy-dom`).
-- Playwright e2e is for the packaged build; not run in pre-commit
-  (slow), but kept green in CI.
+- Playwright e2e launches the built `out/` bundle with the sidecar
+  skipped; not run in pre-commit (slow), but kept green in CI. It does
+  not cover the packaged artifact — see "Running things".
 
 ## Running things
 
@@ -104,16 +105,28 @@ npm run build                 # electron-vite build → out/
 npm run make                  # build + electron-builder package → release/
 npm test                      # vitest run (unit lane)
 npm run test:integration      # integration lane (real spawned sidecar)
-npm run test:e2e              # Playwright against packaged Electron
+npm run test:e2e              # Playwright: launches out/main/index.js
 npm run lint && npm run typecheck
 
-SANCTUM_REPO=../sanctum bash scripts/build-sidecar.sh   # rebuild sidecar bundle
+# Rebuild the sidecar bundle. PYTHON must be >= 3.10 (the script checks
+# and tells you what to use); on macOS bare `python3` is 3.9 and fails.
+PYTHON=python3.12 SANCTUM_REPO=../sanctum bash scripts/build-sidecar.sh
 ```
 
+`test:e2e` launches the built `out/main/index.js` with
+`SANCTUM_SKIP_SIDECAR=1` — **not** the packaged `.app`/`.dmg`. Nothing in
+the automated suites exercises a packaged artifact; that is still a
+manual step.
+
 When the sidecar bundle changes (any sanctum-side dep change, version
-bump, or extras toggle), nuke `sidecar-build/{work,spec,dist,linux-x64}`
-before rerunning the build script — PyInstaller caches the spec file
-and silently skips new collectors otherwise.
+bump, or extras toggle), nuke the per-platform build dirs before
+rerunning the script — PyInstaller caches the spec file and silently
+skips new collectors otherwise. The suffix is `<os>-<arch>` for the host
+you are on, so on an Apple Silicon Mac:
+
+```bash
+rm -rf sidecar-build/{work,spec,dist}-mac-arm64 sidecar-build/mac-arm64
+```
 
 ## Conventions
 
@@ -132,13 +145,55 @@ and silently skips new collectors otherwise.
   round-trip is a single function (`settingsToEnv` in
   `src/main/settings.ts`).
 
-## WSL2 caveat
+## Platform notes
 
-The `.AppImage` artifact relies on FUSE which is unavailable on WSL2;
-launching it errors with `dlopen(): error loading libfuse.so.2`. For
-local end-to-end testing inside WSL2, run
-`release/linux-unpacked/sanctum-desktop` directly. The AppImage gets
-validated on `ubuntu-latest` runners in CI, which is what real users hit.
+macOS (Apple Silicon) is the primary development machine. The scripts
+stay cross-platform — `build-sidecar.sh` branches on `uname` and CI
+builds all three OSes — but these are the local gotchas.
+
+### macOS
+
+**Python.** sanctum needs >= 3.10; macOS ships 3.9 as `/usr/bin/python3`,
+which is what bare `python3` resolves to. `build-sidecar.sh` checks this
+up front and prints the interpreter to use. Pass `PYTHON=python3.12`.
+
+**Building an installable app locally:**
+
+```bash
+PYTHON=python3.12 SANCTUM_REPO=../sanctum bash scripts/build-sidecar.sh
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run make
+open "release/Sanctum Desktop-<version>-arm64.dmg"
+```
+
+`CSC_IDENTITY_AUTO_DISCOVERY=false` stops electron-builder hunting for a
+Developer ID that does not exist yet (issues #2/#3). The result is
+unsigned — fine locally, never distributable. If Gatekeeper blocks it:
+`xattr -dr com.apple.quarantine "/Applications/Sanctum Desktop.app"`.
+
+**Take the `-arm64.dmg`, not the other one.** `electron-builder.yml`
+declares `mac.target[].arch: [x64, arm64]`, and that target-level `arch`
+beats the CLI — `npm run make -- --mac --arm64` does _not_ restrict it.
+PyInstaller only builds for the host arch, so the x64 pass finds no
+`sidecar-build/mac-x64`, logs `file source doesn't exist`, **continues,
+and exits 0**. You get a plausible ~111 MB Intel DMG with no sidecar in
+it. Verify before trusting any DMG:
+
+```bash
+ls "release/mac-arm64/Sanctum Desktop.app/Contents/Resources/sidecar"
+```
+
+**Before the first real release:** no CI workflow runs
+`build-sidecar.sh`, and `sidecar-build/` is gitignored — so
+`release.yml` as written would publish sidecar-less DMGs for both
+arches, silently. WS6 needs both a sidecar build step and something that
+makes a missing `extraResources` source fail the build.
+
+### Other platforms
+
+The `.AppImage` relies on FUSE, which is unavailable on WSL2 —
+launching it there errors with `dlopen(): error loading libfuse.so.2`.
+Run `release/linux-unpacked/sanctum-desktop` directly instead. CI's
+`ubuntu-latest` runner is the AppImage's real validation environment.
 
 ## Where to look before duplicating work
 
