@@ -1,6 +1,6 @@
 {
   "name": "sanctum-desktop",
-  "version": "0.0.1-prealpha",
+  "version": "0.1.0-rc.1",
   "description": "Local-first document anonymization desktop app — Electron shell for the Sanctum engine.",
   "author": {
     "name": "Filippo Tonci",
