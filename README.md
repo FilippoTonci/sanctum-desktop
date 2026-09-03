@@ -243,6 +243,7 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [ ] Accessibility audit (WCAG AA, screen-reader labels, focus management)
 - [ ] Diagnostic bundle export (no automated upload)
 - [ ] Verify `/health`'s `sanctum_commit` + `openapi_digest` against the pinned backend at startup, and fail fast on a mismatch
+- [ ] Download site distributing the unsigned builds to developers and testers (deliberately ahead of signing — see WS6 substep 9 and open decision 3 in the plan)
 - [ ] macOS signing + notarization (Apple Developer ID)
 - [ ] Windows signing (Azure Trusted Signing or Sectigo/DigiCert EV + YubiKey)
 - [ ] Linux AppImage + deb with GPG signatures

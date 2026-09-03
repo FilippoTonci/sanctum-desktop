@@ -54,7 +54,11 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run make
+        # --publish never: on a tag push electron-builder would otherwise
+        # try to upload to GitHub Releases itself and abort on a missing
+        # GH_TOKEN, after the whole build. The `publish` job below is the
+        # single publisher.
+        run: npm run make -- --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: sanctum-desktop-macos
@@ -99,7 +103,11 @@ jobs:
           # the self-hosted runner).
           WIN_CSC_LINK: ${{ secrets.WIN_CERTIFICATE }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-        run: npm run make
+        # --publish never: on a tag push electron-builder would otherwise
+        # try to upload to GitHub Releases itself and abort on a missing
+        # GH_TOKEN, after the whole build. The `publish` job below is the
+        # single publisher.
+        run: npm run make -- --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: sanctum-desktop-windows
@@ -133,7 +141,11 @@ jobs:
           # GPG key material for AppImage + deb signatures.
           GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
-        run: npm run make
+        # --publish never: on a tag push electron-builder would otherwise
+        # try to upload to GitHub Releases itself and abort on a missing
+        # GH_TOKEN, after the whole build. The `publish` job below is the
+        # single publisher.
+        run: npm run make -- --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: sanctum-desktop-linux
