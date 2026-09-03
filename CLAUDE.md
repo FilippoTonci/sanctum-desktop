@@ -231,6 +231,7 @@ Run `release/linux-unpacked/sanctum-desktop` directly instead. CI's
 - `ARCHITECTURE.md` — module-by-module map, three-process model, build
   pipeline, "where to start when adding X" cheat-sheet.
 - `CONTRIBUTING.md` — workflow, commits, tests.
+- `RELEASE.md` — how a release is cut, and what the download site links to.
 - `electron-builder.yml` — packaging config (extraResources path → sidecar).
 - `scripts/build-sidecar.sh` — PyInstaller flag rationale.
 
