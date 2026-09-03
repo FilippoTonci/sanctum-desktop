@@ -14,8 +14,10 @@ The contract between the two repos is **one-way**: this repo depends on the
 `sanctum` HTTP API; `sanctum` does not import, link, or build against
 anything here. Concretely:
 
-- The TypeScript API client is generated from `schema/openapi.json` in the
-  `sanctum` repo, pinned to a specific commit per release.
+- The TypeScript wire types in `src/renderer/src/api/types.ts` are
+  hand-written and mirror `schema/openapi.json` in the `sanctum` repo,
+  pinned to a specific commit per release. (Generating them is a
+  possibility, not a fact — don't describe it as one.)
 - The Python sidecar binary is built from a pinned `sanctum` commit and
   shipped inside the installer. The pin is atomic — an installed desktop
   always talks to the sidecar built from the same commit it was tested
@@ -45,11 +47,14 @@ Work is organised around the Phase 3 plan in
 - `npm run lint` — ESLint with `@typescript-eslint`, `react-hooks`,
   `jsx-a11y`. Zero warnings.
 - `npm run format:check` — Prettier.
-- `npm run typecheck` — `tsc --build --noEmit`. Strict mode, no implicit
+- `npm run typecheck` — `tsc --build --force`. Strict mode, no implicit
   any, no unchecked indexed access.
-- `npm test` — Vitest unit suite.
-- `npm run test:e2e` — Playwright E2E (smoke at minimum; review-flow tests
-  as WS4 lands).
+- `npm test` — Vitest unit lane.
+- `npm run test:e2e` — Playwright against the built `out/` bundle with
+  `SANCTUM_SKIP_SIDECAR=1`. Smoke only today.
+- `npm run test:integration` spawns a real sidecar and needs the sibling
+  `sanctum` checkout, so CI does **not** run it. Run it locally when you
+  touch `src/main/`.
 - `npm run build` cross-platform on `macos-latest`, `windows-latest`,
   `ubuntu-latest`.
 
@@ -76,10 +81,21 @@ will be sent back regardless of how clean the diff is.
    `sandbox: true` in every `BrowserWindow`. ASAR integrity on. No `eval`.
 5. **No telemetry.** Crash reports may land in Phase 4 as opt-in
    local-only (no upload). Not before.
-6. **i18n from day one.** No English string literals in component source —
-   everything goes through `react-i18next`. French catalog stubbed.
-7. **Signed installers only.** No unsigned `.dmg` / `.msi` / `.AppImage`
-   ever ships, including pre-release channels.
+6. **Signed installers before any distribution.** No unsigned `.dmg` /
+   `.msi` / `.AppImage` ever ships to a user, including pre-release
+   channels. Locally built unsigned artifacts are expected and fine —
+   they just never leave your machine.
+7. **The installer always contains its sidecar.** `scripts/before-pack.cjs`
+   enforces this; don't route around it. A packaging change that makes the
+   sidecar optional is the one bug that ships silently.
+
+Not yet guardrails, but planned — don't write docs that describe them as
+though they were:
+
+- **i18n.** `react-i18next` is a WS6 item and is not installed. Component
+  source still carries English string literals.
+- **Backend contract verification.** `/health` reports `sanctum_commit`
+  and `openapi_digest`; nothing checks them yet.
 
 ## Local development
 
@@ -87,13 +103,17 @@ will be sent back regardless of how clean the diff is.
 git clone https://github.com/FilippoTonci/sanctum-desktop.git
 cd sanctum-desktop
 npm install
-cp .env.example .env.local   # set ELECTRON_DEV=1 and SANCTUM_DEV_REPO=../sanctum
+npm run prepare   # husky hooks
 npm run dev
 ```
 
 Dev mode spawns the sidecar from a sibling `../sanctum` checkout (via
-`pip install -e .` in a venv) instead of the packaged binary, so backend
-iteration doesn't require rebuilding PyInstaller output.
+`pip install -e '.[security,api,documents]'` in its `.venv`) instead of the
+packaged binary, so backend iteration doesn't require rebuilding
+PyInstaller output. `npm run dev` sets `ELECTRON_DEV=1`,
+`SANCTUM_DEV_REPO=../sanctum`, and the venv `PATH` inline — nothing loads
+a `.env` file, so export those yourself if you launch Electron another
+way.
 
 ## Filing issues
 
@@ -106,14 +126,16 @@ it.
 
 ## Pull request checklist
 
-- [ ] Branch named `phase-N/ws<M>-<short-slug>` or `fix/<short-slug>`.
+- [ ] Branch named `phase-N/ws<M>-<short-slug>`, `fix/<short-slug>`, or
+      `chore/<short-slug>`.
 - [ ] Commits scoped to one substep each, with the phase/workstream
       tag in the subject.
 - [ ] `npm run lint`, `npm run typecheck`, `npm test` all green locally.
-- [ ] No new English strings in component source (use the i18n catalog).
 - [ ] No new `BrowserWindow` without sandbox + contextIsolation.
 - [ ] No new `fetch` to anything other than `window.sanctum.baseUrl`.
-- [ ] Updated `RELEASE.md` if the change affects packaging or signing.
+- [ ] Docs updated **in the same commit** as the behaviour they describe —
+      the README roadmap box, and any module list in `ARCHITECTURE.md`
+      whose directory you added to or deleted from.
 
 ## License
 

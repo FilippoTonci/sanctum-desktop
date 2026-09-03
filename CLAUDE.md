@@ -34,6 +34,40 @@ Mirror that structure onto git the same way the backend does:
 - If a substep surfaces unrelated cleanup, split it into its own commit
   (or its own PR if it crosses WS boundaries) — don't smuggle it in.
 
+## Keep the docs true
+
+The docs drift because the same fact gets written in four places and only
+the copy someone happens to be reading gets updated. A cleanup pass in
+Aug 2026 found twelve of these — a keyboard map that named keys the code
+no longer binds, a component list naming three deleted files, a guardrail
+demanding `react-i18next` that was never installed. Rules, in order of
+how much drift they prevent:
+
+1. **One fact, one home.** Before writing a fact into a doc, check
+   whether another doc already owns it, and link instead of restating.
+   Current owners:
+
+   | Fact                                        | Owner                    |
+   | ------------------------------------------- | ------------------------ |
+   | What the app is, roadmap, keyboard bindings | `README.md`              |
+   | Module map, invariants, build pipeline      | `ARCHITECTURE.md`        |
+   | Human workflow, PR rules, guardrails        | `CONTRIBUTING.md`        |
+   | Agent operating rules, platform gotchas     | `CLAUDE.md`              |
+   | The sidecar HTTP contract                   | `sanctum` (backend repo) |
+
+2. **Docs land in the commit that changes the behaviour** — not a
+   follow-up. If you rename or delete a file, `grep` its basename across
+   `*.md` in the same breath.
+3. **Never write a plan in the present tense.** If it isn't in the tree
+   today, it belongs in the README roadmap as `[ ]` or in CONTRIBUTING's
+   "not yet guardrails" list — never as an instruction that reads as
+   enforced. An agent will obey it and install things nobody asked for.
+4. **Verify before you write.** Every claim about a path, flag, script,
+   or command should be something you just read in the tree. If you can't
+   check it, don't state it.
+5. **Suspect the docs when they disagree with the code.** The code is
+   what runs. Fix the doc in place rather than working around it.
+
 ## Keep the README roadmap in sync
 
 When a substep / WS / Phase item lands, **edit the matching `[ ]` →
@@ -170,23 +204,19 @@ Developer ID that does not exist yet (issues #2/#3). The result is
 unsigned — fine locally, never distributable. If Gatekeeper blocks it:
 `xattr -dr com.apple.quarantine "/Applications/Sanctum Desktop.app"`.
 
-**Take the `-arm64.dmg`, not the other one.** `electron-builder.yml`
-declares `mac.target[].arch: [x64, arm64]`, and that target-level `arch`
-beats the CLI — `npm run make -- --mac --arm64` does _not_ restrict it.
-PyInstaller only builds for the host arch, so the x64 pass finds no
-`sidecar-build/mac-x64`, logs `file source doesn't exist`, **continues,
-and exits 0**. You get a plausible ~111 MB Intel DMG with no sidecar in
-it. Verify before trusting any DMG:
+**One DMG, Apple Silicon only.** `electron-builder.yml` declares
+`mac.target[].arch: [arm64]`. PyInstaller can't cross-compile, so an
+Intel DMG would need an Intel runner building its own sidecar; declaring
+the arch without one is what once produced a plausible ~111 MB Intel DMG
+with no backend inside, at exit 0. Two guards now stand there —
+`scripts/before-pack.cjs` throws when the target's sidecar bundle is
+missing, and `.github/workflows/release.yml` builds a sidecar on every
+runner before packaging. Adding an arch means changing both files
+together. Spot-check anyway:
 
 ```bash
 ls "release/mac-arm64/Sanctum Desktop.app/Contents/Resources/sidecar"
 ```
-
-**Before the first real release:** no CI workflow runs
-`build-sidecar.sh`, and `sidecar-build/` is gitignored — so
-`release.yml` as written would publish sidecar-less DMGs for both
-arches, silently. WS6 needs both a sidecar build step and something that
-makes a missing `extraResources` source fail the build.
 
 ### Other platforms
 
