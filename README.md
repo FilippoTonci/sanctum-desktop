@@ -158,7 +158,7 @@ npm run make       # build + electron-builder → release/
 
 On macOS prefix `npm run make` with `CSC_IDENTITY_AUTO_DISCOVERY=false` so electron-builder stops hunting for a Developer ID that doesn't exist yet. Packaging targets Apple Silicon only — PyInstaller can't cross-compile, so an Intel DMG needs an Intel runner building its own sidecar. [CLAUDE.md](CLAUDE.md) "Platform notes" has the details.
 
-`.github/workflows/release.yml` builds the sidecar on each runner before packaging, pinned to a `sanctum` ref. Signing and notarization are still WS6 placeholders in that workflow — no signed installer has been produced yet.
+`.github/workflows/release.yml` builds the sidecar on each runner before packaging, against one pinned `sanctum` commit. Releases are cut by hand from the Actions tab — [`RELEASE.md`](RELEASE.md) is the runbook. Signing and notarization are still WS6 placeholders in that workflow — no signed installer has been produced yet.
 
 ---
 
@@ -248,7 +248,7 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [ ] Windows signing (Azure Trusted Signing or Sectigo/DigiCert EV + YubiKey)
 - [ ] Linux AppImage + deb with GPG signatures
 - [ ] Split auto-update channels (shell vs. models)
-- [ ] Tag-driven release workflow
+- [ ] One-click release workflow (`workflow_dispatch` → bump, tag, build, publish — see [`RELEASE.md`](RELEASE.md))
 
 ### Phase 3.5 — Deferred formats _(post-MVP)_
 
