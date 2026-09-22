@@ -144,17 +144,35 @@ jobs:
         run: PYTHON=python SANCTUM_REPO=sanctum-src bash scripts/build-sidecar.sh
       - name: Build + sign + notarize (WS6)
         env:
-          # Developer ID Application certificate (base64-encoded .p12).
-          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-          # notarytool credentials.
+          # NOT named CSC_* on purpose. An absent secret renders as the
+          # empty string, and electron-builder treats a *defined* but empty
+          # CSC_LINK as a path to a .p12 — it resolves "" against the cwd
+          # and dies with "<workspace> not a file". Carry the secrets under
+          # neutral names and only promote them to CSC_* when non-empty.
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          # notarytool credentials. Inert until electron-builder.yml grows a
+          # `mac.notarize` key — nothing reads these today (WS6).
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         # --publish never: electron-builder would otherwise try to upload to
         # GitHub Releases itself and abort on a missing GH_TOKEN, after the
         # whole build. The `publish` job below is the single publisher.
-        run: npm run make -- --publish never
+        run: |
+          set -euo pipefail
+          if [ -n "$MACOS_CERTIFICATE" ]; then
+            echo "Signing with the Developer ID certificate."
+            export CSC_LINK="$MACOS_CERTIFICATE"
+            export CSC_KEY_PASSWORD="$MACOS_CERTIFICATE_PWD"
+          else
+            # Same switch CLAUDE.md documents for local builds: stop
+            # electron-builder hunting for a Developer ID that does not
+            # exist yet (issues #2/#3). The DMG ships unsigned.
+            echo "::warning::No signing certificate — building UNSIGNED."
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          npm run make -- --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: sanctum-desktop-macos
@@ -200,10 +218,20 @@ jobs:
           AZURE_TRUSTED_SIGNING_TENANT_ID: ${{ secrets.AZURE_TRUSTED_SIGNING_TENANT_ID }}
           AZURE_TRUSTED_SIGNING_SECRET: ${{ secrets.AZURE_TRUSTED_SIGNING_SECRET }}
           # Sectigo/DigiCert EV + YubiKey fallback (hardware-bound, needs
-          # the self-hosted runner).
-          WIN_CSC_LINK: ${{ secrets.WIN_CERTIFICATE }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-        run: npm run make -- --publish never
+          # the self-hosted runner). Neutral names for the same reason as
+          # the macOS job: an empty WIN_CSC_LINK would be read as a path.
+          WIN_CERTIFICATE: ${{ secrets.WIN_CERTIFICATE }}
+          WIN_CERTIFICATE_PWD: ${{ secrets.WIN_CERTIFICATE_PWD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$WIN_CERTIFICATE" ]; then
+            export WIN_CSC_LINK="$WIN_CERTIFICATE"
+            export WIN_CSC_KEY_PASSWORD="$WIN_CERTIFICATE_PWD"
+          else
+            echo "::warning::No signing certificate — building UNSIGNED."
+          fi
+          npm run make -- --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: sanctum-desktop-windows
