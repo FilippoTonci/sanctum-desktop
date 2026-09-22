@@ -33,6 +33,7 @@ jobs:
     outputs:
       tag: ${{ steps.bump.outputs.tag }}
       version: ${{ steps.bump.outputs.version }}
+      sha: ${{ steps.bump.outputs.sha }}
       sanctum_sha: ${{ steps.pin.outputs.sha }}
     steps:
       - name: Refuse to release from anything but main
@@ -78,25 +79,33 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Bump, commit, tag
+      - name: Bump and commit
         id: bump
         env:
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
+          # The bump has to land before the builds: electron-builder reads
+          # the version out of package.json to name its artifacts. So this
+          # commit is pushed now and the build jobs check it out by SHA.
+          #
+          # The TAG is not created here. `publish` creates it, at this
+          # commit, only once both builds have succeeded — otherwise a
+          # failed run strands a tag pointing at something that never
+          # produced an artifact (it did, twice: v0.1.0-rc.1 and rc.2).
+          #
           # --no-git-tag-version: npm updates package.json AND
           # package-lock.json (which carries the version twice) but leaves
-          # git alone, so the commit and tag below are ours to shape.
+          # git alone, so the commit below is ours to shape.
           npm version "$VERSION" --no-git-tag-version
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add package.json package-lock.json
           git commit -m "Release v$VERSION"
-          git tag "v$VERSION"
           git push origin HEAD:main
-          git push origin "v$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   build-macos:
     needs: prepare
@@ -108,10 +117,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # The tag, not the branch: what ships is exactly what was tagged,
-          # and package.json here already carries the bumped version that
-          # electron-builder stamps onto the artifacts.
-          ref: ${{ needs.prepare.outputs.tag }}
+          # The bump commit by SHA, not a branch and not the tag (which is
+          # only created once the builds pass). Pinning to the SHA means
+          # what ships is exactly what `publish` will tag, even if main
+          # moves underneath the run.
+          ref: ${{ needs.prepare.outputs.sha }}
       - name: Check out the sanctum backend
         uses: actions/checkout@v4
         with:
@@ -163,7 +173,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare.outputs.tag }}
+          ref: ${{ needs.prepare.outputs.sha }}
       - name: Check out the sanctum backend
         uses: actions/checkout@v4
         with:
@@ -206,7 +216,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare.outputs.tag }}
+          ref: ${{ needs.prepare.outputs.sha }}
       - name: Check out the sanctum backend
         uses: actions/checkout@v4
         with:
@@ -308,6 +318,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
+          # The tag does not exist yet — this creates it, at the bump
+          # commit, now that both builds have actually produced artifacts.
+          target_commitish: ${{ needs.prepare.outputs.sha }}
           name: ${{ needs.prepare.outputs.tag }}
           # Not a draft and not flagged pre-release: both hide the release
           # from /releases/latest/download/, which is the permalink the
