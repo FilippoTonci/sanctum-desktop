@@ -16,9 +16,12 @@
 #                  module analyzer doesn't freeze the source for
 #                  `pip install -e` checkouts; the resulting binary
 #                  hits `ModuleNotFoundError: sanctum` at startup.
-#                  (Release workflow pins this to a specific commit via
-#                  a worktree checkout; local builds point at the dev
-#                  sibling repo.)
+#                  (The release workflow checks the backend out into
+#                  `sanctum-src/` at a pinned commit; local builds point
+#                  at the dev sibling repo.)
+#                  Any relative path works — it is resolved to an
+#                  absolute one below, because pip reads a bare name
+#                  with no separator as a PyPI project, not a directory.
 #   MODEL_TIER     `standard` bundles `en_core_web_sm` (~15 MB).
 #                  `none` bundles no NLP model — the desktop app must
 #                  download one before analysis. Default: standard.
@@ -54,10 +57,24 @@ echo "[build-sidecar] os=$OS arch=$ARCH tier=$MODEL_TIER"
 echo "[build-sidecar] sanctum repo: $SANCTUM_REPO"
 echo "[build-sidecar] output:       $OUT_DIR"
 
-if [ ! -d "$SANCTUM_REPO" ]; then
-  echo "ERROR: SANCTUM_REPO=$SANCTUM_REPO does not exist" >&2
+if [ ! -f "$SANCTUM_REPO/pyproject.toml" ]; then
+  if [ -d "$SANCTUM_REPO" ]; then
+    echo "ERROR: SANCTUM_REPO=$SANCTUM_REPO is not a sanctum checkout" >&2
+    echo "       (no pyproject.toml in it)" >&2
+  else
+    echo "ERROR: SANCTUM_REPO=$SANCTUM_REPO does not exist" >&2
+  fi
   exit 1
 fi
+
+# pip resolves a bare token with no path separator — `sanctum-src`, which
+# is what the release workflow passes — as a PyPI project name rather than
+# a directory, and fails with "No matching distribution found". The check
+# above cannot catch that: the directory really does exist, it is only the
+# *shape* of the string that misleads pip. An absolute path has separators,
+# so it can only ever be read as a path. See issue #38.
+SANCTUM_REPO="$(cd "$SANCTUM_REPO" && pwd)"
+echo "[build-sidecar] sanctum repo resolved to: $SANCTUM_REPO"
 
 # The venv below is created from $PYTHON, so its interpreter version is
 # what every later pip install and the PyInstaller freeze inherit.
