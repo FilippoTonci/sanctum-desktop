@@ -311,34 +311,28 @@ jobs:
           stage 'Sanctum-Desktop-x86_64.AppImage' dist-artifacts/sanctum-desktop-linux/*.AppImage
           stage 'sanctum-desktop-amd64.deb' dist-artifacts/sanctum-desktop-linux/*.deb
 
-      - name: Write the release notes preamble
+      - name: Write the release notes
         env:
           SANCTUM_SHA: ${{ needs.prepare.outputs.sanctum_sha }}
         run: |
           set -euo pipefail
           {
             cat <<'MD'
-          > ### Unsigned build — for developers and testers
-          >
-          > These installers are **not code-signed or notarized**. They are
-          > published so people can run and test Sanctum Desktop before the
-          > signing infrastructure exists. Your OS will object, by design.
+          Drag in a document, review what Sanctum found, export a clean copy.
+          Everything runs on your machine — no uploads, no network calls.
 
-          **macOS** (Apple Silicon only — there is no Intel build):
+          Sanctum Desktop is a local-first PII anonymization tool for legal and
+          consulting work. It renders your `.docx` as-is, highlights detected
+          personal data inline, and lets you accept or reject each one from the
+          keyboard before writing the anonymized file.
 
-          ```
-          xattr -dr com.apple.quarantine "/Applications/Sanctum Desktop.app"
-          ```
-
-          **Linux**: `chmod +x` the `.AppImage` before running it. On WSL2 it
-          will fail on missing FUSE — extract it, or use the `.deb`.
-
-          **Windows**: no build yet. Signing is still being procured.
-
-          ---
+          > **Unsigned build.** Not code-signed or notarized yet, so your OS
+          > will object. On macOS (Apple Silicon only):
+          > `xattr -dr com.apple.quarantine "/Applications/Sanctum Desktop.app"`.
+          > On Linux, `chmod +x` the AppImage. No Windows build yet.
           MD
             echo ""
-            echo "Backend pinned to sanctum [\`$SANCTUM_SHA\`](https://github.com/FilippoTonci/sanctum/commit/$SANCTUM_SHA)."
+            echo "Backend: sanctum [\`${SANCTUM_SHA:0:12}\`](https://github.com/FilippoTonci/sanctum/commit/$SANCTUM_SHA)"
           } > notes.md
           cat notes.md
 
@@ -357,7 +351,10 @@ jobs:
           draft: false
           prerelease: false
           body_path: notes.md
-          generate_release_notes: true
+          # No generate_release_notes: on the first release it has no previous
+          # tag to diff against and pastes in every PR ever merged. The notes
+          # above are for someone deciding whether to run the app, not a
+          # changelog — the commit history is one click away.
           fail_on_unmatched_files: true
           files: |
             dist-artifacts/sanctum-desktop-macos/*.dmg
