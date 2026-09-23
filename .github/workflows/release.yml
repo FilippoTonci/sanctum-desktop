@@ -33,6 +33,7 @@ jobs:
     outputs:
       tag: ${{ steps.bump.outputs.tag }}
       version: ${{ steps.bump.outputs.version }}
+      sha: ${{ steps.bump.outputs.sha }}
       sanctum_sha: ${{ steps.pin.outputs.sha }}
     steps:
       - name: Refuse to release from anything but main
@@ -78,25 +79,33 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Bump, commit, tag
+      - name: Bump and commit
         id: bump
         env:
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
+          # The bump has to land before the builds: electron-builder reads
+          # the version out of package.json to name its artifacts. So this
+          # commit is pushed now and the build jobs check it out by SHA.
+          #
+          # The TAG is not created here. `publish` creates it, at this
+          # commit, only once both builds have succeeded — otherwise a
+          # failed run strands a tag pointing at something that never
+          # produced an artifact (it did, twice: v0.1.0-rc.1 and rc.2).
+          #
           # --no-git-tag-version: npm updates package.json AND
           # package-lock.json (which carries the version twice) but leaves
-          # git alone, so the commit and tag below are ours to shape.
+          # git alone, so the commit below is ours to shape.
           npm version "$VERSION" --no-git-tag-version
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add package.json package-lock.json
           git commit -m "Release v$VERSION"
-          git tag "v$VERSION"
           git push origin HEAD:main
-          git push origin "v$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   build-macos:
     needs: prepare
@@ -108,10 +117,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # The tag, not the branch: what ships is exactly what was tagged,
-          # and package.json here already carries the bumped version that
-          # electron-builder stamps onto the artifacts.
-          ref: ${{ needs.prepare.outputs.tag }}
+          # The bump commit by SHA, not a branch and not the tag (which is
+          # only created once the builds pass). Pinning to the SHA means
+          # what ships is exactly what `publish` will tag, even if main
+          # moves underneath the run.
+          ref: ${{ needs.prepare.outputs.sha }}
       - name: Check out the sanctum backend
         uses: actions/checkout@v4
         with:
@@ -134,17 +144,35 @@ jobs:
         run: PYTHON=python SANCTUM_REPO=sanctum-src bash scripts/build-sidecar.sh
       - name: Build + sign + notarize (WS6)
         env:
-          # Developer ID Application certificate (base64-encoded .p12).
-          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-          # notarytool credentials.
+          # NOT named CSC_* on purpose. An absent secret renders as the
+          # empty string, and electron-builder treats a *defined* but empty
+          # CSC_LINK as a path to a .p12 — it resolves "" against the cwd
+          # and dies with "<workspace> not a file". Carry the secrets under
+          # neutral names and only promote them to CSC_* when non-empty.
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          # notarytool credentials. Inert until electron-builder.yml grows a
+          # `mac.notarize` key — nothing reads these today (WS6).
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         # --publish never: electron-builder would otherwise try to upload to
         # GitHub Releases itself and abort on a missing GH_TOKEN, after the
         # whole build. The `publish` job below is the single publisher.
-        run: npm run make -- --publish never
+        run: |
+          set -euo pipefail
+          if [ -n "$MACOS_CERTIFICATE" ]; then
+            echo "Signing with the Developer ID certificate."
+            export CSC_LINK="$MACOS_CERTIFICATE"
+            export CSC_KEY_PASSWORD="$MACOS_CERTIFICATE_PWD"
+          else
+            # Same switch CLAUDE.md documents for local builds: stop
+            # electron-builder hunting for a Developer ID that does not
+            # exist yet (issues #2/#3). The DMG ships unsigned.
+            echo "::warning::No signing certificate — building UNSIGNED."
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          npm run make -- --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: sanctum-desktop-macos
@@ -163,7 +191,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare.outputs.tag }}
+          ref: ${{ needs.prepare.outputs.sha }}
       - name: Check out the sanctum backend
         uses: actions/checkout@v4
         with:
@@ -190,10 +218,20 @@ jobs:
           AZURE_TRUSTED_SIGNING_TENANT_ID: ${{ secrets.AZURE_TRUSTED_SIGNING_TENANT_ID }}
           AZURE_TRUSTED_SIGNING_SECRET: ${{ secrets.AZURE_TRUSTED_SIGNING_SECRET }}
           # Sectigo/DigiCert EV + YubiKey fallback (hardware-bound, needs
-          # the self-hosted runner).
-          WIN_CSC_LINK: ${{ secrets.WIN_CERTIFICATE }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-        run: npm run make -- --publish never
+          # the self-hosted runner). Neutral names for the same reason as
+          # the macOS job: an empty WIN_CSC_LINK would be read as a path.
+          WIN_CERTIFICATE: ${{ secrets.WIN_CERTIFICATE }}
+          WIN_CERTIFICATE_PWD: ${{ secrets.WIN_CERTIFICATE_PWD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$WIN_CERTIFICATE" ]; then
+            export WIN_CSC_LINK="$WIN_CERTIFICATE"
+            export WIN_CSC_KEY_PASSWORD="$WIN_CERTIFICATE_PWD"
+          else
+            echo "::warning::No signing certificate — building UNSIGNED."
+          fi
+          npm run make -- --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: sanctum-desktop-windows
@@ -206,7 +244,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare.outputs.tag }}
+          ref: ${{ needs.prepare.outputs.sha }}
       - name: Check out the sanctum backend
         uses: actions/checkout@v4
         with:
@@ -308,6 +346,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
+          # The tag does not exist yet — this creates it, at the bump
+          # commit, now that both builds have actually produced artifacts.
+          target_commitish: ${{ needs.prepare.outputs.sha }}
           name: ${{ needs.prepare.outputs.tag }}
           # Not a draft and not flagged pre-release: both hide the release
           # from /releases/latest/download/, which is the permalink the

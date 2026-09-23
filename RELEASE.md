@@ -11,15 +11,24 @@ One deliberate release per click. Nothing is released by merging to
 
 That is the whole ritual. The workflow does the rest:
 
-| Job                         | What it does                                                                                                                                          |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `prepare`                   | Validates the version, bumps `package.json` + `package-lock.json`, commits to `main`, tags `v<version>`, and pins the `sanctum` backend to one commit |
-| `build-macos`/`build-linux` | Check out the **tag**, build the PyInstaller sidecar, then the installer                                                                              |
-| `publish`                   | Attaches the artifacts and publishes the GitHub release                                                                                               |
+| Job                         | What it does                                                                                                                       |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `prepare`                   | Validates the version, bumps `package.json` + `package-lock.json`, commits to `main`, and pins the `sanctum` backend to one commit |
+| `build-macos`/`build-linux` | Check out that **commit**, build the PyInstaller sidecar, then the installer                                                       |
+| `publish`                   | Creates the tag `v<version>` at that commit, attaches the artifacts, publishes the release                                         |
 
 Bad input fails in seconds, before a runner starts: a version that
 isn't semver, a tag that already exists, or a dispatch from a branch
 other than `main`.
+
+The tag is created by `publish`, not `prepare`, so a run that fails to
+build never leaves a tag pointing at a commit that produced no artifact.
+
+The **version bump commit is not rolled back** by a failed run. The
+builds need the bumped version in `package.json` before they start, so
+it has to be pushed up front. A failed release therefore leaves `main`
+on a version that was never released, and the next attempt needs a
+higher one — `prepare` refuses a no-op bump.
 
 ## What the download site links to
 
