@@ -327,8 +327,17 @@ jobs:
           **macOS** (Apple Silicon only — there is no Intel build):
 
           ```
-          xattr -dr com.apple.quarantine "/Applications/Sanctum Desktop.app"
+          xattr -d com.apple.quarantine "/Applications/Sanctum Desktop.app"
           ```
+
+          Note there is no `-r`. On macOS 15 and later the recursive form fails
+          with "Operation not permitted" on every file inside the bundle,
+          because App Management protects the contents of an installed app.
+          Gatekeeper reads only the flag on the bundle itself, so `-d` is both
+          sufficient and the only form that works.
+
+          Or skip the terminal entirely: double-click, let macOS refuse it, then
+          choose **Open Anyway** in System Settings > Privacy & Security.
 
           **Linux**: `chmod +x` the `.AppImage` before running it. On WSL2 it
           will fail on missing FUSE — extract it, or use the `.deb`.
