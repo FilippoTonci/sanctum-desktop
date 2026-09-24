@@ -202,7 +202,10 @@ open "release/Sanctum Desktop-<version>-arm64.dmg"
 `CSC_IDENTITY_AUTO_DISCOVERY=false` stops electron-builder hunting for a
 Developer ID that does not exist yet (issues #2/#3). The result is
 unsigned — fine locally, never distributable. If Gatekeeper blocks it:
-`xattr -dr com.apple.quarantine "/Applications/Sanctum Desktop.app"`.
+`xattr -d com.apple.quarantine "/Applications/Sanctum Desktop.app"` — with no
+`-r`. The recursive form fails on macOS 15+ with "Operation not permitted" on
+every file in the bundle, because App Management protects an installed app's
+contents; Gatekeeper reads only the bundle's own flag.
 
 **One DMG, Apple Silicon only.** `electron-builder.yml` declares
 `mac.target[].arch: [arm64]`. PyInstaller can't cross-compile, so an

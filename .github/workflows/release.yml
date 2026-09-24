@@ -328,7 +328,10 @@ jobs:
 
           > **Unsigned build.** Not code-signed or notarized yet, so your OS
           > will object. On macOS (Apple Silicon only):
-          > `xattr -dr com.apple.quarantine "/Applications/Sanctum Desktop.app"`.
+          > `xattr -d com.apple.quarantine "/Applications/Sanctum Desktop.app"`
+          > — note there is no `-r`, which fails on macOS 15+ because App
+          > Management protects an installed app's contents. Or skip the
+          > terminal: **Open Anyway** in System Settings > Privacy & Security.
           > On Linux, `chmod +x` the AppImage. No Windows build yet.
           MD
             echo ""
