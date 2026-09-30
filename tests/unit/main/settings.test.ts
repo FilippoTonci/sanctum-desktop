@@ -2,7 +2,12 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { DEFAULT_SETTINGS, SettingsStore, settingsToEnv } from '../../../src/main/settings'
+import {
+  DEFAULT_SETTINGS,
+  needsRespawn,
+  SettingsStore,
+  settingsToEnv,
+} from '../../../src/main/settings'
 
 describe('SettingsStore', () => {
   let dir: string
@@ -28,9 +33,9 @@ describe('SettingsStore', () => {
 
     const fresh = new SettingsStore(path)
     expect(fresh.read()).toEqual({
+      ...DEFAULT_SETTINGS,
       nerBackend: 'gliner',
       scoreThreshold: 0.6,
-      defaultOperator: 'replace',
     })
   })
 
@@ -53,9 +58,9 @@ describe('SettingsStore', () => {
     await store.update({ nerBackend: 'gliner' })
     await store.update({ scoreThreshold: 0.8 })
     expect(store.read()).toEqual({
+      ...DEFAULT_SETTINGS,
       nerBackend: 'gliner',
       scoreThreshold: 0.8,
-      defaultOperator: 'replace',
     })
   })
 
@@ -72,6 +77,7 @@ describe('settingsToEnv', () => {
   it('emits the SANCTUM_SECTION__KEY env-var convention used by the backend', () => {
     expect(
       settingsToEnv({
+        ...DEFAULT_SETTINGS,
         nerBackend: 'gliner',
         scoreThreshold: 0.6,
         defaultOperator: 'mask',
@@ -87,5 +93,24 @@ describe('settingsToEnv', () => {
     expect(settingsToEnv({ ...DEFAULT_SETTINGS, scoreThreshold: 0.05 })).toMatchObject({
       SANCTUM_ANALYZER__DEFAULT_SCORE_THRESHOLD: '0.05',
     })
+  })
+})
+
+describe('needsRespawn', () => {
+  it('is false for renderer-only preferences', () => {
+    expect(
+      needsRespawn(DEFAULT_SETTINGS, {
+        ...DEFAULT_SETTINGS,
+        theme: 'dark',
+        outputSuffix: '_redacted',
+        entityTypes: ['PERSON'],
+        replacementStyle: 'fixed',
+      }),
+    ).toBe(false)
+  })
+
+  it('is true when an env-backed key changes', () => {
+    expect(needsRespawn(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, nerBackend: 'gliner' })).toBe(true)
+    expect(needsRespawn(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, scoreThreshold: 0.5 })).toBe(true)
   })
 })

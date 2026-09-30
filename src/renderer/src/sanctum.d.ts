@@ -28,11 +28,19 @@ export interface SaveDialogResult {
 }
 
 export type NerBackend = 'spacy' | 'gliner'
+export type ReplacementStyle = 'label' | 'fixed'
+export type ThemePreference = 'system' | 'light' | 'dark'
 
 export interface AppSettings {
   readonly nerBackend: NerBackend
   readonly scoreThreshold: number
   readonly defaultOperator: string
+  readonly entityTypes: readonly string[] | null
+  readonly replacementStyle: ReplacementStyle
+  readonly replacementText: string
+  readonly outputSuffix: string
+  readonly saveNextToOriginal: boolean
+  readonly theme: ThemePreference
 }
 
 export interface SanctumApi {
