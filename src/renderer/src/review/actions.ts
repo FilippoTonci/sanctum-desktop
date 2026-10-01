@@ -57,6 +57,39 @@ export const localActions: ReviewActions = {
   },
 }
 
+/**
+ * Run a session's mutations one at a time, in the order they were issued.
+ *
+ * The engine handles each decision by loading the whole session, changing
+ * it and saving it back, on several worker threads. A burst of concurrent
+ * requests (a bulk "redact all Person", or holding Enter) races on that
+ * read-modify-write: some requests fail with a 500 and others can
+ * overwrite each other's verdicts. Queueing them here keeps every request
+ * applied on top of the previous one. A failed request does not block the
+ * queue; its caller still sees the rejection.
+ */
+export function serializeMutations(
+  client: SessionsClient,
+): Pick<SessionsClient, 'patchDecision' | 'addUserAdded' | 'deleteUserAdded'> {
+  let tail: Promise<unknown> = Promise.resolve()
+  let inFlight = 0
+  const enqueue = <T>(run: () => Promise<T>): Promise<T> => {
+    // Idle queue: call straight through so a lone request costs no extra tick.
+    const result = inFlight === 0 ? run() : tail.then(run, run)
+    inFlight++
+    const settled = (): void => {
+      inFlight--
+    }
+    tail = result.then(settled, settled)
+    return result
+  }
+  return {
+    patchDecision: (...args) => enqueue(() => client.patchDecision(...args)),
+    addUserAdded: (...args) => enqueue(() => client.addUserAdded(...args)),
+    deleteUserAdded: (...args) => enqueue(() => client.deleteUserAdded(...args)),
+  }
+}
+
 export interface SyncedActionsContext {
   readonly client: SessionsClient
   readonly sessionId: string
@@ -87,7 +120,8 @@ export interface SyncedActionsContext {
  *   as a follow-up — see CHANGELOG.
  */
 export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
-  const { client, sessionId } = ctx
+  const { sessionId } = ctx
+  const client = serializeMutations(ctx.client)
 
   const detectionById = (id: string): Detection | undefined =>
     useReviewStore.getState().detections.find((d) => d.id === id)

@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionsClient } from '../../../src/renderer/src/api/sessions'
 import { ApiError } from '../../../src/renderer/src/api/types'
-import { syncedActions } from '../../../src/renderer/src/review/actions'
+import { serializeMutations, syncedActions } from '../../../src/renderer/src/review/actions'
 import { useReviewStore } from '../../../src/renderer/src/review/store'
 import type { Detection } from '../../../src/renderer/src/review/types'
 
@@ -608,5 +608,37 @@ describe('syncedActions.undoLastDecision', () => {
 
     expect(patchDecision).not.toHaveBeenCalled()
     expect(useReviewStore.getState().detections[0]?.status).toBe('pending')
+  })
+})
+
+describe('serializeMutations', () => {
+  it('starts each request only after the previous one settles, even when one fails', async () => {
+    const log: string[] = []
+    const resolvers: (() => void)[] = []
+    let call = 0
+    const patchDecision = vi.fn((_s: string, id: string) => {
+      log.push(`start ${id}`)
+      const n = call++
+      return new Promise<never>((resolve, reject) => {
+        resolvers.push(() => {
+          log.push(`end ${id}`)
+          if (n === 0) reject(new Error('boom'))
+          else resolve({ decision: {}, preview: '' } as never)
+        })
+      })
+    })
+    const client = serializeMutations(fakeClient({ patchDecision }))
+    const body = { status: 'accept' as const, operator: null, custom_replacement: null }
+    const first = client.patchDecision('s', 'a', body)
+    const second = client.patchDecision('s', 'b', body)
+    await Promise.resolve()
+    expect(log).toEqual(['start a'])
+    resolvers[0]?.()
+    await expect(first).rejects.toThrow('boom')
+    await Promise.resolve()
+    expect(log).toEqual(['start a', 'end a', 'start b'])
+    resolvers[1]?.()
+    await second
+    expect(log).toEqual(['start a', 'end a', 'start b', 'end b'])
   })
 })
