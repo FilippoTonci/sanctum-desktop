@@ -16,8 +16,10 @@ test('app launches and renders the placeholder', async () => {
   const win = await app.firstWindow()
   await win.waitForLoadState('domcontentloaded')
 
-  await expect(win.locator('h1')).toHaveText('Sanctum Desktop')
-  await expect(win.locator('.tagline')).toContainText('Local-first')
+  // Both strings are rendered by components/DropZone.tsx (studio home screen).
+  // The heading names the accepted formats, which D4/D5 extend, hence the regex.
+  await expect(win.getByRole('heading', { level: 1 })).toHaveText(/^Drop a .+ to review$/)
+  await expect(win.getByText(/never leaves this computer/)).toBeVisible()
 
   await app.close()
 })
