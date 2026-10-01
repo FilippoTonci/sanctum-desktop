@@ -9,11 +9,19 @@ const SETTINGS_GET_CHANNEL = 'sanctum:get-settings'
 const SETTINGS_UPDATE_CHANNEL = 'sanctum:update-settings'
 
 export type NerBackend = 'spacy' | 'gliner'
+export type ReplacementStyle = 'label' | 'fixed'
+export type ThemePreference = 'system' | 'light' | 'dark'
 
 export interface AppSettings {
   readonly nerBackend: NerBackend
   readonly scoreThreshold: number
   readonly defaultOperator: string
+  readonly entityTypes: readonly string[] | null
+  readonly replacementStyle: ReplacementStyle
+  readonly replacementText: string
+  readonly outputSuffix: string
+  readonly saveNextToOriginal: boolean
+  readonly theme: ThemePreference
 }
 
 export interface SaveDialogOptions {
@@ -83,8 +91,9 @@ export interface SanctumApi {
    */
   getSettings(): Promise<AppSettings | null>
   /**
-   * Persist a settings patch and trigger a sidecar respawn so the new
-   * env lands on the Python process. Returns the merged settings.
+   * Persist a settings patch. The main process respawns the sidecar
+   * only when the patch changes its env (NLP tier, threshold, operator).
+   * Returns the merged settings.
    */
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings | null>
 }

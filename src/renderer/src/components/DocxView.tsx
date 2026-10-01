@@ -7,7 +7,6 @@ import { detectionIdFromClick } from '../review/click-focus'
 
 interface DocxViewProps {
   readonly file: File
-  readonly onClose: () => void
   readonly detections: readonly Detection[]
   readonly focusedId: string | null
   readonly onRendered?: (root: HTMLElement) => void
@@ -19,7 +18,6 @@ type RenderState = { kind: 'rendering' } | { kind: 'ready' } | { kind: 'error'; 
 
 export function DocxView({
   file,
-  onClose,
   detections,
   focusedId,
   onRendered,
@@ -27,6 +25,7 @@ export function DocxView({
   onUnwrappable,
 }: DocxViewProps): ReactElement {
   const bodyRef = useRef<HTMLDivElement | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
   const [state, setState] = useState<RenderState>({ kind: 'rendering' })
 
   useEffect(() => {
@@ -102,33 +101,51 @@ export function DocxView({
     }
   }, [onFocusDetection])
 
+  // Zoom the page down (never up) so it always fits the canvas width —
+  // matters on a ~1024px window with both side panels open. The natural
+  // width is measured once at zoom 1 after each render.
+  useEffect(() => {
+    if (state.kind !== 'ready') return undefined
+    const host = bodyRef.current
+    const scroller = scrollRef.current
+    if (host === null || scroller === null) return undefined
+    host.style.zoom = '1'
+    const natural = host.scrollWidth
+    const fit = (): void => {
+      const available = scroller.clientWidth - 48
+      const zoom = natural > 0 ? Math.max(0.55, Math.min(1, available / natural)) : 1
+      host.style.zoom = zoom.toFixed(3)
+    }
+    fit()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver(fit)
+    ro.observe(scroller)
+    return () => {
+      ro.disconnect()
+    }
+  }, [state.kind])
+
   return (
-    <section className="docx-view" aria-busy={state.kind === 'rendering'}>
-      <header className="docx-view-header">
-        <div className="docx-view-meta">
-          <strong>{file.name}</strong>
-          <span className="docx-view-size">{formatBytes(file.size)}</span>
-        </div>
-        <button type="button" className="docx-view-close" onClick={onClose}>
-          Close
-        </button>
-      </header>
+    <section className="canvas" aria-busy={state.kind === 'rendering'} aria-label="Document">
       {state.kind === 'rendering' ? (
-        <p className="docx-view-status" role="status">
+        <p className="canvas-status" role="status">
+          <span className="spinner" aria-hidden="true" />
           Rendering document…
         </p>
       ) : null}
       {state.kind === 'error' ? (
-        <p className="docx-view-status docx-view-error" role="alert">
+        <p className="canvas-status is-error" role="alert">
           Could not render this document: {state.message}
         </p>
       ) : null}
-      <div ref={bodyRef} className="docx-view-body" data-testid="docx-body" />
+      <div ref={scrollRef} className="canvas-scroll">
+        <div ref={bodyRef} className="docx-view-body" data-testid="docx-body" />
+      </div>
     </section>
   )
 }
 
-function formatBytes(bytes: number): string {
+export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${String(bytes)} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`

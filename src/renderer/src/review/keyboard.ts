@@ -1,14 +1,14 @@
 import { useEffect, useRef } from 'react'
 import { localActions, type ReviewActions } from './actions'
+import { decideAllPendingOfType } from './bulk'
 import { useReviewStore, type ReviewState } from './store'
 
 /**
- * Bind the review-surface keyboard map. Suspended whenever an input,
+ * Bind the review-surface keyboard map (README "Keyboard reference"
+ * owns the user-facing list). Suspended whenever an input,
  * textarea, or contenteditable region holds focus — so a user typing
  * in the "edit replacement" field cannot accidentally accept the
  * detection underneath the modal.
- *
- * The set of bindings is derived from README §⌨️ Keyboard Reference.
  *
  * Tab / Shift+Tab are intercepted only when no specific element holds
  * focus (i.e. the document body is the active element). That keeps
@@ -112,6 +112,25 @@ export function dispatchKey(
       if (store.detections.length === 0) return false
       store.focusPrev()
       return true
+    case 'n':
+      // Jump to the next detection still waiting for a verdict.
+      if (store.detections.length === 0) return false
+      store.focusNextPending()
+      return true
+    case 'A':
+    case 'R': {
+      // Shift+A / Shift+R: redact / keep every still-pending detection of
+      // the focused detection's entity type ("accept all Person").
+      const focused = store.detections.find((d) => d.id === store.focusedId)
+      if (focused === undefined) return false
+      decideAllPendingOfType(
+        store.detections,
+        focused.entityType,
+        key === 'A' ? 'accept' : 'reject',
+        actions,
+      )
+      return true
+    }
     case 'Enter':
       // Accept + auto-advance to the next pending detection. Picking
       // the next pending entry (rather than the next-by-index) keeps

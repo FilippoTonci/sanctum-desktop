@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import type { SessionsClient } from '../api/sessions'
 import { ApiError, type ReviewSessionIndexEntry } from '../api/types'
 
@@ -21,6 +21,10 @@ interface RecentSessionsProps {
    * user keeps an audit trail of past reviews (capped at five).
    */
   readonly onResume?: (sessionId: string) => void
+  /** Session currently open in the review surface; rendered as active. */
+  readonly currentSessionId?: string | null
+  /** Bump to force a re-fetch (e.g. after closing or saving a document). */
+  readonly refreshKey?: number
 }
 
 type LoadState =
@@ -87,10 +91,13 @@ async function pruneOldSessions(
   )
 }
 
-export function RecentSessions({ client, onResume }: RecentSessionsProps): ReactElement | null {
+export function RecentSessions({
+  client,
+  onResume,
+  currentSessionId = null,
+  refreshKey = 0,
+}: RecentSessionsProps): ReactElement | null {
   const [state, setState] = useState<LoadState>({ kind: 'idle' })
-  const [open, setOpen] = useState(false)
-  const panelId = useId()
 
   useEffect(() => {
     if (client === null) {
@@ -98,7 +105,7 @@ export function RecentSessions({ client, onResume }: RecentSessionsProps): React
       return undefined
     }
     const ctrl = new AbortController()
-    setState({ kind: 'loading' })
+    setState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
     void (async () => {
       try {
         const body = await client.listSessions(ctrl.signal)
@@ -121,126 +128,76 @@ export function RecentSessions({ client, onResume }: RecentSessionsProps): React
     return () => {
       ctrl.abort()
     }
-  }, [client])
+  }, [client, refreshKey])
 
-  // Standalone-browser mode (no client) → omit the panel entirely so the
-  // drop zone stands alone. This is the "no backend, no recent sessions"
-  // path; an explicit empty state would be misleading.
+  // Standalone-browser mode (no client) → omit the list entirely; an
+  // explicit empty state would be misleading.
   if (client === null) return null
 
-  const count = state.kind === 'ready' ? state.sessions.length : state.kind === 'loading' ? null : 0
-  const countLabel =
-    state.kind === 'loading'
-      ? 'Loading…'
-      : state.kind === 'ready'
-        ? state.sessions.length === 0
-          ? 'None yet'
-          : `${String(state.sessions.length)} session${state.sessions.length === 1 ? '' : 's'}`
-        : '—'
-
   return (
-    <section
-      className={`recent-sessions${open ? ' recent-sessions-open' : ''}`}
-      aria-label="Recent review sessions"
-    >
-      <button
-        type="button"
-        className="recent-sessions-toggle"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => {
-          setOpen((prev) => !prev)
-        }}
-      >
-        <span className="recent-sessions-toggle-label">
-          <span className="recent-sessions-toggle-chevron" aria-hidden="true">
-            {open ? '▾' : '▸'}
-          </span>
-          Recent sessions
-        </span>
-        <span className="recent-sessions-toggle-meta">
-          {count !== null && count > 0 ? (
-            <span className="recent-sessions-toggle-badge">{String(count)}</span>
-          ) : null}
-          <span className="recent-sessions-count">{countLabel}</span>
-        </span>
-      </button>
-
-      {open ? (
-        <div className="recent-sessions-panel" id={panelId}>
-          {state.kind === 'loading' ? (
-            <p className="recent-sessions-status" role="status">
-              Loading…
-            </p>
-          ) : null}
-
-          {state.kind === 'error' ? (
-            <p className="recent-sessions-status recent-sessions-error" role="alert">
-              Could not load sessions: {state.message}
-            </p>
-          ) : null}
-
-          {state.kind === 'ready' && state.sessions.length === 0 ? (
-            <p className="recent-sessions-empty">
-              No reviews yet. Drop a .docx below to start your first one.
-            </p>
-          ) : null}
-
-          {state.kind === 'ready' && state.sessions.length > 0 ? (
-            <ul className="recent-sessions-list">
-              {state.sessions.map((s) => {
-                const resumable = s.status === 'open'
-                const tooltip = resumable
-                  ? `${s.source_path} · ${s.id}`
-                  : `${s.source_path} · ${s.id} — ${s.status}; input bytes shed at terminal status`
-                return (
-                  <li key={s.id}>
-                    <button
-                      type="button"
-                      className={`recent-sessions-item recent-sessions-item-${s.status}`}
-                      onClick={resumable ? () => onResume?.(s.id) : undefined}
-                      disabled={!resumable}
-                      aria-disabled={!resumable}
-                      title={tooltip}
-                    >
-                      <div className="recent-sessions-item-row">
-                        <span className="recent-sessions-item-name">{filename(s.source_path)}</span>
-                        <span
-                          className={`recent-sessions-item-status recent-sessions-item-status-${s.status}`}
-                        >
-                          {s.status}
-                        </span>
-                      </div>
-                      <div className="recent-sessions-item-meta">
-                        <span>{formatRelative(s.created_at)}</span>
-                        <span className="recent-sessions-item-counts">
-                          {s.pending_count > 0 ? (
-                            <span className="recent-sessions-item-pending">
-                              {String(s.pending_count)} pending
-                            </span>
-                          ) : null}
-                          {s.accepted_count > 0 ? (
-                            <span className="recent-sessions-item-accepted">
-                              {String(s.accepted_count)} accepted
-                            </span>
-                          ) : null}
-                          {s.rejected_count > 0 ? (
-                            <span className="recent-sessions-item-rejected">
-                              {String(s.rejected_count)} rejected
-                            </span>
-                          ) : null}
-                        </span>
-                      </div>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          ) : null}
-        </div>
+    <section className="recent" aria-label="Recent documents">
+      <header className="panel-head">
+        <h2 className="panel-title">Recent</h2>
+      </header>
+      {state.kind === 'loading' ? (
+        <p className="panel-empty" role="status">
+          Loading…
+        </p>
+      ) : null}
+      {state.kind === 'error' ? (
+        <p className="panel-empty panel-error" role="alert">
+          Could not load recent documents: {state.message}
+        </p>
+      ) : null}
+      {state.kind === 'ready' && state.sessions.length === 0 ? (
+        <p className="panel-empty">Documents you review appear here.</p>
+      ) : null}
+      {state.kind === 'ready' && state.sessions.length > 0 ? (
+        <ul className="recent-list">
+          {state.sessions.map((s) => {
+            const resumable = s.status === 'open'
+            const active = s.id === currentSessionId
+            const total = s.pending_count + s.accepted_count + s.rejected_count
+            const reviewed = s.accepted_count + s.rejected_count
+            const tooltip = resumable
+              ? `${s.source_path}\nReview in progress: ${String(reviewed)} of ${String(total)} reviewed`
+              : `${s.source_path}\n${statusText(s.status)}. The review can't be reopened.`
+            return (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  className={`recent-item${active ? ' is-active' : ''}`}
+                  onClick={resumable && !active ? () => onResume?.(s.id) : undefined}
+                  disabled={!resumable}
+                  aria-current={active ? 'true' : undefined}
+                  title={tooltip}
+                >
+                  <span className={`recent-dot recent-dot-${s.status}`} aria-hidden="true" />
+                  <span className="recent-name">{filename(s.source_path)}</span>
+                  <span className="recent-meta">
+                    {resumable
+                      ? `${String(reviewed)}/${String(total)}`
+                      : formatRelative(s.created_at)}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
       ) : null}
     </section>
   )
+}
+
+function statusText(status: ReviewSessionIndexEntry['status']): string {
+  switch (status) {
+    case 'open':
+      return 'In progress'
+    case 'committed':
+      return 'Saved'
+    case 'abandoned':
+      return 'Closed without saving'
+  }
 }
 
 function filename(path: string): string {
