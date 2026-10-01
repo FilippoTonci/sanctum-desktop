@@ -395,6 +395,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
   height: 26px;
   padding: 0 10px;
   border: 0;
@@ -416,14 +417,14 @@ button:disabled {
 
 .segmented-sm {
   display: flex;
-  margin: 0 12px 8px;
+  margin: 0 8px 8px;
 }
 
 .segmented-sm .segmented-item {
-  flex: 1;
+  flex: 1 1 auto;
   justify-content: center;
   height: 22px;
-  padding: 0 4px;
+  padding: 0 3px;
   font-size: 11.5px;
   gap: 4px;
 }
@@ -621,6 +622,8 @@ button:disabled {
 
 .sidebar.is-collapsed .sidebar-actions,
 .sidebar.is-collapsed .sidebar-foot {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   padding-left: 0;
   padding-right: 0;
@@ -1298,6 +1301,8 @@ button:disabled {
 }
 
 .field-note {
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: 11px;
   color: var(--text-3);
 }

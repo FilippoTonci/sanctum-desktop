@@ -197,7 +197,8 @@ export function DetectionSidebar(): ReactElement {
               }}
             >
               {f.label}
-              <span className="segmented-count">{String(n)}</span>
+              {/* "All" needs no count: the panel head already shows the total. */}
+              {f.id !== 'all' && <span className="segmented-count">{String(n)}</span>}
             </button>
           )
         })}
