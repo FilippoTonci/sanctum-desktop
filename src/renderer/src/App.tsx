@@ -1,44 +1,86 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
-import { mappingClientFromCredentials } from './api/mapping'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactElement,
+} from 'react'
 import { clientFromCredentials, type SessionsClient } from './api/sessions'
-import { ApiError } from './api/types'
+import { ApiError, type CreateReviewSessionRequest } from './api/types'
+import { CommandPalette, type Command } from './components/CommandPalette'
 import { CommitPanel } from './components/CommitPanel'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { DetectionSidebar } from './components/DetectionSidebar'
 import { DocxView } from './components/DocxView'
-import { DropZone } from './components/DropZone'
+import { DropZone, rejectReason } from './components/DropZone'
 import { EditReplacement } from './components/EditReplacement'
-import { MappingStoreChip } from './components/MappingStoreChip'
+import { Inspector } from './components/Inspector'
 import { RecentSessions } from './components/RecentSessions'
-import { SanctumEmblem } from './components/SanctumEmblem'
-import { SettingsModal } from './components/SettingsModal'
+import { ReviewToolbar } from './components/ReviewToolbar'
+import { SETTINGS_SECTIONS, SettingsView, type SettingsSection } from './components/SettingsView'
+import { Sidebar } from './components/Sidebar'
 import { Splash } from './components/Splash'
 import { TypedError } from './components/TypedError'
+import { decideAllPendingOfType } from './review/bulk'
+import { entityLabel } from './review/entities'
 import { seedFakeDetections } from './review/fake-detections'
 import { previewsForStore, sessionToDetections } from './review/from-session'
-import { useReviewKeyboard } from './review/keyboard'
+import { isInputFocused, useReviewKeyboard } from './review/keyboard'
 import { useMissedSelectionTracker } from './review/selection-tracker'
 import { extractSegmentOrder } from './review/segments'
 import { useReviewStore } from './review/store'
 import { OPERATOR_NAMES, type OperatorName } from './review/types'
 import { localActions, syncedActions, type ReviewActions } from './review/actions'
 import { ReviewActionsProvider } from './review/use-actions'
-import type { SanctumStatus } from './sanctum'
+import type { AppSettings, SanctumStatus, ThemePreference } from './sanctum'
 
 type AnalysisState =
   | { kind: 'fake' }
+  | { kind: 'waiting' }
   | { kind: 'pending' }
   | { kind: 'ready' }
   | { kind: 'error'; error: unknown }
 
+/** Pending destructive action awaiting the discard-review confirmation. */
+type ConfirmState =
+  | { kind: 'close' }
+  | { kind: 'open'; file: File }
+  | { kind: 'resume'; sessionId: string }
+  | null
+
+/**
+ * The only operator the product uses. The engine still supports others
+ * (and the IPC/API code for the mapping store stays in place), but the UI
+ * never offers them: every session is created with `replace`.
+ */
+const SESSION_OPERATOR: OperatorName = 'replace'
+
+const NARROW_QUERY = '(max-width: 1199px)'
+
 export function App(): ReactElement {
   const [status, setStatus] = useState<SanctumStatus>({ state: 'idle' })
   const [doc, setDoc] = useState<File | null>(null)
+  const [sourcePath, setSourcePath] = useState<string | null>(null)
   const [docRoot, setDocRoot] = useState<HTMLElement | null>(null)
   const [analysis, setAnalysis] = useState<AnalysisState>({ kind: 'fake' })
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [view, setView] = useState<'main' | 'settings'>('main')
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('detection')
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [sidebarPref, setSidebarPref] = useState<boolean | null>(null)
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW_QUERY).matches)
+  const [dragActive, setDragActive] = useState(false)
+  const [dropError, setDropError] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<ConfirmState>(null)
+  const [recentKey, setRecentKey] = useState(0)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const detections = useReviewStore((s) => s.detections)
   const focusedId = useReviewStore((s) => s.focusedId)
+  const commitPanelOpen = useReviewStore((s) => s.commitPanelOpen)
+  const pendingMissedSelection = useReviewStore((s) => s.pendingMissedSelection)
   const setFocused = useReviewStore((s) => s.setFocused)
   const setUnwrappableIds = useReviewStore((s) => s.setUnwrappableIds)
   const setStoreDetections = useReviewStore((s) => s.setDetections)
@@ -46,7 +88,6 @@ export function App(): ReactElement {
   const setSessionId = useReviewStore((s) => s.setSessionId)
   const setDefaultOperator = useReviewStore((s) => s.setDefaultOperator)
   const setPreviews = useReviewStore((s) => s.setPreviews)
-  const setMappingStoreUnlocked = useReviewStore((s) => s.setMappingStoreUnlocked)
   const clearStore = useReviewStore((s) => s.clear)
 
   useEffect(() => {
@@ -68,6 +109,9 @@ export function App(): ReactElement {
     void api.getStatus().then((current) => {
       if (active) setStatus(current)
     })
+    void api.getSettings().then((current) => {
+      if (active) setSettings(current)
+    })
 
     const unsubscribe = api.onStatusChange((next) => {
       if (active) setStatus(next)
@@ -79,6 +123,27 @@ export function App(): ReactElement {
     }
   }, [])
 
+  // Theme: follow the system unless Settings pins light or dark.
+  const themePref: ThemePreference = settings?.theme ?? 'system'
+  useEffect(() => {
+    const root = document.documentElement
+    if (themePref === 'system') delete root.dataset.theme
+    else root.dataset.theme = themePref
+  }, [themePref])
+
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW_QUERY)
+    const onChange = (e: MediaQueryListEvent): void => {
+      setNarrow(e.matches)
+      setSidebarPref(null)
+    }
+    mq.addEventListener('change', onChange)
+    return () => {
+      mq.removeEventListener('change', onChange)
+    }
+  }, [])
+
+  const sidebarCollapsed = sidebarPref ?? narrow
   const reviewMode = doc !== null
   const showBackendStatus = status.state !== 'ready'
 
@@ -87,75 +152,103 @@ export function App(): ReactElement {
     return clientFromCredentials({ baseUrl: status.baseUrl, token: status.token })
   }, [status])
 
-  const mappingClient = useMemo(() => {
-    if (status.state !== 'ready') return null
-    return mappingClientFromCredentials({ baseUrl: status.baseUrl, token: status.token })
-  }, [status])
-
-  // Mirror the /health-reported lock state into the store on every
-  // status change. unlock/lock round-trips will overwrite locally;
-  // a fresh /health poll (e.g. on sidecar respawn) re-syncs.
-  useEffect(() => {
-    if (status.state !== 'ready') return
-    setMappingStoreUnlocked(status.health.mapping_store_unlocked ?? null)
-  }, [status, setMappingStoreUnlocked])
-
   // Keyboard handler reaches actions through the same factory the
-  // ReviewActionsProvider uses below — kept in sync via a shared
-  // memo so we never accidentally drift between "what the buttons
-  // do" (provider) and "what the keys do" (this hook).
+  // ReviewActionsProvider uses below — kept in sync via a shared memo so
+  // "what the buttons do" and "what the keys do" never drift.
   const sessionId = useReviewStore((s) => s.sessionId)
   const reviewActions = useMemo<ReviewActions>(() => {
     if (sessionsClient === null || sessionId === null) return localActions
     return syncedActions({ client: sessionsClient, sessionId })
   }, [sessionsClient, sessionId])
 
-  useReviewKeyboard(reviewMode, docRoot, reviewActions)
+  const overlayOpen = paletteOpen || commitPanelOpen || confirm !== null
+  useReviewKeyboard(reviewMode && view === 'main' && !overlayOpen, docRoot, reviewActions)
   useMissedSelectionTracker(reviewMode ? docRoot : null)
 
-  const handleFile = useCallback(
-    (file: File) => {
-      setDoc(file)
-      clearStore()
-      // Mode is decided in the effect below once `doc` settles.
-    },
-    [clearStore],
-  )
+  const handleSettingsChange = useCallback(async (patch: Partial<AppSettings>): Promise<void> => {
+    const next = await window.sanctum?.updateSettings(patch)
+    if (next === null || next === undefined) throw new Error('Settings unavailable in this build')
+    setSettings(next)
+  }, [])
 
-  const handleClose = useCallback(() => {
+  /** Close the current document, discarding an uncommitted review. */
+  const closeDocument = useCallback(() => {
     // If the session is open and the user closes without committing,
-    // tell the backend to drop it — keeps the on-disk session store
-    // tidy and prevents stale entries piling up in the Recent Sessions
-    // list. We only DELETE when the session hasn't already been
-    // committed (commit deletes the session dir on its own).
+    // tell the backend to drop it — keeps the on-disk session store tidy
+    // (and deletes its copy of the document). Committed sessions are
+    // already torn down server-side.
     const state = useReviewStore.getState()
     if (sessionsClient !== null && state.sessionId !== null && state.commitResult === null) {
       const sid = state.sessionId
-      void sessionsClient.abandonSession(sid).catch(() => {
-        // Don't block local close on a failed DELETE — the user wants
-        // out and we already cleared the local view. Surface via the
-        // sync-error toast so it isn't silently swallowed.
-        useReviewStore.getState().setLastSyncError(`abandon: failed to delete session ${sid}`)
-      })
+      void sessionsClient
+        .abandonSession(sid)
+        .catch(() => {
+          useReviewStore.getState().setLastSyncError(`abandon: failed to delete session ${sid}`)
+        })
+        .finally(() => {
+          setRecentKey((k) => k + 1)
+        })
+    } else {
+      setRecentKey((k) => k + 1)
     }
     setDoc(null)
+    setSourcePath(null)
     setDocRoot(null)
     setAnalysis({ kind: 'fake' })
     clearStore()
   }, [clearStore, sessionsClient])
 
+  const openFile = useCallback(
+    (file: File) => {
+      if (useReviewStore.getState().sessionId !== null || doc !== null) closeDocument()
+      setDropError(null)
+      setView('main')
+      clearStore()
+      setSourcePath(window.sanctum?.getFilePath(file) ?? null)
+      setDoc(file)
+      // Mode is decided in the effect below once `doc` settles.
+    },
+    [clearStore, closeDocument, doc],
+  )
+
+  /** True when closing now would throw away review work. */
+  const hasUnsavedWork = useCallback((): boolean => {
+    const s = useReviewStore.getState()
+    return (
+      doc !== null && s.commitResult === null && s.detections.some((d) => d.status !== 'pending')
+    )
+  }, [doc])
+
+  const requestOpenFile = useCallback(
+    (file: File | undefined) => {
+      const reason = rejectReason(file)
+      if (reason !== null || file === undefined) {
+        setDropError(reason)
+        return
+      }
+      if (hasUnsavedWork()) setConfirm({ kind: 'open', file })
+      else openFile(file)
+    },
+    [hasUnsavedWork, openFile],
+  )
+
+  const requestClose = useCallback(() => {
+    if (hasUnsavedWork()) setConfirm({ kind: 'close' })
+    else closeDocument()
+  }, [closeDocument, hasUnsavedWork])
+
+  const openPicker = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+
   const handleRendered = useCallback(
     (root: HTMLElement) => {
       setDocRoot(root)
       // Snapshot segment DOM order before any detections land in the
-      // store; appendDetection / addMissed / setDetections sort against
-      // this so a freshly user-added row slots into its document-order
-      // position (arrow-down then steps to the next PII downstream
-      // instead of jumping to the trailing USER_ADDED slot).
+      // store so user-added rows slot into document order.
       setSegmentOrder(extractSegmentOrder(root))
       // The seedFakeDetections fallback only fires when we're not
-      // talking to a real backend. Real-mode detections arrive via the
-      // POST round-trip the effect below kicks off.
+      // talking to a real backend.
       if (analysis.kind === 'fake') {
         setStoreDetections(seedFakeDetections(root))
       }
@@ -163,16 +256,9 @@ export function App(): ReactElement {
     [analysis.kind, setSegmentOrder, setStoreDetections],
   )
 
-  // Drive the create-session round-trip whenever the dropped file
-  // changes AND we have a usable client + on-disk path. Fires exactly
-  // once per file because the cleanup function aborts the in-flight
-  // POST if `doc` is replaced before it returns.
-  //
-  // Resume short-circuit: handleResume hydrates the store + sessionId
-  // synchronously before setDoc, so a non-null sessionId here means
-  // "already analysed; skip the create-session round-trip." Fresh
-  // drops always pass through `clearStore` first → sessionId is
-  // null → the gate stays open.
+  // Drive the create-session round-trip whenever the dropped file changes
+  // AND we have a usable client + on-disk path. Resumed sessions arrive
+  // with sessionId already set and short-circuit here.
   useEffect(() => {
     if (doc === null) return undefined
 
@@ -182,9 +268,16 @@ export function App(): ReactElement {
     }
 
     const path = window.sanctum?.getFilePath(doc) ?? ''
+    if (sessionsClient === null && window.sanctum !== undefined && path !== '') {
+      // Engine still starting (or restarting after a settings change):
+      // wait for it rather than falling back to the fake seeder. This
+      // effect re-runs when the client appears.
+      setAnalysis({ kind: 'waiting' })
+      return undefined
+    }
     if (sessionsClient === null || path === '') {
-      // Fake-seeder fallback: standalone browser, sidecar skipped, or
-      // a renderer-synthesised File without an on-disk path.
+      // Fake-seeder fallback: standalone browser, or a renderer-synthesised
+      // File without an on-disk path.
       setAnalysis({ kind: 'fake' })
       return undefined
     }
@@ -203,6 +296,7 @@ export function App(): ReactElement {
         setStoreDetections(sessionToDetections(response))
         setPreviews(previewsForStore(response))
         setAnalysis({ kind: 'ready' })
+        setRecentKey((k) => k + 1)
       },
       onError: (err) => {
         setAnalysis({ kind: 'error', error: err })
@@ -221,16 +315,15 @@ export function App(): ReactElement {
     setPreviews,
   ])
 
-  const handleResume = useCallback(
+  const resumeSession = useCallback(
     (resumeSessionId: string): void => {
       if (sessionsClient === null) return
+      if (doc !== null) closeDocument()
+      setView('main')
 
-      // Resume is split between two ticks: the async fetches run
-      // concurrently (session JSON + input bytes), then a single
-      // synchronous batch hydrates store + sessionId + doc so the
-      // create-session effect above sees the resumed state and
-      // short-circuits. Errors surface via the AnalysisState union
-      // and the existing TypedError surface renders them.
+      // The async fetches run concurrently (session JSON + input bytes),
+      // then a single synchronous batch hydrates store + sessionId + doc
+      // so the create-session effect above sees the resumed state.
       setAnalysis({ kind: 'pending' })
       const ctrl = new AbortController()
       void (async () => {
@@ -246,10 +339,6 @@ export function App(): ReactElement {
             type: blob.type || 'application/octet-stream',
           })
 
-          // Order matters: clear first so we never carry decisions
-          // from a prior session into the resumed view, then write
-          // the resumed state in the order the create-session effect
-          // expects (sessionId before doc so the gate above fires).
           clearStore()
           setSessionId(resumeSessionId)
           if (isOperatorName(session.default_operator)) {
@@ -257,6 +346,7 @@ export function App(): ReactElement {
           }
           setStoreDetections(sessionToDetections(session))
           setPreviews(previewsForStore(session))
+          setSourcePath(session.source_path)
           setDoc(file)
         } catch (err) {
           if (ctrl.signal.aborted) return
@@ -264,77 +354,435 @@ export function App(): ReactElement {
         }
       })()
     },
-    [sessionsClient, clearStore, setSessionId, setDefaultOperator, setStoreDetections, setPreviews],
+    [
+      sessionsClient,
+      doc,
+      closeDocument,
+      clearStore,
+      setSessionId,
+      setDefaultOperator,
+      setStoreDetections,
+      setPreviews,
+    ],
   )
 
+  const requestResume = useCallback(
+    (id: string) => {
+      if (hasUnsavedWork()) setConfirm({ kind: 'resume', sessionId: id })
+      else resumeSession(id)
+    },
+    [hasUnsavedWork, resumeSession],
+  )
+
+  const openSettings = useCallback((section?: SettingsSection) => {
+    if (section !== undefined) setSettingsSection(section)
+    setView('settings')
+  }, [])
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarPref(!sidebarCollapsed)
+  }, [sidebarCollapsed])
+
+  // App-level shortcuts. Modifier combos work even while typing; the
+  // review surface's own letter keys live in review/keyboard.ts.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && !e.altKey && !e.shiftKey) {
+        const key = e.key.toLowerCase()
+        if (key === 'k') {
+          e.preventDefault()
+          setPaletteOpen((o) => !o)
+          return
+        }
+        if (confirm !== null || commitPanelOpen) return
+        if (key === ',') {
+          e.preventDefault()
+          setPaletteOpen(false)
+          openSettings()
+        } else if (key === 'o') {
+          e.preventDefault()
+          setPaletteOpen(false)
+          openPicker()
+        } else if (key === '\\') {
+          e.preventDefault()
+          toggleSidebar()
+        } else if (key === 's' && doc !== null) {
+          e.preventDefault()
+          setPaletteOpen(false)
+          setView('main')
+          useReviewStore.getState().openCommitPanel()
+        }
+        return
+      }
+      if (
+        e.key === 'Escape' &&
+        view === 'settings' &&
+        !overlayOpen &&
+        !isInputFocused(e.target) &&
+        !e.defaultPrevented
+      ) {
+        e.preventDefault()
+        setView('main')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [commitPanelOpen, confirm, doc, openPicker, openSettings, overlayOpen, toggleSidebar, view])
+
+  const commands = useMemo<Command[]>(() => {
+    const list: Command[] = []
+    const focused = detections.find((d) => d.id === focusedId)
+    const store = useReviewStore.getState
+    if (reviewMode) {
+      const REVIEW = 'Review'
+      list.push(
+        {
+          id: 'redact',
+          group: REVIEW,
+          title: 'Redact selected detection',
+          keywords: 'accept',
+          keys: ['↵'],
+          disabled: focused === undefined,
+          run: () => {
+            if (focused === undefined) return
+            reviewActions.accept(focused.id)
+            store().focusNextPending()
+          },
+        },
+        {
+          id: 'keep',
+          group: REVIEW,
+          title: 'Keep original text',
+          keywords: 'reject dismiss',
+          keys: ['⌫'],
+          disabled: focused === undefined,
+          run: () => {
+            if (focused === undefined) return
+            reviewActions.reject(focused.id)
+            store().focusNextPending()
+          },
+        },
+        {
+          id: 'edit',
+          group: REVIEW,
+          title: 'Edit replacement',
+          keys: ['E'],
+          disabled: focused === undefined,
+          run: () => {
+            if (focused !== undefined) store().startEditingReplacement(focused.id)
+          },
+        },
+        {
+          id: 'next-pending',
+          group: REVIEW,
+          title: 'Go to next detection to review',
+          keywords: 'pending jump',
+          keys: ['N'],
+          run: () => {
+            store().focusNextPending()
+          },
+        },
+        {
+          id: 'mark-missed',
+          group: REVIEW,
+          title: 'Mark selected text as missed PII',
+          keywords: 'add user',
+          keys: ['M'],
+          disabled: pendingMissedSelection === null,
+          run: () => {
+            const pending = store().pendingMissedSelection
+            if (pending !== null) reviewActions.addMissed(pending)
+          },
+        },
+      )
+      const types = [...new Set(detections.map((d) => d.entityType))]
+      for (const t of types) {
+        const pending = detections.filter((d) => d.entityType === t && d.status === 'pending')
+        if (pending.length === 0) continue
+        const isFocusedType = focused?.entityType === t
+        list.push(
+          {
+            id: `redact-all-${t}`,
+            group: REVIEW,
+            title: `Redact all ${entityLabel(t)} (${String(pending.length)} to review)`,
+            keywords: `accept bulk ${t}`,
+            keys: isFocusedType ? ['⇧', 'A'] : undefined,
+            run: () => {
+              decideAllPendingOfType(store().detections, t, 'accept', reviewActions)
+            },
+          },
+          {
+            id: `keep-all-${t}`,
+            group: REVIEW,
+            title: `Keep all ${entityLabel(t)} (${String(pending.length)} to review)`,
+            keywords: `reject bulk ${t}`,
+            keys: isFocusedType ? ['⇧', 'R'] : undefined,
+            run: () => {
+              decideAllPendingOfType(store().detections, t, 'reject', reviewActions)
+            },
+          },
+        )
+      }
+      list.push(
+        {
+          id: 'undo',
+          group: REVIEW,
+          title: 'Undo last decision',
+          keys: ['⌘', 'Z'],
+          disabled: store().undoStack.length === 0,
+          run: () => {
+            reviewActions.undoLastDecision()
+          },
+        },
+        {
+          id: 'save',
+          group: REVIEW,
+          title: 'Save redacted copy',
+          keywords: 'commit export',
+          keys: ['⌘', 'S'],
+          run: () => {
+            store().openCommitPanel()
+          },
+        },
+        {
+          id: 'close',
+          group: REVIEW,
+          title: 'Close document',
+          keywords: 'discard abandon',
+          run: requestClose,
+        },
+      )
+    }
+    list.push({
+      id: 'open',
+      group: 'Documents',
+      title: 'Open document…',
+      keywords: 'file docx new',
+      keys: ['⌘', 'O'],
+      run: openPicker,
+    })
+    list.push(
+      {
+        id: 'settings',
+        group: 'Go to',
+        title: 'Settings',
+        keywords: 'preferences',
+        keys: ['⌘', ','],
+        run: () => {
+          openSettings()
+        },
+      },
+      ...SETTINGS_SECTIONS.map<Command>((s) => ({
+        id: `settings-${s.id}`,
+        group: 'Go to',
+        title: `Settings: ${s.label}`,
+        keywords: 'preferences',
+        run: () => {
+          openSettings(s.id)
+        },
+      })),
+      {
+        id: 'sidebar',
+        group: 'Go to',
+        title: sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar',
+        keywords: 'toggle panel',
+        keys: ['⌘', '\\'],
+        run: toggleSidebar,
+      },
+    )
+    if (settings !== null) {
+      const themes: readonly [ThemePreference, string][] = [
+        ['system', 'Match system'],
+        ['light', 'Light'],
+        ['dark', 'Dark'],
+      ]
+      for (const [id, label] of themes) {
+        list.push({
+          id: `theme-${id}`,
+          group: 'Appearance',
+          title: `Theme: ${label}`,
+          keywords: 'appearance color mode',
+          disabled: settings.theme === id,
+          run: () => {
+            void handleSettingsChange({ theme: id })
+          },
+        })
+      }
+    }
+    return list
+  }, [
+    detections,
+    focusedId,
+    handleSettingsChange,
+    openPicker,
+    openSettings,
+    pendingMissedSelection,
+    requestClose,
+    reviewActions,
+    reviewMode,
+    settings,
+    sidebarCollapsed,
+    toggleSidebar,
+  ])
+
+  const onDragOver = (e: DragEvent<HTMLDivElement>): void => {
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    if (!dragActive) setDragActive(true)
+  }
+  const onDragLeave = (e: DragEvent<HTMLDivElement>): void => {
+    if (e.relatedTarget === null) setDragActive(false)
+  }
+  const onDrop = (e: DragEvent<HTMLDivElement>): void => {
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    setDragActive(false)
+    requestOpenFile(e.dataTransfer.files[0])
+  }
+
+  const confirmDiscard = (): void => {
+    const c = confirm
+    setConfirm(null)
+    if (c === null) return
+    if (c.kind === 'close') closeDocument()
+    else if (c.kind === 'open') openFile(c.file)
+    else resumeSession(c.sessionId)
+  }
+
   return (
-    <main className={`shell${reviewMode ? ' shell-review' : ''}`}>
-      <header className="shell-header">
-        <div className="shell-brand">
-          <SanctumEmblem />
-          <div className="shell-brand-text">
-            <p className="shell-eyebrow">
-              <span className="shell-eyebrow-dot" aria-hidden="true" />
-              <span>Local · Offline · Sealed</span>
-            </p>
-            <h1>Sanctum Desktop</h1>
-            <p className="tagline">
-              Local-first sanctuary for sensitive documents — review, redact, and seal without ever
-              leaving your machine.
-            </p>
-          </div>
-        </div>
-        <div className="shell-header-controls">
-          <MappingStoreChip client={mappingClient} />
-          {window.sanctum?.getSettings !== undefined ? (
-            <button
-              type="button"
-              className="shell-settings-button"
-              onClick={() => {
-                setSettingsOpen(true)
-              }}
-              title="Settings"
-              aria-label="Settings"
-            >
-              ⚙️
-            </button>
-          ) : null}
-        </div>
-      </header>
-      {settingsOpen ? (
-        <SettingsModal
+    <ReviewActionsProvider client={sessionsClient} sessionId={sessionId}>
+      <div
+        className={`app${reviewMode ? ' is-review' : ''}${sidebarCollapsed ? ' is-rail' : ''}${
+          dragActive ? ' is-dragging' : ''
+        }`}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          status={status}
+          settingsActive={view === 'settings'}
+          onOpen={openPicker}
+          onPalette={() => {
+            setPaletteOpen(true)
+          }}
+          onSettings={() => {
+            if (view === 'settings') setView('main')
+            else openSettings()
+          }}
+          onToggle={toggleSidebar}
+        >
+          <RecentSessions
+            client={sessionsClient}
+            onResume={requestResume}
+            currentSessionId={sessionId}
+            refreshKey={recentKey}
+          />
+          {reviewMode ? <DetectionSidebar /> : null}
+        </Sidebar>
+
+        <main className="main">
+          {showBackendStatus ? <Splash status={status} /> : null}
+          {reviewMode ? (
+            <div className="review">
+              <ReviewToolbar
+                fileName={doc.name}
+                fileSize={doc.size}
+                onClose={requestClose}
+                onUndo={() => {
+                  reviewActions.undoLastDecision()
+                }}
+              />
+              <DocxView
+                file={doc}
+                detections={detections}
+                focusedId={focusedId}
+                onRendered={handleRendered}
+                onFocusDetection={setFocused}
+                onUnwrappable={setUnwrappableIds}
+              />
+              <EditReplacement anchorRoot={docRoot} />
+              <AnalysisBanner state={analysis} />
+              <SyncErrorToast />
+            </div>
+          ) : (
+            <>
+              <DropZone onBrowse={openPicker} dragActive={dragActive} error={dropError} />
+              <AnalysisBanner state={analysis} />
+            </>
+          )}
+        </main>
+
+        {reviewMode ? <Inspector /> : null}
+
+        {view === 'settings' ? (
+          <SettingsView
+            settings={settings}
+            status={status}
+            section={settingsSection}
+            onSectionChange={setSettingsSection}
+            onChange={handleSettingsChange}
+            onClose={() => {
+              setView('main')
+            }}
+          />
+        ) : null}
+
+        {reviewMode ? (
+          <CommitPanel
+            client={sessionsClient}
+            sourceFileName={doc.name}
+            sourcePath={sourcePath}
+            outputSuffix={settings?.outputSuffix ?? '_anonymized'}
+            saveNextToOriginal={settings?.saveNextToOriginal ?? true}
+            onDone={closeDocument}
+            onOpenAnother={() => {
+              closeDocument()
+              openPicker()
+            }}
+          />
+        ) : null}
+
+        <CommandPalette
+          open={paletteOpen}
+          commands={commands}
           onClose={() => {
-            setSettingsOpen(false)
+            setPaletteOpen(false)
           }}
         />
-      ) : null}
-      {showBackendStatus ? <Splash status={status} /> : null}
-      {reviewMode ? (
-        <ReviewActionsProvider client={sessionsClient} sessionId={sessionId}>
-          <div className="review-layout">
-            <DocxView
-              file={doc}
-              onClose={handleClose}
-              detections={detections}
-              focusedId={focusedId}
-              onRendered={handleRendered}
-              onFocusDetection={setFocused}
-              onUnwrappable={setUnwrappableIds}
-            />
-            <DetectionSidebar />
-            <EditReplacement anchorRoot={docRoot} />
-            <CommitPanel client={sessionsClient} sourceFileName={doc.name} onDone={handleClose} />
-            <AnalysisBanner state={analysis} />
-            <SyncErrorToast />
-          </div>
-        </ReviewActionsProvider>
-      ) : (
-        <div className="landing">
-          <RecentSessions client={sessionsClient} onResume={handleResume} />
-          <DropZone onFile={handleFile} />
-        </div>
-      )}
-    </main>
+
+        {confirm !== null ? (
+          <ConfirmDialog
+            title={`Close ${doc?.name ?? 'this document'}?`}
+            body="Your review decisions will be discarded and Sanctum's working copy of the document is deleted. The original file is not touched."
+            confirmLabel="Discard review"
+            onConfirm={confirmDiscard}
+            onCancel={() => {
+              setConfirm(null)
+            }}
+          />
+        ) : null}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".docx"
+          data-testid="drop-zone-input"
+          className="visually-hidden"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0]
+            e.currentTarget.value = ''
+            requestOpenFile(file)
+          }}
+        />
+      </div>
+    </ReviewActionsProvider>
   )
 }
 
@@ -346,17 +794,31 @@ interface RunAnalysisArgs {
   readonly onError: (err: unknown) => void
 }
 
+/**
+ * Build the create-session body from Settings: always the `replace`
+ * operator, with the chosen replacement style and entity filter.
+ * Exported for tests.
+ */
+export function sessionRequestFromSettings(
+  path: string,
+  settings: AppSettings | null | undefined,
+): CreateReviewSessionRequest {
+  const fixed = settings?.replacementStyle === 'fixed'
+  return {
+    input_path: path,
+    default_operator: SESSION_OPERATOR,
+    ...(fixed ? { default_operator_params: { new_value: settings.replacementText } } : {}),
+    ...(settings?.entityTypes !== null && settings?.entityTypes !== undefined
+      ? { entities: settings.entityTypes }
+      : {}),
+  }
+}
+
 async function runAnalysis(args: RunAnalysisArgs): Promise<void> {
   try {
-    // Honour the Settings panel's default operator so the fresh session
-    // matches what the user picked. Fall back to 'replace' when the
-    // bridge is unavailable (standalone-browser / sidecar-skip path) or
-    // when the persisted value didn't come through — same default as
-    // DEFAULT_SETTINGS in src/main/settings.ts.
     const settings = await window.sanctum?.getSettings()
-    const defaultOperator = settings?.defaultOperator ?? 'replace'
     const response = await args.client.createSession(
-      { input_path: args.path, default_operator: defaultOperator },
+      sessionRequestFromSettings(args.path, settings),
       args.signal,
     )
     if (args.signal.aborted) return
@@ -368,17 +830,19 @@ async function runAnalysis(args: RunAnalysisArgs): Promise<void> {
 }
 
 function AnalysisBanner({ state }: { readonly state: AnalysisState }): ReactElement | null {
-  if (state.kind === 'pending') {
+  if (state.kind === 'pending' || state.kind === 'waiting') {
     return (
-      <div className="analysis-banner analysis-banner-pending" role="status">
-        <span className="splash-spinner" aria-hidden="true" />
-        Analyzing document…
+      <div className="toast toast-status" role="status">
+        <span className="spinner" aria-hidden="true" />
+        {state.kind === 'pending'
+          ? 'Finding personal data…'
+          : 'Waiting for the detection engine to start…'}
       </div>
     )
   }
   if (state.kind === 'error') {
     return (
-      <div className="analysis-banner-host">
+      <div className="toast-host">
         <TypedError error={state.error} />
       </div>
     )
@@ -392,11 +856,7 @@ function isOperatorName(value: string): value is OperatorName {
 
 /**
  * Pull a usable display filename out of the session manifest's
- * `source_path`. The backend stores the absolute path the user dropped
- * the file from, which on Windows can use either separator. A bare
- * fallback ('session.docx') exists for the unreachable corner case
- * where the path has no separator and is empty — keeps `new File`
- * happy without throwing.
+ * `source_path` (either separator). Falls back to 'session.docx'.
  */
 function filenameFromSourcePath(sourcePath: string): string {
   const parts = sourcePath.split(/[/\\]/)
@@ -409,15 +869,13 @@ function SyncErrorToast(): ReactElement | null {
   const setLastSyncError = useReviewStore((s) => s.setLastSyncError)
   if (lastSyncError === null) return null
   // Reconstruct an ApiError-shaped object so TypedError can route on
-  // the status code. The store doesn't preserve the class identity
-  // (it serialises to a plain object), so we use the same .status +
-  // .message pair from the error class signature.
+  // the status code.
   const fauxError =
     lastSyncError.status !== null
       ? new ApiError(lastSyncError.status, null, lastSyncError.message)
       : new Error(lastSyncError.message)
   return (
-    <div className="sync-error-toast-host">
+    <div className="toast-host">
       <TypedError
         error={fauxError}
         onDismiss={() => {

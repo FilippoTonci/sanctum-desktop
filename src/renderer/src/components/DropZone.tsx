@@ -1,78 +1,63 @@
-import { useCallback, useRef, useState, type DragEvent, type ReactElement } from 'react'
+import type { ReactElement } from 'react'
+import { Icon, Kbd } from './Icon'
 
 interface DropZoneProps {
-  readonly onFile: (file: File) => void
+  /** Opens the file picker (App owns the single hidden file input). */
+  readonly onBrowse: () => void
+  /** True while a file is dragged over the window. */
+  readonly dragActive: boolean
+  /** Last rejected-file message, if any. */
+  readonly error: string | null
 }
 
-const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
-export function DropZone({ onFile }: DropZoneProps): ReactElement {
-  const inputRef = useRef<HTMLInputElement | null>(null)
-  const [dragActive, setDragActive] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+/** Returns an error message for a file the app cannot open, or null. */
+export function rejectReason(file: File | undefined): string | null {
+  if (file === undefined) return 'No file received.'
+  const isDocx = file.type === DOCX_MIME || file.name.toLowerCase().endsWith('.docx')
+  if (!isDocx) return `Only Word documents (.docx) can be opened. "${file.name}" is not one.`
+  return null
+}
 
-  const accept = useCallback(
-    (file: File | undefined) => {
-      if (file === undefined) {
-        setError('No file received.')
-        return
-      }
-      const isDocx = file.type === DOCX_MIME || file.name.toLowerCase().endsWith('.docx')
-      if (!isDocx) {
-        setError(`Only .docx files are supported (got "${file.name}").`)
-        return
-      }
-      setError(null)
-      onFile(file)
-    },
-    [onFile],
-  )
-
-  const onDrop = (e: DragEvent<HTMLDivElement>): void => {
-    e.preventDefault()
-    setDragActive(false)
-    accept(e.dataTransfer.files[0])
-  }
-
-  const onDragOver = (e: DragEvent<HTMLDivElement>): void => {
-    e.preventDefault()
-    if (!dragActive) setDragActive(true)
-  }
-
-  const openFilePicker = (): void => {
-    inputRef.current?.click()
-  }
-
+/**
+ * Home canvas: the whole main area is the drop target (the drag handlers
+ * live on the app root so a drop anywhere in the window works).
+ */
+export function DropZone({ onBrowse, dragActive, error }: DropZoneProps): ReactElement {
   return (
-    <div
-      className={`drop-zone${dragActive ? ' drop-zone-active' : ''}`}
-      data-testid="drop-zone"
-      onDragOver={onDragOver}
-      onDragLeave={() => {
-        setDragActive(false)
-      }}
-      onDrop={onDrop}
-    >
-      <p className="drop-zone-headline">Drop a .docx file to begin</p>
-      <p className="drop-zone-hint">or use the button below to browse</p>
-      <button type="button" className="drop-zone-browse" onClick={openFilePicker}>
-        Browse for a file
-      </button>
-      {error !== null ? (
-        <p className="drop-zone-error" role="alert">
-          {error}
+    <section className="home" aria-label="Open a document">
+      <div className={`drop-target${dragActive ? ' is-active' : ''}`} data-testid="drop-zone">
+        <div className="drop-icon" aria-hidden="true">
+          <Icon name="doc" size={28} />
+        </div>
+        <h1 className="home-title">Drop a Word document to review</h1>
+        <p className="home-lede">
+          Sanctum flags names, addresses, dates and account numbers. You confirm each one, then save
+          a redacted copy. The document never leaves this computer.
         </p>
-      ) : null}
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".docx"
-        data-testid="drop-zone-input"
-        className="drop-zone-input"
-        onChange={(e) => {
-          accept(e.currentTarget.files?.[0])
-        }}
-      />
-    </div>
+        <button type="button" className="btn btn-primary" onClick={onBrowse}>
+          Open document…
+          <Kbd keys={['⌘', 'O']} />
+        </button>
+        {error !== null ? (
+          <p className="drop-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <ol className="home-steps" aria-label="How it works">
+          <li>
+            <span className="home-step-n">1</span>Open a .docx
+          </li>
+          <li>
+            <span className="home-step-n">2</span>Review with <Kbd keys={['↵']} /> and{' '}
+            <Kbd keys={['⌫']} />
+          </li>
+          <li>
+            <span className="home-step-n">3</span>Save a redacted copy <Kbd keys={['⌘', 'S']} />
+          </li>
+        </ol>
+      </div>
+    </section>
   )
 }
