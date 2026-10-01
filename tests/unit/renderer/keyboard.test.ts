@@ -133,6 +133,32 @@ describe('dispatchKey', () => {
     expect(dispatchKey('u', useReviewStore.getState())).toBe(false)
   })
 
+  it('n jumps to the next pending detection', () => {
+    const s = useReviewStore.getState()
+    s.setDetections([makeDetection('a'), makeDetection('b'), makeDetection('c')])
+    useReviewStore.getState().setStatus('b', 'accepted')
+    useReviewStore.getState().setFocused('a')
+    expect(dispatchKey('n', useReviewStore.getState())).toBe(true)
+    expect(useReviewStore.getState().focusedId).toBe('c')
+  })
+
+  it('Shift+A / Shift+R decide every pending detection of the focused type', () => {
+    const accept = vi.fn<(id: string) => void>()
+    const reject = vi.fn<(id: string) => void>()
+    const actions = { ...localActions, accept, reject }
+    useReviewStore.getState().setDetections([
+      { ...makeDetection('a'), entityType: 'PERSON' },
+      { ...makeDetection('b'), entityType: 'EMAIL_ADDRESS' },
+      { ...makeDetection('c'), entityType: 'PERSON' },
+      { ...makeDetection('d'), entityType: 'PERSON', status: 'rejected' },
+    ])
+    useReviewStore.getState().setFocused('a')
+    expect(dispatchKey('A', useReviewStore.getState(), actions)).toBe(true)
+    expect(accept.mock.calls.map((c) => c[0])).toEqual(['a', 'c'])
+    expect(dispatchKey('R', useReviewStore.getState(), actions)).toBe(true)
+    expect(reject.mock.calls.map((c) => c[0])).toEqual(['a', 'c'])
+  })
+
   it('repeated accepts on the same detection do not balloon the undo stack', () => {
     useReviewStore.getState().setDetections([makeDetection('a')])
     dispatchKey('Enter', useReviewStore.getState()) // pending → accepted, push edit
