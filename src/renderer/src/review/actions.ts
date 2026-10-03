@@ -33,6 +33,13 @@ export interface ReviewActions {
   setOperator(id: string, operator: OperatorName): void
   setCustomReplacement(id: string, replacement: string | null): void
   addMissed(span: MissedSpan): void
+  /**
+   * `addMissed`, awaitable: resolves true once the finding is in the
+   * store (with its preview and undo entry), false if the engine refused
+   * it (the error is reported like `addMissed`'s). Used by the leak sheet
+   * to add findings one at a time before retrying the save.
+   */
+  addMissedAndWait(span: MissedSpan): Promise<boolean>
   undoLastDecision(): void
 }
 
@@ -51,6 +58,10 @@ export const localActions: ReviewActions = {
   },
   addMissed(span) {
     useReviewStore.getState().addMissed(span)
+  },
+  addMissedAndWait(span) {
+    useReviewStore.getState().addMissed(span)
+    return Promise.resolve(true)
   },
   undoLastDecision() {
     useReviewStore.getState().undoLastDecision()
@@ -164,6 +175,53 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
 
   const recordPreview = (id: string, response: DecisionWithPreviewResponse): void => {
     useReviewStore.getState().setPreview(id, response.preview)
+  }
+
+  const addUserAddedSpan = async (span: MissedSpan): Promise<boolean> => {
+    try {
+      const response = await client.addUserAdded(sessionId, {
+        segment_anchor: span.locator.segmentId,
+        entity_type: 'USER_ADDED',
+        original: span.text,
+        start: span.locator.start,
+        end: span.locator.end,
+      })
+      if (response.decision.kind !== 'user_added') return false
+      // Backend drops any model proposal whose char range overlapped
+      // the new UA span (sanctum#31). Mirror the cascade locally so
+      // the listing matches what a refetch would show.
+      const removedIds = response.removed_proposal_ids ?? []
+      for (const id of removedIds) {
+        useReviewStore.getState().removeDetection(id)
+        useReviewStore.getState().clearPreview(id)
+      }
+      const ua = response.decision
+      const detectionId = `user:${ua.id}`
+      useReviewStore.getState().appendDetection({
+        id: detectionId,
+        segmentId: ua.segment_anchor,
+        start: ua.start,
+        end: ua.end,
+        text: ua.original,
+        entityType: 'USER_ADDED',
+        status: 'accepted',
+      })
+      useReviewStore.getState().setPreview(detectionId, response.preview)
+      useReviewStore.getState().pushUserAddUndo({
+        kind: 'user-add',
+        id: detectionId,
+        segmentId: ua.segment_anchor,
+        start: ua.start,
+        end: ua.end,
+        text: ua.original,
+        entityType: 'USER_ADDED',
+        preview: response.preview,
+      })
+      return true
+    } catch (err) {
+      reportError('addMissed', err)
+      return false
+    }
   }
 
   return {
@@ -296,50 +354,11 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       // user-added detection so it's the one the reviewer can immediately
       // tweak (operator, custom replacement, …).
       useReviewStore.getState().setFocused(null)
-      void (async () => {
-        try {
-          const response = await client.addUserAdded(sessionId, {
-            segment_anchor: span.locator.segmentId,
-            entity_type: 'USER_ADDED',
-            original: span.text,
-            start: span.locator.start,
-            end: span.locator.end,
-          })
-          if (response.decision.kind !== 'user_added') return
-          // Backend drops any model proposal whose char range overlapped
-          // the new UA span (sanctum#31). Mirror the cascade locally so
-          // the listing matches what a refetch would show.
-          const removedIds = response.removed_proposal_ids ?? []
-          for (const id of removedIds) {
-            useReviewStore.getState().removeDetection(id)
-            useReviewStore.getState().clearPreview(id)
-          }
-          const ua = response.decision
-          const detectionId = `user:${ua.id}`
-          useReviewStore.getState().appendDetection({
-            id: detectionId,
-            segmentId: ua.segment_anchor,
-            start: ua.start,
-            end: ua.end,
-            text: ua.original,
-            entityType: 'USER_ADDED',
-            status: 'accepted',
-          })
-          useReviewStore.getState().setPreview(detectionId, response.preview)
-          useReviewStore.getState().pushUserAddUndo({
-            kind: 'user-add',
-            id: detectionId,
-            segmentId: ua.segment_anchor,
-            start: ua.start,
-            end: ua.end,
-            text: ua.original,
-            entityType: 'USER_ADDED',
-            preview: response.preview,
-          })
-        } catch (err) {
-          reportError('addMissed', err)
-        }
-      })()
+      void addUserAddedSpan(span)
+    },
+
+    addMissedAndWait(span) {
+      return addUserAddedSpan(span)
     },
 
     undoLastDecision() {

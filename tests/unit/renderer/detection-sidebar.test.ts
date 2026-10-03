@@ -21,6 +21,7 @@ vi.mock('../../../src/renderer/src/review/use-actions', () => {
     setOperator: vi.fn(),
     setCustomReplacement: vi.fn(),
     addMissed: vi.fn(),
+    addMissedAndWait: vi.fn(),
     undoLastDecision: vi.fn(),
   }
   return {

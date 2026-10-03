@@ -200,6 +200,54 @@ describe('syncedActions.setOperator', () => {
   })
 })
 
+describe('addMissedAndWait', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+
+  it('resolves true once the finding is in the store, with an undo entry', async () => {
+    const addUserAdded = vi.fn(() =>
+      Promise.resolve({
+        decision: {
+          kind: 'user_added' as const,
+          id: 'ua-1',
+          segment_anchor: 'page2/line4',
+          entity_type: 'USER_ADDED',
+          original: 'Priya',
+          start: 0,
+          end: 5,
+        },
+        preview: '<PERSON>',
+      }),
+    )
+    const actions = syncedActions({ client: fakeClient({ addUserAdded }), sessionId: 'sess-1' })
+
+    const ok = await actions.addMissedAndWait({
+      locator: { segmentId: 'page2/line4', start: 0, end: 5 },
+      text: 'Priya',
+    })
+
+    expect(ok).toBe(true)
+    const state = useReviewStore.getState()
+    expect(state.detections.map((d) => d.id)).toEqual(['user:ua-1'])
+    expect(state.previews['user:ua-1']).toBe('<PERSON>')
+    expect(state.undoStack.at(-1)).toMatchObject({ kind: 'user-add', id: 'user:ua-1' })
+  })
+
+  it('resolves false and reports the error when the POST fails', async () => {
+    const addUserAdded = vi.fn(() => Promise.reject(new ApiError(400, null, 'bad span')))
+    const actions = syncedActions({ client: fakeClient({ addUserAdded }), sessionId: 'sess-1' })
+
+    const ok = await actions.addMissedAndWait({
+      locator: { segmentId: 's', start: 0, end: 1 },
+      text: 'x',
+    })
+
+    expect(ok).toBe(false)
+    expect(useReviewStore.getState().lastSyncError?.message).toContain('bad span')
+  })
+})
+
 describe('syncedActions.addMissed', () => {
   beforeEach(() => {
     useReviewStore.getState().clear()
