@@ -33,6 +33,14 @@ export interface TextSegment {
   readonly id: string
   readonly text: string
   readonly metadata?: Record<string, unknown>
+  /**
+   * Paragraph key (engine Ruling 14): segments sharing a block are joined
+   * in order, with `join_before` between them, for detection and the leak
+   * check. `null` = the segment stands alone. Optional for older engines.
+   */
+  readonly block?: string | null
+  /** Text placed between the previous segment of the block and this one. */
+  readonly join_before?: string
 }
 
 export interface ReviewProposal {
