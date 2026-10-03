@@ -11,12 +11,23 @@ interface DropZoneProps {
 }
 
 export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+
+/** File-picker `accept` list: the formats the review canvas can render. */
+export const ACCEPTED_EXTENSIONS = '.docx,.pptx'
+
+/** True for a PowerPoint deck (reviewed on the slide canvas, not docx-preview). */
+export function isPptxFile(file: Pick<File, 'name' | 'type'>): boolean {
+  return file.type === PPTX_MIME || file.name.toLowerCase().endsWith('.pptx')
+}
 
 /** Returns an error message for a file the app cannot open, or null. */
 export function rejectReason(file: File | undefined): string | null {
   if (file === undefined) return 'No file received.'
   const isDocx = file.type === DOCX_MIME || file.name.toLowerCase().endsWith('.docx')
-  if (!isDocx) return `Only Word documents (.docx) can be opened. "${file.name}" is not one.`
+  if (!isDocx && !isPptxFile(file)) {
+    return `Only Word (.docx) and PowerPoint (.pptx) files can be opened. "${file.name}" is not one.`
+  }
   return null
 }
 
@@ -31,7 +42,7 @@ export function DropZone({ onBrowse, dragActive, error }: DropZoneProps): ReactE
         <div className="drop-icon" aria-hidden="true">
           <Icon name="doc" size={28} />
         </div>
-        <h1 className="home-title">Drop a Word document to review</h1>
+        <h1 className="home-title">Drop a Word or PowerPoint file to review</h1>
         <p className="home-lede">
           Sanctum flags names, addresses, dates and account numbers. You confirm each one, then save
           a redacted copy. The document never leaves this computer.
@@ -47,7 +58,7 @@ export function DropZone({ onBrowse, dragActive, error }: DropZoneProps): ReactE
         ) : null}
         <ol className="home-steps" aria-label="How it works">
           <li>
-            <span className="home-step-n">1</span>Open a .docx
+            <span className="home-step-n">1</span>Open a .docx or .pptx
           </li>
           <li>
             <span className="home-step-n">2</span>Review with <Kbd keys={['↵']} /> and{' '}
