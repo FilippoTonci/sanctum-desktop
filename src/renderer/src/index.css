@@ -1856,6 +1856,34 @@ button:disabled {
   margin-bottom: 12px;
 }
 
+.leak-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.leak-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.leak-row + .leak-row {
+  border-top: 1px solid var(--border);
+}
+
+.leak-row strong {
+  font-weight: 600;
+}
+
+.leak-row-note {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
 .sheet-success-mark {
   display: grid;
   place-items: center;

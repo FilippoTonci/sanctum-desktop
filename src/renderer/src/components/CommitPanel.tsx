@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import type { SessionsClient } from '../api/sessions'
 import { countDetections } from '../review/bulk'
+import { parseLeakError, planLeakFixes, type LeakFix } from '../review/leaks'
 import { useReviewStore } from '../review/store'
+import { useReviewActions } from '../review/use-actions'
 import { Icon, Kbd } from './Icon'
+import { LeakSheet } from './LeakSheet'
 import { TypedError } from './TypedError'
 
 const ATTESTATION = 'I have reviewed every detection in this document and confirm these decisions.'
@@ -27,7 +30,12 @@ interface CommitPanelProps {
   readonly onOpenAnother: () => void
 }
 
-type SubmitState = { kind: 'form' } | { kind: 'submitting' } | { kind: 'error'; error: unknown }
+type SubmitState =
+  | { kind: 'form' }
+  | { kind: 'submitting' }
+  | { kind: 'error'; error: unknown }
+  /** The engine refused the save (422 leak check); `fixing` while adding findings. */
+  | { kind: 'leak'; fixes: readonly LeakFix[]; outputPath: string; fixing: boolean }
 
 export function CommitPanel({
   client,
@@ -47,6 +55,7 @@ export function CommitPanel({
   const setCommitResult = useReviewStore((s) => s.setCommitResult)
   const focusNextPending = useReviewStore((s) => s.focusNextPending)
   const setFocused = useReviewStore((s) => s.setFocused)
+  const actions = useReviewActions()
 
   const [attested, setAttested] = useState(false)
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: 'form' })
@@ -54,6 +63,12 @@ export function CommitPanel({
 
   const counts = useMemo(() => countDetections(detections), [detections])
   const visible = open || commitResult !== null
+
+  // Closing the panel (Cancel, Esc, Back to review) drops the last attempt's
+  // outcome, so reopening it never shows a stale error or leak sheet.
+  useEffect(() => {
+    if (!open) setSubmitState({ kind: 'form' })
+  }, [open])
 
   // Move focus into the sheet when it opens so Space / Enter / Esc land here.
   useEffect(() => {
@@ -98,23 +113,68 @@ export function CommitPanel({
         return
       }
       if (dialog.canceled || dialog.filePath === null) return
-
-      setSubmitState({ kind: 'submitting' })
-      try {
-        const response = await client.commitSession(sessionId, {
-          output_path: dialog.filePath,
-          attested: true,
-        })
-        setCommitResult({
-          outputPath: response.output_path,
-          committedAt: response.committed_at,
-        })
-        setSubmitState({ kind: 'form' })
-        setAttested(false)
-      } catch (err) {
-        setSubmitState({ kind: 'error', error: err })
-      }
+      await commitTo(client, sessionId, dialog.filePath)
     })()
+  }
+
+  /**
+   * POST the commit. A leak-check refusal (422) re-reads the session's
+   * segments to locate each leaked value and opens the leak sheet; any
+   * other failure shows the typed error.
+   */
+  const commitTo = async (api: SessionsClient, sid: string, outputPath: string): Promise<void> => {
+    setSubmitState({ kind: 'submitting' })
+    try {
+      const response = await api.commitSession(sid, { output_path: outputPath, attested: true })
+      setCommitResult({ outputPath: response.output_path, committedAt: response.committed_at })
+      setSubmitState({ kind: 'form' })
+      setAttested(false)
+    } catch (err) {
+      const leak = parseLeakError(err)
+      if (leak === null) {
+        setSubmitState({ kind: 'error', error: err })
+        return
+      }
+      try {
+        const session = await api.getSession(sid)
+        const fixes = planLeakFixes(leak, session.segments, useReviewStore.getState().detections)
+        setSubmitState({ kind: 'leak', fixes, outputPath, fixing: false })
+      } catch (fetchErr) {
+        setSubmitState({ kind: 'error', error: fetchErr })
+      }
+    }
+  }
+
+  /** "Redact these too": add each span as a user finding, then save again. */
+  const handleRedactLeaks = (): void => {
+    if (submitState.kind !== 'leak' || client === null || sessionId === null) return
+    const { fixes, outputPath } = submitState
+    setSubmitState({ ...submitState, fixing: true })
+    void (async () => {
+      for (const fix of fixes) {
+        for (const span of fix.spans) {
+          const ok = await actions.addMissedAndWait({
+            locator: { segmentId: span.segmentId, start: span.start, end: span.end },
+            text: span.text,
+          })
+          if (!ok) {
+            const reason = useReviewStore.getState().lastSyncError?.message ?? 'unknown error'
+            setSubmitState({
+              kind: 'error',
+              error: new Error(`Could not redact "${span.text}": ${reason}`),
+            })
+            return
+          }
+        }
+      }
+      await commitTo(client, sessionId, outputPath)
+    })()
+  }
+
+  const handleBackToReview = (): void => {
+    setSubmitState({ kind: 'form' })
+    setAttested(false)
+    close()
   }
 
   const handleReviewRemaining = (): void => {
@@ -136,6 +196,17 @@ export function CommitPanel({
       e.preventDefault()
       handleSubmit()
     }
+  }
+
+  if (submitState.kind === 'leak') {
+    return (
+      <LeakSheet
+        fixes={submitState.fixes}
+        busy={submitState.fixing}
+        onRedact={handleRedactLeaks}
+        onBack={handleBackToReview}
+      />
+    )
   }
 
   if (commitResult !== null) {
