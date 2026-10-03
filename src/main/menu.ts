@@ -1,5 +1,6 @@
 import type { MenuItemConstructorOptions } from 'electron'
 
+/** Keep in sync with the copies in src/preload/index.ts and src/renderer/src/sanctum.d.ts. */
 /** Commands the menu forwards to the renderer, which owns the review state. */
 export const MENU_COMMANDS = [
   'open',
@@ -96,6 +97,7 @@ export function buildMenuTemplate(
             send('undo')
           },
         },
+        { role: 'redo', accelerator: 'Shift+CmdOrCtrl+Z' },
         { type: 'separator' },
         { role: 'cut' },
         { role: 'copy' },

@@ -27,6 +27,7 @@ import { decideAllPendingOfType } from './review/bulk'
 import { entityLabel } from './review/entities'
 import { seedFakeDetections } from './review/fake-detections'
 import { previewsForStore, sessionToDetections } from './review/from-session'
+import { runMenuUndo } from './menu-undo'
 import { isInputFocused, useReviewKeyboard } from './review/keyboard'
 import { useMissedSelectionTracker } from './review/selection-tracker'
 import { extractSegmentOrder } from './review/segments'
@@ -394,6 +395,20 @@ export function App(): ReactElement {
         setPaletteOpen((o) => !o)
         return
       }
+      if (cmd === 'undo') {
+        runMenuUndo({
+          inputFocused: isInputFocused(document.activeElement),
+          blocked: confirm !== null || commitPanelOpen,
+          undoStackSize: useReviewStore.getState().undoStack.length,
+          // execCommand is the only renderer-side way to run a text field's native undo.
+          // eslint-disable-next-line @typescript-eslint/no-deprecated
+          nativeUndo: () => document.execCommand('undo'),
+          undoDecision: () => {
+            reviewActions.undoLastDecision()
+          },
+        })
+        return
+      }
       if (confirm !== null || commitPanelOpen) return
       setPaletteOpen(false)
       switch (cmd) {
@@ -401,7 +416,9 @@ export function App(): ReactElement {
           openPicker()
           break
         case 'close':
+          // No document: ⌘W closes the window, like the native role.
           if (doc !== null) requestClose()
+          else window.close()
           break
         case 'save':
           if (doc !== null) {
@@ -411,17 +428,6 @@ export function App(): ReactElement {
           break
         case 'settings':
           openSettings()
-          break
-        case 'undo':
-          // Inside a text field Undo is the field's own; otherwise it
-          // reverts the last review decision.
-          if (isInputFocused(document.activeElement)) {
-            // execCommand is the only renderer-side way to run a text field's native undo.
-            // eslint-disable-next-line @typescript-eslint/no-deprecated
-            document.execCommand('undo')
-          } else if (useReviewStore.getState().undoStack.length > 0) {
-            reviewActions.undoLastDecision()
-          }
           break
         case 'toggle-sidebar':
           toggleSidebar()

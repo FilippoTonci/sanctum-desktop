@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 
 const MENU_COMMAND_CHANNEL = 'sanctum:menu-command'
+// Keep in sync with MENU_COMMANDS in src/main/menu.ts and src/renderer/src/sanctum.d.ts.
 const MENU_COMMANDS = [
   'open',
   'close',

@@ -43,6 +43,7 @@ export interface AppSettings {
   readonly theme: ThemePreference
 }
 
+// Keep in sync with MENU_COMMANDS in src/main/menu.ts and src/preload/index.ts.
 export type MenuCommand =
   | 'open'
   | 'close'
