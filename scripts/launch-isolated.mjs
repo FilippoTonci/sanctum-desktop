@@ -17,7 +17,7 @@
 import { createRequire } from 'node:module'
 import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const desktopDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -25,10 +25,12 @@ const desktopDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export async function launchIsolated({ home, extraEnv = {} } = {}) {
   const require = createRequire(join(desktopDir, 'package.json'))
   const { _electron: electron } = require('@playwright/test')
-  // realpath: macOS tmpdir is under the /var symlink, which the engine refuses as an output path.
-  home = resolve(home ?? mkdtempSync(join(realpathSync(tmpdir()), 'sanctum-home-')))
+  home = resolve(home ?? mkdtempSync(join(tmpdir(), 'sanctum-home-')))
+  mkdirSync(join(home, 'userData'), { recursive: true })
+  // realpath after mkdir (works for --home too): macOS tmpdir is under the /var
+  // symlink, which the engine refuses as an output path.
+  home = realpathSync(home)
   const userData = join(home, 'userData')
-  mkdirSync(userData, { recursive: true })
 
   const repo = process.env.SANCTUM_REPO
   const env = {
@@ -42,7 +44,7 @@ export async function launchIsolated({ home, extraEnv = {} } = {}) {
     env.SANCTUM_DEV_REPO = engine
     // Engine checkout wins over any editable install in the venv.
     env.PYTHONPATH = engine
-    env.PATH = `${join(process.env.SANCTUM_VENV ?? join(engine, '.venv'), 'bin')}:${process.env.PATH}`
+    env.PATH = [join(process.env.SANCTUM_VENV ?? join(engine, '.venv'), 'bin'), process.env.PATH].join(delimiter)
   } else {
     env.SANCTUM_SKIP_SIDECAR = '1'
   }

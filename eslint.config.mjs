@@ -8,7 +8,6 @@ export default tseslint.config(
   {
     ignores: [
       'out/**',
-      'scripts/**',
       'dist/**',
       'release/**',
       'sidecar-build/**',
@@ -82,6 +81,26 @@ export default tseslint.config(
       // The whole point of a .cjs file is CommonJS; require() is correct
       // here, not a legacy import to be migrated.
       '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  // Standalone ESM scripts (walkthrough launcher). Same untyped treatment
+  // as the .cjs block; `*.config.mjs` stays ignored above.
+  {
+    files: ['scripts/**/*.mjs'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      sourceType: 'module',
+      parserOptions: {
+        project: false,
+        projectService: false,
+        program: null,
+      },
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
     },
   },
 )
