@@ -158,6 +158,91 @@ export interface ReviewSessionResponse {
   readonly previews: Record<string, string>
 }
 
+/*
+ * Review-surface layout — `GET /review-sessions/{id}/layout` (Phase 3.5
+ * shared layout contract, see sanctum `plans/phase-3-5-pptx-pdf.md`).
+ * Points (1/72 in), top-left origin, items in paint order. Fields marked
+ * "addition" are optional extensions the pptx prototype introduced.
+ */
+
+export interface LayoutRun {
+  readonly segment_id: string
+  readonly text: string
+  readonly size: number
+  readonly bold?: boolean
+  readonly italic?: boolean
+  readonly color?: string | null
+  readonly font?: string | null
+}
+
+export type LayoutAlign = 'left' | 'center' | 'right' | 'justify'
+
+export interface LayoutParagraph {
+  readonly align?: LayoutAlign
+  readonly runs: readonly LayoutRun[]
+}
+
+interface LayoutBox {
+  readonly x: number
+  readonly y: number
+  readonly w: number
+  readonly h: number
+}
+
+export interface LayoutTextboxItem extends LayoutBox {
+  readonly kind: 'textbox'
+  readonly paragraphs: readonly LayoutParagraph[]
+  /** addition: vertical anchor of the text frame. */
+  readonly anchor?: 'top' | 'middle' | 'bottom'
+}
+
+export interface LayoutTextlineItem extends LayoutBox {
+  readonly kind: 'textline'
+  readonly segment_id: string
+  readonly text: string
+  readonly size: number
+}
+
+export interface LayoutImageItem extends LayoutBox {
+  readonly kind: 'image'
+  /** data: URI, or null when the format can't be shown in a browser. */
+  readonly src: string | null
+  /** addition: picture alt-text segment. */
+  readonly alt?: { readonly segment_id: string; readonly text: string } | null
+}
+
+export interface LayoutShapeItem extends LayoutBox {
+  readonly kind: 'shape'
+  readonly fill: string | null
+}
+
+export type LayoutItem = LayoutTextboxItem | LayoutTextlineItem | LayoutImageItem | LayoutShapeItem
+
+export interface LayoutPage {
+  readonly index: number
+  readonly width: number
+  readonly height: number
+  readonly items: readonly LayoutItem[]
+  /** addition: speaker notes (pptx). */
+  readonly notes?: readonly LayoutParagraph[] | null
+}
+
+export interface LayoutUnscanned {
+  readonly where: string
+  readonly what: string
+  /** addition: 0-based page index, null for document-level entries. */
+  readonly page?: number | null
+}
+
+export interface ReviewSessionLayout {
+  readonly format: 'pptx' | 'pdf'
+  readonly pages: readonly LayoutPage[]
+  readonly unscanned?: readonly LayoutUnscanned[]
+}
+
+/** Wire name of the engine's response model; same shape. */
+export type ReviewSessionLayoutResponse = ReviewSessionLayout
+
 export interface ApiErrorBody {
   readonly error: string
   readonly details?: readonly Record<string, unknown>[] | null

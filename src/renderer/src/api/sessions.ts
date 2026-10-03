@@ -27,6 +27,7 @@ import {
   type CreateReviewSessionRequest,
   type DecisionWithPreviewResponse,
   type PatchProposalDecisionRequest,
+  type ReviewSessionLayout,
   type ReviewSessionListResponse,
   type ReviewSessionResponse,
 } from './types'
@@ -46,6 +47,12 @@ export interface SessionsClient {
    * — those have shed their input bytes by design.
    */
   getSessionInput(id: string, signal?: AbortSignal): Promise<Blob>
+  /**
+   * Fetch the positioned review layout (pptx today). Throws ApiError(415)
+   * for formats rendered client-side (docx) and ApiError(410) once the
+   * session has shed its input (committed / abandoned).
+   */
+  getLayout(id: string, signal?: AbortSignal): Promise<ReviewSessionLayout>
   patchDecision(
     sessionId: string,
     proposalId: string,
@@ -149,6 +156,15 @@ export function createSessionsClient(opts: ClientOptions): SessionsClient {
         throw new Error('unreachable')
       }
       return response.blob()
+    },
+
+    async getLayout(id, signal) {
+      const response = await fetchImpl(url(`/review-sessions/${encodeURIComponent(id)}/layout`), {
+        method: 'GET',
+        headers: headers(),
+        signal,
+      })
+      return (await handle(response)) as ReviewSessionLayout
     },
 
     async patchDecision(sessionId, proposalId, body, signal) {
