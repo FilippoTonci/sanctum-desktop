@@ -4,7 +4,9 @@ import type { ReviewSessionLayout } from '../../../src/renderer/src/api/types'
 import { rejectReason } from '../../../src/renderer/src/components/DropZone'
 import {
   cloneForThumbnail,
+  isSafeImageSrc,
   renderPptxLayout,
+  safeColor,
   slideIndexOfSegment,
 } from '../../../src/renderer/src/review/pptx-render'
 import { extractSegmentOrder, findSegmentRange } from '../../../src/renderer/src/review/segments'
@@ -132,5 +134,55 @@ describe('pptx helpers', () => {
     expect(rejectReason(file('Deck.PPTX'))).toBeNull()
     expect(rejectReason(file('memo.docx'))).toBeNull()
     expect(rejectReason(file('scan.pdf', 'application/pdf'))).not.toBeNull()
+  })
+})
+
+describe('engine-supplied values are sanitised', () => {
+  const page = (items: ReviewSessionLayout['pages'][number]['items']): ReviewSessionLayout => ({
+    format: 'pptx',
+    pages: [{ index: 0, width: 720, height: 540, items, notes: null }],
+  })
+
+  it('renders a placeholder for any image src that is not data:image/', () => {
+    for (const src of [
+      'https://example.com/x.png',
+      'file:///etc/passwd',
+      'javascript:alert(1)',
+      'data:text/html;base64,AAAA',
+      'data:image/svg+xml;base64,AAAA',
+    ]) {
+      const host = document.createElement('div')
+      renderPptxLayout(host, page([{ kind: 'image', x: 0, y: 0, w: 1, h: 1, src, alt: null }]))
+      expect(host.querySelector('img')).toBeNull()
+      expect(host.querySelector('.pptx-image-missing')).not.toBeNull()
+    }
+    expect(isSafeImageSrc('data:image/png;base64,AAAA')).toBe(true)
+    expect(isSafeImageSrc('data:image/jpeg;base64,AAAA')).toBe(true)
+  })
+
+  it('drops fills and run colours that are not hex or rgb(a)', () => {
+    expect(safeColor('#1F4E79')).toBe('#1F4E79')
+    expect(safeColor('rgba(0, 0, 0, 0.5)')).toBe('rgba(0, 0, 0, 0.5)')
+    expect(safeColor('url(https://example.com/x.png)')).toBeNull()
+    expect(safeColor('red; background: url(x)')).toBeNull()
+    const host = document.createElement('div')
+    renderPptxLayout(
+      host,
+      page([
+        { kind: 'shape', x: 0, y: 0, w: 1, h: 1, fill: 'url(https://example.com/x.png)' },
+        {
+          kind: 'textbox',
+          x: 0,
+          y: 0,
+          w: 1,
+          h: 1,
+          paragraphs: [
+            { runs: [{ segment_id: 's', text: 't', size: 10, color: 'url(https://x/y)' }] },
+          ],
+        },
+      ]),
+    )
+    expect(host.querySelector<HTMLElement>('.pptx-shape')?.getAttribute('style')).not.toMatch(/url/)
+    expect(host.querySelector<HTMLElement>('.pptx-run')?.style.color).toBe('')
   })
 })

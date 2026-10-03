@@ -123,8 +123,8 @@ interface DetectionSidebarProps {
 }
 
 /**
- * The document's detections as a layer list: grouped by entity type,
- * filterable by status, with per-group bulk actions. Lives in the left
+ * The document's detections as a layer list: grouped by entity type, or
+ * by slide for PowerPoint decks (`bySlide`), filterable by status, with per-group bulk actions. Lives in the left
  * sidebar during review; the right-hand Inspector edits the focused one.
  */
 export function DetectionSidebar({ bySlide = false }: DetectionSidebarProps): ReactElement {

@@ -246,8 +246,10 @@ export function App(): ReactElement {
   const handleRendered = useCallback(
     (root: HTMLElement) => {
       setDocRoot(root)
-      // Snapshot segment DOM order before any detections land in the
-      // store so user-added rows slot into document order.
+      // Snapshot segment DOM order so detections and user-added rows sort
+      // in document order. A docx usually renders before analysis lands; a
+      // pptx renders from the engine layout, so for decks this runs after
+      // the detections are in the store and setSegmentOrder re-sorts them.
       setSegmentOrder(extractSegmentOrder(root))
       // The seedFakeDetections fallback only fires when we're not
       // talking to a real backend.

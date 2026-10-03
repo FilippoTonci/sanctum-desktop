@@ -1225,7 +1225,7 @@ button:disabled {
   padding: 0 4px;
   border-radius: 999px;
   background: var(--redacted);
-  color: var(--surface);
+  color: #ffffff;
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;

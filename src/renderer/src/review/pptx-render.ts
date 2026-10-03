@@ -30,6 +30,20 @@ import type {
 } from '../api/types'
 import type { Detection } from './types'
 
+const SAFE_COLOR = /^(#[0-9a-f]{3,8}|rgba?\(\s*[\d.%\s,/]+\))$/i
+
+/** Engine colours are `#rrggbb`; anything else (e.g. `url(...)`) is dropped. */
+export function safeColor(value: string | null | undefined): string | null {
+  if (value === undefined || value === null) return null
+  const v = value.trim()
+  return SAFE_COLOR.test(v) ? v : null
+}
+
+/** Image sources must be inline raster data (`data:image/...`), never SVG. */
+export function isSafeImageSrc(src: string): boolean {
+  return /^data:image\/(png|jpe?g|gif|bmp|webp|x-icon|vnd\.microsoft\.icon);/i.test(src)
+}
+
 /** Default PowerPoint text-frame insets, in points (0.1in L/R, 0.05in T/B). */
 const INSET_X_PT = 7.2
 const INSET_Y_PT = 3.6
@@ -122,12 +136,15 @@ function renderShape(ctx: PageCtx, item: LayoutShapeItem): HTMLElement {
   const el = ctx.doc.createElement('div')
   el.className = 'pptx-shape'
   place(el, ctx, item)
-  if (item.fill !== null) el.style.background = item.fill
+  const fill = safeColor(item.fill)
+  if (fill !== null) el.style.backgroundColor = fill
   return el
 }
 
 function renderImage(ctx: PageCtx, item: LayoutImageItem): HTMLElement {
-  if (item.src === null) {
+  // Only inline raster data is drawn: anything else (a URL, file path,
+  // SVG/script data) renders the placeholder, like an unpreviewable format.
+  if (item.src === null || !isSafeImageSrc(item.src)) {
     const el = ctx.doc.createElement('div')
     el.className = 'pptx-image pptx-image-missing'
     el.title = 'This image format cannot be previewed'
@@ -191,7 +208,8 @@ function renderParagraph(
     }
     if (run.bold === true) span.style.fontWeight = '700'
     if (run.italic === true) span.style.fontStyle = 'italic'
-    if (run.color !== undefined && run.color !== null) span.style.color = run.color
+    const color = safeColor(run.color)
+    if (color !== null) span.style.color = color
     if (run.font !== undefined && run.font !== null && run.font !== '') {
       span.style.fontFamily = `${JSON.stringify(run.font)}, var(--pptx-font)`
     }
