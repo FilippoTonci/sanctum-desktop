@@ -43,6 +43,15 @@ export interface AppSettings {
   readonly theme: ThemePreference
 }
 
+export type MenuCommand =
+  | 'open'
+  | 'close'
+  | 'save'
+  | 'settings'
+  | 'undo'
+  | 'toggle-sidebar'
+  | 'palette'
+
 export interface SanctumApi {
   getStatus(): Promise<SanctumStatus>
   onStatusChange(listener: (status: SanctumStatus) => void): () => void
@@ -56,6 +65,7 @@ export interface SanctumApi {
   getMappingStorePath(): Promise<string>
   getSettings(): Promise<AppSettings | null>
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings | null>
+  onMenuCommand(cb: (cmd: MenuCommand) => void): () => void
 }
 
 declare global {

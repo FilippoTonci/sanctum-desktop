@@ -32,3 +32,47 @@ test('app launches and renders the placeholder', async () => {
 
   await app.close()
 })
+
+test('native menu commands reach the renderer', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'sanctum-e2e-'))
+  const app = await electron.launch({
+    args: [
+      resolve(__dirname, '../../out/main/index.js'),
+      `--user-data-dir=${join(home, 'userData')}`,
+    ],
+    env: {
+      ...process.env,
+      HOME: home,
+      ELECTRON_DISABLE_SANDBOX_WARNING: '1',
+      SANCTUM_SKIP_SIDECAR: '1',
+    },
+  })
+  const win = await app.firstWindow()
+  await win.waitForLoadState('domcontentloaded')
+  await expect(win.getByRole('heading', { level: 1 })).toBeVisible()
+
+  // Menu accelerators cannot be driven from Playwright; run the item's click
+  // handler in the main process, which is the IPC path the accelerator takes.
+  const clickItem = (label: string): Promise<void> =>
+    app.evaluate(({ Menu }, l) => {
+      const find = (items: Electron.MenuItem[]): Electron.MenuItem | undefined => {
+        for (const i of items) {
+          if (i.label === l) return i
+          const hit = i.submenu ? find(i.submenu.items) : undefined
+          if (hit) return hit
+        }
+        return undefined
+      }
+      const item = find(Menu.getApplicationMenu()?.items ?? [])
+      if (!item) throw new Error(`no menu item ${l}`)
+      ;(item.click as () => void)()
+    }, label)
+
+  await clickItem('Command Palette…')
+  await expect(win.getByRole('dialog')).toBeVisible()
+  await win.keyboard.press('Escape')
+  await clickItem('Settings…')
+  await expect(win.getByRole('heading', { name: /settings/i }).first()).toBeVisible()
+
+  await app.close()
+})

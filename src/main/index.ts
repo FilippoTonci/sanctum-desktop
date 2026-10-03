@@ -1,12 +1,23 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell, type WebContents } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  session,
+  shell,
+  type WebContents,
+} from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pollHealth } from './health'
+import { buildMenuTemplate, type MenuCommand } from './menu'
 import { needsRespawn, SettingsStore, settingsToEnv, type AppSettings } from './settings'
 import { spawnSidecar, type SidecarHandle } from './sidecar'
 import { StatusBus, toPublicStatus } from './status'
 
 const APP_URL_ALLOWLIST = new Set<string>(['https://github.com/FilippoTonci/sanctum'])
+const MENU_COMMAND_CHANNEL = 'sanctum:menu-command'
 const STATUS_CHANNEL = 'sanctum:status-change'
 const STATUS_GET_CHANNEL = 'sanctum:get-status'
 const SAVE_DIALOG_CHANNEL = 'sanctum:show-save-dialog'
@@ -68,6 +79,14 @@ function createWindow(): void {
   win.on('ready-to-show', () => {
     win.show()
   })
+
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      buildMenuTemplate((cmd: MenuCommand) => {
+        if (!win.isDestroyed()) win.webContents.send(MENU_COMMAND_CHANNEL, cmd)
+      }, process.platform),
+    ),
+  )
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (APP_URL_ALLOWLIST.has(url)) {

@@ -45,16 +45,7 @@ export function useReviewKeyboard(
         return
       }
 
-      // Ctrl/Cmd-Z is the undo shortcut. Suspended while typing so the
-      // browser's native input-undo still works inside the replacement
-      // editor.
-      if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
-        if (isInputFocused(event.target)) return
-        if (useReviewStore.getState().undoStack.length === 0) return
-        actionsRef.current.undoLastDecision()
-        event.preventDefault()
-        return
-      }
+      // Undo (⌘Z) is a native menu accelerator; App.tsx handles its command.
 
       // Other modifier combos pass through unchanged so browser shortcuts
       // (Cmd+R, Cmd+W, …) keep working.

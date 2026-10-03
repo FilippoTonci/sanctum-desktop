@@ -383,38 +383,65 @@ export function App(): ReactElement {
     setSidebarPref(!sidebarCollapsed)
   }, [sidebarCollapsed])
 
-  // App-level shortcuts. Modifier combos work even while typing; the
-  // review surface's own letter keys live in review/keyboard.ts.
+  // Native menu commands. The menu owns the modifier shortcuts (⌘O, ⌘W, ⌘S,
+  // ⌘Z, ⌘K, ⌘,, ⌘\\); each command runs the same handler the palette uses, so
+  // open and close go through the confirm-before-discard flow.
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent): void => {
-      const mod = e.metaKey || e.ctrlKey
-      if (mod && !e.altKey && !e.shiftKey) {
-        const key = e.key.toLowerCase()
-        if (key === 'k') {
-          e.preventDefault()
-          setPaletteOpen((o) => !o)
-          return
-        }
-        if (confirm !== null || commitPanelOpen) return
-        if (key === ',') {
-          e.preventDefault()
-          setPaletteOpen(false)
-          openSettings()
-        } else if (key === 'o') {
-          e.preventDefault()
-          setPaletteOpen(false)
-          openPicker()
-        } else if (key === '\\') {
-          e.preventDefault()
-          toggleSidebar()
-        } else if (key === 's' && doc !== null) {
-          e.preventDefault()
-          setPaletteOpen(false)
-          setView('main')
-          useReviewStore.getState().openCommitPanel()
-        }
+    const api = window.sanctum
+    if (api === undefined) return undefined
+    return api.onMenuCommand((cmd) => {
+      if (cmd === 'palette') {
+        setPaletteOpen((o) => !o)
         return
       }
+      if (confirm !== null || commitPanelOpen) return
+      setPaletteOpen(false)
+      switch (cmd) {
+        case 'open':
+          openPicker()
+          break
+        case 'close':
+          if (doc !== null) requestClose()
+          break
+        case 'save':
+          if (doc !== null) {
+            setView('main')
+            useReviewStore.getState().openCommitPanel()
+          }
+          break
+        case 'settings':
+          openSettings()
+          break
+        case 'undo':
+          // Inside a text field Undo is the field's own; otherwise it
+          // reverts the last review decision.
+          if (isInputFocused(document.activeElement)) {
+            // execCommand is the only renderer-side way to run a text field's native undo.
+            // eslint-disable-next-line @typescript-eslint/no-deprecated
+            document.execCommand('undo')
+          } else if (useReviewStore.getState().undoStack.length > 0) {
+            reviewActions.undoLastDecision()
+          }
+          break
+        case 'toggle-sidebar':
+          toggleSidebar()
+          break
+      }
+    })
+  }, [
+    commitPanelOpen,
+    confirm,
+    doc,
+    openPicker,
+    openSettings,
+    requestClose,
+    reviewActions,
+    toggleSidebar,
+  ])
+
+  // Escape leaves Settings. Everything modifier-based is a menu accelerator.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
       if (
         e.key === 'Escape' &&
         view === 'settings' &&
@@ -430,7 +457,7 @@ export function App(): ReactElement {
     return () => {
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [commitPanelOpen, confirm, doc, openPicker, openSettings, overlayOpen, toggleSidebar, view])
+  }, [overlayOpen, view])
 
   const commands = useMemo<Command[]>(() => {
     const list: Command[] = []
