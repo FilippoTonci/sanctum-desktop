@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { countDetections } from '../review/bulk'
 import { useReviewStore } from '../review/store'
 import { formatBytes } from './DocxView'
@@ -9,6 +9,8 @@ interface ReviewToolbarProps {
   readonly fileSize: number
   readonly onClose: () => void
   readonly onUndo: () => void
+  /** View-specific controls (the PDF zoom), shown before the actions. */
+  readonly extra?: ReactNode
 }
 
 /**
@@ -20,6 +22,7 @@ export function ReviewToolbar({
   fileSize,
   onClose,
   onUndo,
+  extra,
 }: ReviewToolbarProps): ReactElement {
   const detections = useReviewStore((s) => s.detections)
   const canUndo = useReviewStore((s) => s.undoStack.length > 0)
@@ -73,6 +76,8 @@ export function ReviewToolbar({
           )}
         </span>
       </div>
+
+      {extra !== undefined ? <div className="toolbar-extra">{extra}</div> : null}
 
       <div className="toolbar-actions">
         <button

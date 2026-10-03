@@ -220,11 +220,18 @@ export function PptxView({
   )
 }
 
-function UnscannedNotice({ items }: { readonly items: readonly LayoutUnscanned[] }): ReactElement {
+/** Parts of the file the engine could not scan; shared with PdfView. */
+export function UnscannedNotice({
+  items,
+  noun = 'presentation',
+}: {
+  readonly items: readonly LayoutUnscanned[]
+  readonly noun?: string
+}): ReactElement {
   return (
     <details className="pptx-unscanned" data-testid="pptx-unscanned">
       <summary>
-        {String(items.length)} part{items.length === 1 ? '' : 's'} of this presentation{' '}
+        {String(items.length)} part{items.length === 1 ? '' : 's'} of this {noun}{' '}
         {items.length === 1 ? 'is' : 'are'} not scanned. Check {items.length === 1 ? 'it' : 'them'}{' '}
         by hand.
       </summary>
@@ -243,7 +250,11 @@ function UnscannedNotice({ items }: { readonly items: readonly LayoutUnscanned[]
  * Scroll only the canvas scroller. `scrollIntoView` also scrolls every
  * scrollable ancestor, which can push the review toolbar off screen.
  */
-function scrollWithin(scroller: HTMLElement, el: HTMLElement, align: 'start' | 'nearest'): void {
+export function scrollWithin(
+  scroller: HTMLElement,
+  el: HTMLElement,
+  align: 'start' | 'nearest',
+): void {
   const box = scroller.getBoundingClientRect()
   const r = el.getBoundingClientRect()
   const margin = 24

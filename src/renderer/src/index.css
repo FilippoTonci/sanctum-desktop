@@ -1073,6 +1073,12 @@ button:disabled {
   white-space: nowrap;
 }
 
+.toolbar-extra {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
 .toolbar-actions {
   display: flex;
   align-items: center;
@@ -1370,6 +1376,131 @@ button:disabled {
 @media (max-width: 1199px) {
   .pptx-rail {
     display: none;
+  }
+}
+
+/* =========================================================================
+   PDF review — PDF.js page rasters under a transparent text layer built
+   from the engine's /layout textlines (review/pdf-layout.ts). Every line
+   carries [data-segment-id], so the highlight / wrap / click machinery
+   applies unchanged. Geometry is points × --pdf-scale (CSS px per point),
+   so zoom changes one custom property and never rebuilds the layer. The
+   page rail reuses the pptx rail; pages stay white in both themes.
+   ========================================================================= */
+
+.pdf-zoom .segmented-item {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.pdf-thumb {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: #ffffff;
+  pointer-events: none;
+}
+
+.pdf-thumb canvas {
+  display: block;
+}
+
+.pdf-thumb-mark {
+  position: absolute;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--pending);
+}
+
+.pdf-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pdf-page-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  width: max-content;
+  min-width: 100%;
+  margin: 0 auto;
+}
+
+.pdf-page {
+  position: relative;
+  flex: none;
+  background: #ffffff;
+  border-radius: 2px;
+  box-shadow: var(--shadow-page);
+}
+
+.pdf-page-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pdf-text-host,
+.pdf-text-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.pdf-textline {
+  position: absolute;
+  left: calc(var(--pdf-scale) * var(--x) * 1px);
+  top: calc(var(--pdf-scale) * var(--y) * 1px);
+  height: calc(var(--pdf-scale) * var(--h) * 1px);
+  line-height: calc(var(--pdf-scale) * var(--h) * 1px);
+  font-size: calc(var(--pdf-scale) * var(--size) * 1px);
+  white-space: pre;
+  color: transparent;
+  transform-origin: 0 0;
+  cursor: text;
+}
+
+.pdf-textline::selection,
+.pdf-textline *::selection {
+  background: var(--accent-soft);
+  color: transparent;
+}
+
+/* The original glyphs are paint on the canvas and cannot be hidden, so
+   an accepted replacement is the redaction token laid over the original
+   span. The original stays in the flow (transparent) so the line's
+   geometry holds. */
+.pdf-text-layer .sanctum-edit {
+  position: relative;
+}
+
+.pdf-text-layer .sanctum-edit[data-status='accepted'] .sanctum-edit-original {
+  display: inline;
+}
+
+.pdf-text-layer .sanctum-edit[data-status='accepted'] .sanctum-edit-replacement {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-width: 100%;
+  height: 100%;
+  padding: 0 0.3em;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1199px) {
+  .pdf-zoom .segmented-item {
+    padding: 0 6px;
   }
 }
 

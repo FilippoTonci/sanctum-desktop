@@ -14,9 +14,16 @@ import { CommitPanel } from './components/CommitPanel'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { DetectionSidebar } from './components/DetectionSidebar'
 import { DocxView } from './components/DocxView'
-import { ACCEPTED_EXTENSIONS, DropZone, isPptxFile, rejectReason } from './components/DropZone'
+import {
+  ACCEPTED_EXTENSIONS,
+  DropZone,
+  isPdfFile,
+  isPptxFile,
+  rejectReason,
+} from './components/DropZone'
 import { EditReplacement } from './components/EditReplacement'
 import { Inspector } from './components/Inspector'
+import { PdfView, PdfZoomControl } from './components/PdfView'
 import { PptxView } from './components/PptxView'
 import { RecentSessions } from './components/RecentSessions'
 import { ReviewToolbar } from './components/ReviewToolbar'
@@ -31,6 +38,7 @@ import { previewsForStore, sessionToDetections } from './review/from-session'
 import { runMenuUndo } from './menu-undo'
 import { isInputFocused, useReviewKeyboard } from './review/keyboard'
 import { useMissedSelectionTracker } from './review/selection-tracker'
+import type { ZoomMode } from './review/pdf-layout'
 import { extractSegmentOrder } from './review/segments'
 import { useReviewStore } from './review/store'
 import { OPERATOR_NAMES, type OperatorName } from './review/types'
@@ -75,6 +83,8 @@ export function App(): ReactElement {
   const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW_QUERY).matches)
   const [dragActive, setDragActive] = useState(false)
   const [dropError, setDropError] = useState<string | null>(null)
+  // PDF zoom lives here so the control can sit in ReviewToolbar.
+  const [pdfZoom, setPdfZoom] = useState<ZoomMode>('fit')
   const [confirm, setConfirm] = useState<ConfirmState>(null)
   const [recentKey, setRecentKey] = useState(0)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -596,7 +606,7 @@ export function App(): ReactElement {
       id: 'open',
       group: 'Documents',
       title: 'Open document…',
-      keywords: 'file docx pptx powerpoint word new',
+      keywords: 'file docx pptx pdf powerpoint word new',
       keys: ['⌘', 'O'],
       run: openPicker,
     })
@@ -732,8 +742,25 @@ export function App(): ReactElement {
                 onUndo={() => {
                   reviewActions.undoLastDecision()
                 }}
+                extra={
+                  isPdfFile(doc) ? (
+                    <PdfZoomControl value={pdfZoom} onChange={setPdfZoom} />
+                  ) : undefined
+                }
               />
-              {isPptxFile(doc) ? (
+              {isPdfFile(doc) ? (
+                <PdfView
+                  file={doc}
+                  zoom={pdfZoom}
+                  detections={detections}
+                  focusedId={focusedId}
+                  onRendered={handleRendered}
+                  onFocusDetection={setFocused}
+                  onUnwrappable={setUnwrappableIds}
+                  client={sessionsClient}
+                  sessionId={sessionId}
+                />
+              ) : isPptxFile(doc) ? (
                 <PptxView
                   detections={detections}
                   focusedId={focusedId}
