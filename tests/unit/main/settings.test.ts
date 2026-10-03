@@ -64,6 +64,20 @@ describe('SettingsStore', () => {
     })
   })
 
+  it('loads an rc.3 settings file (three fields only) and defaults every newer field', async () => {
+    // Exact shape rc.3 wrote: origin/main:src/main/settings.ts had only these keys.
+    const rc3 = { nerBackend: 'gliner', scoreThreshold: 0.5, defaultOperator: 'replace' }
+    await writeFile(path, JSON.stringify(rc3, null, 2), 'utf8')
+    const loaded = new SettingsStore(path).read()
+    expect(loaded).toEqual({ ...DEFAULT_SETTINGS, ...rc3 })
+    expect(loaded.entityTypes).toBeNull()
+    expect(loaded.replacementStyle).toBe('label')
+    expect(loaded.replacementText).toBe('[REDACTED]')
+    expect(loaded.outputSuffix).toBe('_anonymized')
+    expect(loaded.saveNextToOriginal).toBe(true)
+    expect(loaded.theme).toBe('system')
+  })
+
   it('caches reads so the second call does not re-stat the file', async () => {
     const store = new SettingsStore(path)
     const first = store.read()
