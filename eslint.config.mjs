@@ -8,6 +8,7 @@ export default tseslint.config(
   {
     ignores: [
       'out/**',
+      'scripts/**',
       'dist/**',
       'release/**',
       'sidecar-build/**',
