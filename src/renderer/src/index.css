@@ -1145,6 +1145,234 @@ button:disabled {
   border-radius: 2px;
 }
 
+/* =========================================================================
+   PowerPoint review — slides drawn from the engine's /layout.
+   Item positions are % of the slide; font sizes are cqw of the slide,
+   so each slide scales to its column with no JS. Like docx pages, the
+   slide itself keeps its own colours in both themes.
+   ========================================================================= */
+
+.pptx-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.pptx-rail {
+  flex: none;
+  width: 128px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 16px 8px 16px 10px;
+  border-right: 1px solid var(--border);
+}
+
+.pptx-rail-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  align-items: start;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text-3);
+  text-align: left;
+}
+
+.pptx-rail-item:hover {
+  background: var(--surface-3);
+}
+
+.pptx-rail-item.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.pptx-rail-number {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 16px;
+  text-align: right;
+}
+
+.pptx-thumb {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: #ffffff;
+  pointer-events: none;
+}
+
+.pptx-thumb .pptx-slide {
+  box-shadow: none;
+}
+
+.pptx-rail-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--redacted);
+  color: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.pptx-rail-badge.is-pending {
+  background: var(--pending);
+}
+
+.pptx-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pptx-view-body {
+  width: 100%;
+}
+
+.pptx-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 1040px;
+  margin: 0 auto;
+  --pptx-font: 'Calibri', 'Carlito', 'Helvetica Neue', Arial, sans-serif;
+}
+
+.pptx-slide-label {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.pptx-slide {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  container-type: inline-size;
+  background: #ffffff;
+  color: #000000;
+  font-family: var(--pptx-font);
+  line-height: 1.15;
+  border-radius: 2px;
+  box-shadow: var(--shadow-page);
+}
+
+.pptx-shape,
+.pptx-image,
+.pptx-textbox,
+.pptx-textline {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.pptx-image {
+  object-fit: fill;
+}
+
+.pptx-image-missing {
+  background: repeating-linear-gradient(45deg, #eeeeee, #eeeeee 6px, #e2e2e2 6px, #e2e2e2 12px);
+}
+
+.pptx-textbox {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow-wrap: break-word;
+}
+
+.pptx-anchor-middle {
+  justify-content: center;
+}
+
+.pptx-anchor-bottom {
+  justify-content: flex-end;
+}
+
+.pptx-p {
+  margin: 0;
+  min-height: 1em;
+  white-space: pre-wrap;
+}
+
+.pptx-textline {
+  white-space: pre;
+  color: transparent;
+}
+
+/* Speaker notes and picture alt text: reviewed text that is not on the slide. */
+.pptx-offslide {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.pptx-offslide-heading {
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.pptx-unscanned {
+  max-width: 1040px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 8px 14px;
+  border: 1px solid var(--pending);
+  border-radius: var(--r-md);
+  background: var(--pending-soft);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.pptx-unscanned summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.pptx-unscanned ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+
+/* Slide-grouped findings list: the entity type moves onto each row. */
+.detection-row-type {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+@media (max-width: 1199px) {
+  .pptx-rail {
+    display: none;
+  }
+}
+
 /* CSS Custom Highlight API — pending/accepted/rejected/focused markings. */
 ::highlight(sanctum-pending) {
   background-color: rgba(247, 190, 60, 0.38);

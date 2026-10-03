@@ -14,9 +14,10 @@ import { CommitPanel } from './components/CommitPanel'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { DetectionSidebar } from './components/DetectionSidebar'
 import { DocxView } from './components/DocxView'
-import { DropZone, rejectReason } from './components/DropZone'
+import { ACCEPTED_EXTENSIONS, DropZone, isPptxFile, rejectReason } from './components/DropZone'
 import { EditReplacement } from './components/EditReplacement'
 import { Inspector } from './components/Inspector'
+import { PptxView } from './components/PptxView'
 import { RecentSessions } from './components/RecentSessions'
 import { ReviewToolbar } from './components/ReviewToolbar'
 import { SETTINGS_SECTIONS, SettingsView, type SettingsSection } from './components/SettingsView'
@@ -593,7 +594,7 @@ export function App(): ReactElement {
       id: 'open',
       group: 'Documents',
       title: 'Open document…',
-      keywords: 'file docx new',
+      keywords: 'file docx pptx powerpoint word new',
       keys: ['⌘', 'O'],
       run: openPicker,
     })
@@ -715,7 +716,7 @@ export function App(): ReactElement {
             currentSessionId={sessionId}
             refreshKey={recentKey}
           />
-          {reviewMode ? <DetectionSidebar /> : null}
+          {reviewMode ? <DetectionSidebar bySlide={isPptxFile(doc)} /> : null}
         </Sidebar>
 
         <main className="main">
@@ -730,14 +731,26 @@ export function App(): ReactElement {
                   reviewActions.undoLastDecision()
                 }}
               />
-              <DocxView
-                file={doc}
-                detections={detections}
-                focusedId={focusedId}
-                onRendered={handleRendered}
-                onFocusDetection={setFocused}
-                onUnwrappable={setUnwrappableIds}
-              />
+              {isPptxFile(doc) ? (
+                <PptxView
+                  detections={detections}
+                  focusedId={focusedId}
+                  onRendered={handleRendered}
+                  onFocusDetection={setFocused}
+                  onUnwrappable={setUnwrappableIds}
+                  client={sessionsClient}
+                  sessionId={sessionId}
+                />
+              ) : (
+                <DocxView
+                  file={doc}
+                  detections={detections}
+                  focusedId={focusedId}
+                  onRendered={handleRendered}
+                  onFocusDetection={setFocused}
+                  onUnwrappable={setUnwrappableIds}
+                />
+              )}
               <EditReplacement anchorRoot={docRoot} />
               <AnalysisBanner state={analysis} />
               <SyncErrorToast />
@@ -803,7 +816,7 @@ export function App(): ReactElement {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".docx"
+          accept={ACCEPTED_EXTENSIONS}
           data-testid="drop-zone-input"
           className="visually-hidden"
           tabIndex={-1}
