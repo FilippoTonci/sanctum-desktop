@@ -129,11 +129,12 @@ describe('pptx helpers', () => {
     expect(slideIndexOfSegment('body/p0/r0')).toBeNull()
   })
 
-  it('accepts .docx and .pptx only', () => {
+  it('accepts .docx, .pptx and .pdf only', () => {
     const file = (name: string, type = ''): File => new File(['x'], name, { type })
     expect(rejectReason(file('Deck.PPTX'))).toBeNull()
     expect(rejectReason(file('memo.docx'))).toBeNull()
-    expect(rejectReason(file('scan.pdf', 'application/pdf'))).not.toBeNull()
+    expect(rejectReason(file('scan.pdf', 'application/pdf'))).toBeNull()
+    expect(rejectReason(file('sheet.xlsx'))).not.toBeNull()
   })
 })
 

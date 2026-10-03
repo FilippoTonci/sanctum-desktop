@@ -201,6 +201,8 @@ export interface LayoutTextlineItem extends LayoutBox {
   readonly segment_id: string
   readonly text: string
   readonly size: number
+  /** addition: PDF base font name. Optional — the engine does not send it. */
+  readonly font?: string | null
 }
 
 export interface LayoutImageItem extends LayoutBox {
