@@ -1388,10 +1388,29 @@ button:disabled {
    page rail reuses the pptx rail; pages stay white in both themes.
    ========================================================================= */
 
+/* Compact zoom in the toolbar's view slot: segmented-sm metrics. */
 .pdf-zoom .segmented-item {
-  height: 24px;
-  padding: 0 8px;
-  font-size: 12px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11.5px;
+}
+
+/* With a view slot the toolbar is one control busier: give the room
+   back the way the narrow-window rule does (size hidden, short track). */
+.toolbar:has(.toolbar-extra) .toolbar-doc-size {
+  display: none;
+}
+
+.toolbar:has(.toolbar-extra) .progress-track {
+  width: 88px;
+}
+
+/* Below this width the bar cannot hold the zoom control and the track
+   next to each other; the "n of N reviewed" label carries the progress. */
+@media (max-width: 1439px) {
+  .toolbar:has(.toolbar-extra) .progress-track {
+    display: none;
+  }
 }
 
 .pdf-thumb {
@@ -1474,8 +1493,8 @@ button:disabled {
 
 /* The original glyphs are paint on the canvas and cannot be hidden, so
    an accepted replacement is the redaction token laid over the original
-   span. The original stays in the flow (transparent) so the line's
-   geometry holds. */
+   span, at the original's size. The original stays in the flow
+   (transparent) so the line's geometry holds. */
 .pdf-text-layer .sanctum-edit {
   position: relative;
 }
@@ -1488,20 +1507,20 @@ button:disabled {
   position: absolute;
   left: 0;
   top: 0;
-  display: inline-flex;
-  align-items: center;
+  display: block;
   box-sizing: border-box;
-  min-width: 100%;
+  /* Exactly the original's box: a longer token must not cover the kept
+     text next to it, so it is clipped instead (the Inspector and the
+     findings list show it in full). */
+  width: 100%;
   height: 100%;
-  padding: 0 0.3em;
+  padding: 0 0.2em;
+  overflow: hidden;
   border-radius: 2px;
+  font-size: 0.72em;
+  line-height: calc(var(--pdf-scale) * var(--h) * 1px);
   white-space: nowrap;
-}
-
-@media (max-width: 1199px) {
-  .pdf-zoom .segmented-item {
-    padding: 0 6px;
-  }
+  text-overflow: clip;
 }
 
 /* CSS Custom Highlight API — pending/accepted/rejected/focused markings. */
