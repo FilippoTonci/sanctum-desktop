@@ -46,6 +46,7 @@ export function PptxView({
 }: PptxViewProps): ReactElement {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const railRef = useRef<HTMLElement | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
   const [state, setState] = useState<RenderState>({ kind: 'waiting' })
   // Held in a ref: App rebuilds onRendered when the analysis state flips,
   // and re-rendering the deck for that would throw away the wraps.
@@ -106,12 +107,11 @@ export function PptxView({
   useEffect(() => {
     if (state.kind !== 'ready' || focusedId === null) return
     const host = bodyRef.current
-    if (host === null) return
+    const scroller = scrollRef.current
+    if (host === null || scroller === null) return
     for (const el of host.querySelectorAll<HTMLElement>('[data-detection-id]')) {
       if (el.getAttribute('data-detection-id') === focusedId) {
-        if (typeof el.scrollIntoView === 'function') {
-          el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-        }
+        scrollWithin(scroller, el, 'nearest')
         return
       }
     }
@@ -142,7 +142,10 @@ export function PptxView({
     const frame = bodyRef.current?.querySelector<HTMLElement>(
       `.pptx-slide-frame[data-slide-index="${String(index)}"]`,
     )
-    frame?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    const scroller = scrollRef.current
+    if (frame !== null && frame !== undefined && scroller !== null) {
+      scrollWithin(scroller, frame, 'start')
+    }
   }
 
   const pages = state.kind === 'ready' ? state.layout.pages : []
@@ -208,7 +211,7 @@ export function PptxView({
             })}
           </nav>
         ) : null}
-        <div className="canvas-scroll pptx-scroll">
+        <div ref={scrollRef} className="canvas-scroll pptx-scroll">
           {unscanned.length > 0 ? <UnscannedNotice items={unscanned} /> : null}
           <div ref={bodyRef} className="pptx-view-body" data-testid="pptx-body" />
         </div>
@@ -234,6 +237,22 @@ function UnscannedNotice({ items }: { readonly items: readonly LayoutUnscanned[]
       </ul>
     </details>
   )
+}
+
+/**
+ * Scroll only the canvas scroller. `scrollIntoView` also scrolls every
+ * scrollable ancestor, which can push the review toolbar off screen.
+ */
+function scrollWithin(scroller: HTMLElement, el: HTMLElement, align: 'start' | 'nearest'): void {
+  const box = scroller.getBoundingClientRect()
+  const r = el.getBoundingClientRect()
+  const margin = 24
+  let delta: number
+  if (align === 'start') delta = r.top - box.top - margin
+  else if (r.top < box.top + margin) delta = r.top - box.top - margin
+  else if (r.bottom > box.bottom - margin) delta = r.bottom - box.bottom + margin
+  else return
+  if (typeof scroller.scrollBy === 'function') scroller.scrollBy({ top: delta, behavior: 'smooth' })
 }
 
 function countBySlide(
