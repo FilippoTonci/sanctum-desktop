@@ -197,3 +197,36 @@ describe('DetectionSidebar focus scrolling', () => {
     expect(scrollIntoView).not.toHaveBeenCalled()
   })
 })
+
+describe('DetectionSidebar grouped by slide (pptx)', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('renders one header per slide with its to-review count, in slide order', () => {
+    useReviewStore
+      .getState()
+      .setDetections([
+        detection({ id: 'a', segmentId: 'slide2/shape0/p0/r0' }),
+        detection({ id: 'b', segmentId: 'slide0/notes/p0/r0', entityType: 'EMAIL_ADDRESS' }),
+        detection({ id: 'c', segmentId: 'slide2/shape1/alt', status: 'accepted' }),
+        detection({ id: 'd', segmentId: 'slide2/shape2/p0/r0' }),
+      ])
+    const { getAllByRole } = render(React.createElement(DetectionSidebar, { bySlide: true }))
+    const heads = getAllByRole('button', { expanded: true }).map((b) => b.textContent)
+    expect(heads).toEqual(['Slide 1 · 1 to review', 'Slide 3 · 2 to review'])
+  })
+
+  it('keeps entity-type groups when not a slide deck', () => {
+    useReviewStore
+      .getState()
+      .setDetections([detection({ id: 'a', segmentId: 'slide2/shape0/p0/r0' })])
+    const { getAllByRole } = render(React.createElement(DetectionSidebar))
+    const heads = getAllByRole('button', { expanded: true }).map((b) => b.textContent)
+    expect(heads[0]).toMatch(/^Person/i)
+  })
+})

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { countDetections, decideAllPendingOfType } from '../review/bulk'
 import { entityLabel } from '../review/entities'
+import { groupDetectionsBySlide, slideIndexOfSegment } from '../review/pptx-render'
 import { useReviewStore } from '../review/store'
 import type { Detection, DetectionStatus, OperatorName } from '../review/types'
 import { useReviewActions } from '../review/use-actions'
@@ -75,7 +76,11 @@ const FILTERS: readonly { readonly id: Filter; readonly label: string }[] = [
 ]
 
 interface Group {
-  readonly type: string
+  /** Collapse key: the entity type, or `slide:<i>` for slide groups. */
+  readonly key: string
+  /** Set for entity-type groups, which offer a "Redact all" bulk action. */
+  readonly type: string | null
+  readonly label: string
   readonly items: readonly Detection[]
   readonly pending: number
 }
@@ -89,10 +94,32 @@ function groupByType(detections: readonly Detection[]): Group[] {
     else list.push(d)
   }
   return [...map.entries()].map(([type, items]) => ({
+    key: type,
     type,
+    label: entityLabel(type),
     items,
-    pending: items.filter((d) => d.status === 'pending').length,
+    pending: countDetections(items).pending,
   }))
+}
+
+/** Group detections by slide (pptx), slides in deck order. */
+function groupBySlide(detections: readonly Detection[]): Group[] {
+  return groupDetectionsBySlide(detections).map(({ slide, detections: items }) => ({
+    key: slideKey(slide),
+    type: null,
+    label: slide === -1 ? 'Elsewhere in the deck' : `Slide ${String(slide + 1)}`,
+    items,
+    pending: countDetections(items).pending,
+  }))
+}
+
+function slideKey(slide: number): string {
+  return `slide:${String(slide)}`
+}
+
+interface DetectionSidebarProps {
+  /** Group by slide instead of entity type (PowerPoint decks). */
+  readonly bySlide?: boolean
 }
 
 /**
@@ -100,7 +127,7 @@ function groupByType(detections: readonly Detection[]): Group[] {
  * filterable by status, with per-group bulk actions. Lives in the left
  * sidebar during review; the right-hand Inspector edits the focused one.
  */
-export function DetectionSidebar(): ReactElement {
+export function DetectionSidebar({ bySlide = false }: DetectionSidebarProps): ReactElement {
   const detections = useReviewStore((s) => s.detections)
   const focusedId = useReviewStore((s) => s.focusedId)
   const setFocused = useReviewStore((s) => s.setFocused)
@@ -114,18 +141,23 @@ export function DetectionSidebar(): ReactElement {
 
   const counts = countDetections(detections)
   const focused = detections.find((d) => d.id === focusedId)
-  const focusedType = focused?.entityType
+  const focusedKey =
+    focused === undefined
+      ? undefined
+      : bySlide
+        ? slideKey(slideIndexOfSegment(focused.segmentId) ?? -1)
+        : focused.entityType
 
   // A collapsed group must never hide the row keyboard focus lands on.
   useEffect(() => {
-    if (focusedType === undefined) return
+    if (focusedKey === undefined) return
     setCollapsed((prev) => {
-      if (!prev.has(focusedType)) return prev
+      if (!prev.has(focusedKey)) return prev
       const next = new Set(prev)
-      next.delete(focusedType)
+      next.delete(focusedKey)
       return next
     })
-  }, [focusedType])
+  }, [focusedKey])
 
   // Keyboard navigation and click-to-focus both move focusedId; keep the
   // matching row on screen. `block: 'nearest'` is a no-op when the row is
@@ -139,14 +171,14 @@ export function DetectionSidebar(): ReactElement {
 
   const groups = useMemo(() => {
     const visible = filter === 'all' ? detections : detections.filter((d) => d.status === filter)
-    return groupByType(visible)
-  }, [detections, filter])
+    return bySlide ? groupBySlide(visible) : groupByType(visible)
+  }, [bySlide, detections, filter])
 
-  const toggleGroup = (type: string): void => {
+  const toggleGroup = (key: string): void => {
     setCollapsed((prev) => {
       const next = new Set(prev)
-      if (next.has(type)) next.delete(type)
-      else next.add(type)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
@@ -211,30 +243,37 @@ export function DetectionSidebar(): ReactElement {
       ) : (
         <div className="detection-groups">
           {groups.map((g) => {
-            const isCollapsed = collapsed.has(g.type)
+            const isCollapsed = collapsed.has(g.key)
+            const bulkType = g.type
             return (
-              <div key={g.type} className="detection-group">
+              <div key={g.key} className="detection-group">
                 <div className="group-head">
                   <button
                     type="button"
                     className="group-toggle"
                     aria-expanded={!isCollapsed}
                     onClick={() => {
-                      toggleGroup(g.type)
+                      toggleGroup(g.key)
                     }}
                   >
                     <Icon name={isCollapsed ? 'chevronRight' : 'chevronDown'} size={12} />
-                    <span className="group-name">{entityLabel(g.type)}</span>
-                    <span className="group-count">{String(g.items.length)}</span>
+                    <span className="group-name">{g.label}</span>
+                    {bulkType === null ? (
+                      <span className="group-count">
+                        {g.pending > 0 ? ` · ${String(g.pending)} to review` : ' · reviewed'}
+                      </span>
+                    ) : (
+                      <span className="group-count">{String(g.items.length)}</span>
+                    )}
                   </button>
-                  {g.pending > 0 ? (
+                  {bulkType !== null && g.pending > 0 ? (
                     <button
                       type="button"
                       className="group-bulk"
                       onClick={() => {
-                        decideAllPendingOfType(detections, g.type, 'accept', actions)
+                        decideAllPendingOfType(detections, bulkType, 'accept', actions)
                       }}
-                      title={`Redact the ${String(g.pending)} ${entityLabel(g.type)} detections still to review (Shift+A)`}
+                      title={`Redact the ${String(g.pending)} ${g.label} detections still to review (Shift+A)`}
                     >
                       Redact all
                     </button>
@@ -259,6 +298,11 @@ export function DetectionSidebar(): ReactElement {
                           >
                             <StatusGlyph status={d.status} />
                             <span className="detection-row-text">{d.text}</span>
+                            {bySlide && variant !== 'firm' ? (
+                              <span className="detection-row-type">
+                                {entityLabel(d.entityType)}
+                              </span>
+                            ) : null}
                             {variant === 'firm' ? (
                               <span
                                 className="detection-row-token"
