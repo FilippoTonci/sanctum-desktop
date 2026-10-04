@@ -34,7 +34,9 @@ export async function launchIsolated({ home, extraEnv = {} } = {}) {
 
   const repo = process.env.SANCTUM_REPO
   const env = {
-    ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'ELECTRON_RUN_AS_NODE')),
+    ...Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => k !== 'ELECTRON_RUN_AS_NODE'),
+    ),
     HOME: home,
     ELECTRON_DISABLE_SANDBOX_WARNING: '1',
   }
@@ -44,7 +46,10 @@ export async function launchIsolated({ home, extraEnv = {} } = {}) {
     env.SANCTUM_DEV_REPO = engine
     // Engine checkout wins over any editable install in the venv.
     env.PYTHONPATH = engine
-    env.PATH = [join(process.env.SANCTUM_VENV ?? join(engine, '.venv'), 'bin'), process.env.PATH].join(delimiter)
+    env.PATH = [
+      join(process.env.SANCTUM_VENV ?? join(engine, '.venv'), 'bin'),
+      process.env.PATH,
+    ].join(delimiter)
   } else {
     env.SANCTUM_SKIP_SIDECAR = '1'
   }
