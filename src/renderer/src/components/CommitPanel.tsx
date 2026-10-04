@@ -9,6 +9,7 @@ import {
   type SearchSegment,
 } from '../review/leaks'
 import { useReviewStore } from '../review/store'
+import { headsOf } from '../review/types'
 import { useReviewActions } from '../review/use-actions'
 import { Icon, Kbd } from './Icon'
 import { LeakSheet } from './LeakSheet'
@@ -220,7 +221,7 @@ export function CommitPanel({
     const state = useReviewStore.getState()
     const current = state.detections.find((d) => d.id === state.focusedId)
     if (current?.status === 'pending') return
-    const firstPending = state.detections.find((d) => d.status === 'pending')
+    const firstPending = headsOf(state.detections).find((d) => d.status === 'pending')
     if (firstPending !== undefined && state.focusedId === null) setFocused(firstPending.id)
     else focusNextPending()
   }

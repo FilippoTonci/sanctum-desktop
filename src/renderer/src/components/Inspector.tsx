@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { countDetections, decideAllPendingOfType, idsOfType } from '../review/bulk'
 import { entityLabel } from '../review/entities'
 import { useReviewStore } from '../review/store'
-import type { Detection } from '../review/types'
+import { findingText, headsOf, type Detection } from '../review/types'
 import { useReviewActions } from '../review/use-actions'
 import { pickFocusedControlsState, STATUS_LABEL, StatusGlyph } from './DetectionSidebar'
 import { Icon, Kbd } from './Icon'
@@ -21,8 +21,10 @@ export function Inspector(): ReactElement {
   const focusNext = useReviewStore((s) => s.focusNext)
   const focusPrev = useReviewStore((s) => s.focusPrev)
 
-  const index = detections.findIndex((d) => d.id === focusedId)
-  const detection = index === -1 ? undefined : detections[index]
+  // Findings, not pieces: a linked finding is numbered and shown once.
+  const findings = headsOf(detections)
+  const index = findings.findIndex((d) => d.id === focusedId)
+  const detection = index === -1 ? undefined : findings[index]
 
   return (
     <aside className="inspector" aria-label="Inspector">
@@ -30,7 +32,7 @@ export function Inspector(): ReactElement {
         <h2 className="panel-title">
           {detection === undefined
             ? 'Inspector'
-            : `Detection ${String(index + 1)} of ${String(detections.length)}`}
+            : `Detection ${String(index + 1)} of ${String(findings.length)}`}
         </h2>
         <div className="inspector-nav">
           <button
@@ -131,7 +133,7 @@ function FocusedDetection({
             {STATUS_LABEL[detection.status]}
           </span>
         </div>
-        <p className="inspector-subject">{detection.text}</p>
+        <p className="inspector-subject">{findingText(detection)}</p>
       </section>
 
       <section className="inspector-section">

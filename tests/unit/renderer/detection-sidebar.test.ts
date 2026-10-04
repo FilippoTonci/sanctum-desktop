@@ -231,3 +231,36 @@ describe('DetectionSidebar grouped by slide (pptx)', () => {
     expect(heads[0]).toMatch(/^Person/i)
   })
 })
+
+describe('DetectionSidebar linked findings', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('lists a finding split across runs as one row under the whole name', async () => {
+    const group = { groupId: 'g1', groupText: 'Jennifer Martin' }
+    useReviewStore
+      .getState()
+      .setDetections([
+        detection({ id: 'a', text: 'Jennifer', groupIndex: 0, ...group }),
+        detection({ id: 'b', segmentId: 'body/p0/r2', text: 'Martin', groupIndex: 1, ...group }),
+        detection({ id: 's', segmentId: 'body/p1/r0', text: 'Ann' }),
+      ])
+    const { getAllByRole, getByRole } = render(React.createElement(DetectionSidebar))
+    const rows = getAllByRole('button', { pressed: undefined }).filter((b) =>
+      b.className.includes('detection-row'),
+    )
+    expect(rows.map((r) => r.querySelector('.detection-row-text')?.textContent)).toEqual([
+      'Jennifer Martin',
+      'Ann',
+    ])
+    expect(getByRole('heading').textContent).toMatch(/Detections\s*2/)
+    await userEvent.click(rows[1]!)
+    await userEvent.click(rows[0]!)
+    expect(useReviewStore.getState().focusedId).toBe('a')
+    await act(() => Promise.resolve())
+  })
+})

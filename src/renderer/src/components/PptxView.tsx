@@ -7,7 +7,7 @@ import {
   renderPptxLayout,
   slideIndexOfSegment,
 } from '../review/pptx-render'
-import type { Detection } from '../review/types'
+import { headsOf, type Detection } from '../review/types'
 import { useReviewSurface } from '../review/use-review-surface'
 import { Icon } from './Icon'
 
@@ -132,7 +132,7 @@ export function PptxView({
     }
   }, [state])
 
-  const perSlide = useMemo(() => countBySlide(detections), [detections])
+  const perSlide = useMemo(() => countBySlide(headsOf(detections)), [detections])
   const focusedSlide = useMemo(() => {
     const d = detections.find((x) => x.id === focusedId)
     return d === undefined ? null : slideIndexOfSegment(d.segmentId)

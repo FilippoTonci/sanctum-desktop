@@ -3,7 +3,13 @@ import { countDetections, decideAllPendingOfType } from '../review/bulk'
 import { entityLabel } from '../review/entities'
 import { groupDetectionsBySlide, slideIndexOfSegment } from '../review/pptx-render'
 import { useReviewStore } from '../review/store'
-import type { Detection, DetectionStatus, OperatorName } from '../review/types'
+import {
+  findingText,
+  headsOf,
+  type Detection,
+  type DetectionStatus,
+  type OperatorName,
+} from '../review/types'
 import { useReviewActions } from '../review/use-actions'
 import { Icon } from './Icon'
 
@@ -169,8 +175,11 @@ export function DetectionSidebar({ bySlide = false }: DetectionSidebarProps): Re
     row.scrollIntoView({ block: 'nearest' })
   }, [focusedId])
 
+  // One row per finding: a linked finding (a name split across runs or
+  // lines) lists its head only, under the whole name.
   const groups = useMemo(() => {
-    const visible = filter === 'all' ? detections : detections.filter((d) => d.status === filter)
+    const heads = headsOf(detections)
+    const visible = filter === 'all' ? heads : heads.filter((d) => d.status === filter)
     return bySlide ? groupBySlide(visible) : groupByType(visible)
   }, [bySlide, detections, filter])
 
@@ -297,7 +306,7 @@ export function DetectionSidebar({ bySlide = false }: DetectionSidebarProps): Re
                             }}
                           >
                             <StatusGlyph status={d.status} />
-                            <span className="detection-row-text">{d.text}</span>
+                            <span className="detection-row-text">{findingText(d)}</span>
                             {bySlide && variant !== 'firm' ? (
                               <span className="detection-row-type">
                                 {entityLabel(d.entityType)}

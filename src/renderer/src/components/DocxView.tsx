@@ -76,7 +76,7 @@ export function DocxView({
     const unwrappable = wrapDetections(host, detections)
     onUnwrappable?.(unwrappable)
     const resolved = resolveDetections(host, detections)
-    applyHighlightRegistries(resolved, focusedId)
+    applyHighlightRegistries(resolved, focusedId, detections)
   }, [state.kind, detections, focusedId, onUnwrappable])
 
   // Native listener rather than an onClick prop: the docx body is a
