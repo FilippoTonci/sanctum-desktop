@@ -26,6 +26,9 @@ export default defineConfig({
     plugins: [react()],
     build: {
       outDir: 'out/renderer',
+      // Fonts must be files: the CSP's font-src does not allow data: URIs.
+      assetsInlineLimit: (filePath: string) =>
+        /\.(woff2?|ttf|otf)$/.test(filePath) ? false : undefined,
       rollupOptions: {
         input: resolve(__dirname, 'src/renderer/index.html'),
       },
