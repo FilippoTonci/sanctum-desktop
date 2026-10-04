@@ -119,7 +119,6 @@ Wraps the sidecar's REST API. Both clients are constructed once per
   source of truth for the renderer's contract with the backend.**
 - `sessions.ts` — `SessionsClient`: list / create / get / patch decision
   / add user-added / delete user-added / commit / abandon.
-- `mapping.ts` — `MappingClient`: lock / unlock the encrypted mapping store.
 
 #### `src/renderer/src/components/` — React components
 
@@ -169,9 +168,6 @@ view) | `Inspector`.
 - `DropZone.tsx` — landing-page drop target + file picker for `.docx`,
   `.pptx` and `.pdf`.
 - `SanctumEmblem.tsx` — decorative header wordmark (`aria-hidden`).
-- `MappingStoreChip.tsx`, `UnlockModal.tsx` — mapping-store lock/unlock UI.
-  Not mounted by the studio (the app only uses the `replace` operator); the
-  `MappingClient` and IPC remain.
 
 #### `src/renderer/src/review/` — Review-surface state
 
@@ -279,7 +275,7 @@ tests/
 | ------------------------------------- | -------------------------------------------------------------------------------------- |
 | New IPC method                        | `src/preload/index.ts` + `src/main/index.ts` handler + `src/preload/sanctum.d.ts` type |
 | New review action / keyboard shortcut | `src/renderer/src/review/actions.ts` + `keyboard.ts`                                   |
-| New REST call to the sidecar          | `src/renderer/src/api/sessions.ts` (or `mapping.ts`) + `types.ts`                      |
+| New REST call to the sidecar          | `src/renderer/src/api/sessions.ts` + `types.ts`                                        |
 | New visible surface                   | `src/renderer/src/components/<Name>.tsx`, mount in `App.tsx`                           |
 | New menu item / palette command       | `src/main/menu.ts` (+ preload/`sanctum.d.ts` `MenuCommand`), handler in `App.tsx`      |
 | New document format                   | a `<Fmt>View.tsx` using `review/use-review-surface.ts`; accept it in `DropZone.tsx`    |
