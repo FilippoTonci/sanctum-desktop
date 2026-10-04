@@ -1583,6 +1583,17 @@ button:disabled {
   display: inline;
 }
 
+/* The tail pieces of a linked finding (a name split across runs) render
+   empty: the head carries the whole token, the rest vanish as they do in
+   the saved file. A PDF keeps the cover box, which hides the canvas text. */
+.sanctum-edit[data-status='accepted'] .sanctum-edit-replacement:empty {
+  display: none;
+}
+
+.pdf-text-layer .sanctum-edit[data-status='accepted'] .sanctum-edit-replacement:empty {
+  display: block;
+}
+
 /* =========================================================================
    Inspector
    ========================================================================= */

@@ -13,7 +13,7 @@ import {
   type ZoomMode,
 } from '../review/pdf-layout'
 import type { PDFDocumentProxy, RenderTask } from '../review/pdfjs'
-import type { Detection } from '../review/types'
+import { headsOf, type Detection } from '../review/types'
 import { useReviewSurface } from '../review/use-review-surface'
 import { Icon } from './Icon'
 import { scrollWithin, UnscannedNotice } from './PptxView'
@@ -481,7 +481,7 @@ function PdfPageRail({
     }
   }, [pdf, sizes.length])
 
-  const counts = useMemo(() => countByPage(detections), [detections])
+  const counts = useMemo(() => countByPage(headsOf(detections)), [detections])
   // One bar per text line that still has a pending finding. Every
   // thumbnail is THUMB_WIDTH_PX wide whatever its page size, so the
   // mapping uses each line's own page width.
