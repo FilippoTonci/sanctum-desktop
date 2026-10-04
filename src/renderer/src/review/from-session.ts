@@ -60,6 +60,7 @@ export function sessionToDetections(session: ReviewSessionResponse): Detection[]
       status: decision === undefined ? 'pending' : decisionStatus(decision.status),
       operator: knownOperator(decision?.operator),
       customReplacement: nullableToOptional(decision?.custom_replacement),
+      ...groupFields(p),
     })
   }
 
@@ -78,6 +79,21 @@ export function sessionToDetections(session: ReviewSessionResponse): Detection[]
   }
 
   return out
+}
+
+/**
+ * Linked-finding fields, present only for a grouped piece so a single
+ * finding's Detection keeps exactly its previous shape.
+ */
+function groupFields(
+  p: ReviewSessionResponse['proposals'][number],
+): Pick<Detection, 'groupId' | 'groupIndex' | 'groupText'> {
+  if (p.group_id === null || p.group_id === undefined) return {}
+  return {
+    groupId: p.group_id,
+    groupIndex: p.group_index ?? 0,
+    groupText: nullableToOptional(p.group_original),
+  }
 }
 
 function decisionStatus(status: 'accept' | 'reject'): 'accepted' | 'rejected' {

@@ -53,6 +53,15 @@ export interface ReviewProposal {
   readonly start: number
   /** Exclusive char offset within the segment's text — added in WS1.5. */
   readonly end: number
+  /**
+   * Linked finding (E6): pieces of one name split across runs or lines
+   * share a group id. `null`/absent for a single-piece finding.
+   */
+  readonly group_id?: string | null
+  /** 0 for the head piece, which carries the replacement preview. */
+  readonly group_index?: number
+  /** The whole finding's text; `null` for a single-piece finding. */
+  readonly group_original?: string | null
 }
 
 export type ProposalDecisionStatus = 'accept' | 'reject'

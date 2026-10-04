@@ -23,8 +23,9 @@
 
 import type { SessionsClient } from '../api/sessions'
 import { ApiError, type DecisionWithPreviewResponse } from '../api/types'
+import { sessionToDetections, previewsForStore } from './from-session'
 import { useReviewStore } from './store'
-import type { Detection, OperatorName } from './types'
+import { headOf, type Detection, type OperatorName } from './types'
 import type { MissedSpan } from './store'
 
 export interface ReviewActions {
@@ -116,6 +117,10 @@ export interface SyncedActionsContext {
  * accept/reject; operator + custom-replacement edits read the prior
  * value from the live store before mutating.
  *
+ * Linked findings (several pieces sharing a `groupId`) are addressed by
+ * their head: one request carries the head's id, the engine records the
+ * verdict on every piece, and the store mirrors that on every piece.
+ *
  * Out-of-scope edges (documented for slice 5+):
  *
  * - User-added decisions don't have a backend PATCH endpoint.
@@ -136,6 +141,27 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
 
   const detectionById = (id: string): Detection | undefined =>
     useReviewStore.getState().detections.find((d) => d.id === id)
+
+  /** The detection a request should name: the head of `id`'s finding. */
+  const findingById = (id: string): Detection | undefined =>
+    headOf(useReviewStore.getState().detections, id)
+
+  /**
+   * A hand-marked span that ate some pieces of a linked finding leaves the
+   * others with new offsets, text and head (the engine renumbers them).
+   * Refetch and refresh just those pieces; everything else is untouched.
+   */
+  const resyncGroups = async (groups: ReadonlySet<string>): Promise<void> => {
+    try {
+      const session = await ctx.client.getSession(sessionId)
+      const updates = sessionToDetections(session).filter(
+        (d) => d.groupId !== undefined && groups.has(d.groupId),
+      )
+      useReviewStore.getState().refreshDetections(updates, previewsForStore(session))
+    } catch (err) {
+      reportError('addMissed (refresh)', err)
+    }
+  }
 
   const isUserAdded = (id: string): boolean => id.startsWith('user:')
 
@@ -197,6 +223,11 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       // the new UA span (sanctum#31). Mirror the cascade locally so
       // the listing matches what a refetch would show.
       const removedIds = response.removed_proposal_ids ?? []
+      const touchedGroups = new Set<string>()
+      for (const id of removedIds) {
+        const groupId = detectionById(id)?.groupId
+        if (groupId !== undefined) touchedGroups.add(groupId)
+      }
       for (const id of removedIds) {
         useReviewStore.getState().removeDetection(id)
         useReviewStore.getState().clearPreview(id)
@@ -223,6 +254,7 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
         entityType: 'USER_ADDED',
         preview: response.preview,
       })
+      if (touchedGroups.size > 0) await resyncGroups(touchedGroups)
       return true
     } catch (err) {
       reportError('addMissed', err)
@@ -231,9 +263,10 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
   }
 
   return {
-    accept(id) {
-      const detection = detectionById(id)
+    accept(target) {
+      const detection = findingById(target)
       if (detection === undefined) return
+      const id = detection.id
       const previous = detection.status
 
       // Optimistic local flip first so the UI is responsive.
@@ -256,9 +289,10 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       })()
     },
 
-    reject(id) {
-      const detection = detectionById(id)
+    reject(target) {
+      const detection = findingById(target)
       if (detection === undefined) return
+      const id = detection.id
       const previous = detection.status
 
       useReviewStore.getState().setStatus(id, 'rejected')
@@ -290,9 +324,10 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       })()
     },
 
-    setOperator(id, operator) {
-      const detection = detectionById(id)
+    setOperator(target, operator) {
+      const detection = findingById(target)
       if (detection === undefined) return
+      const id = detection.id
       const previous = detection.operator
       useReviewStore.getState().setOperator(id, operator)
 
@@ -327,9 +362,10 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       })()
     },
 
-    setCustomReplacement(id, replacement) {
-      const detection = detectionById(id)
+    setCustomReplacement(target, replacement) {
+      const detection = findingById(target)
       if (detection === undefined) return
+      const id = detection.id
       const previous = detection.customReplacement ?? null
       useReviewStore.getState().setCustomReplacement(id, replacement)
 

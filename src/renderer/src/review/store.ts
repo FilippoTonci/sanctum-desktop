@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import type { SegmentLocator } from './segments'
-import type { Detection, DetectionStatus, OperatorName } from './types'
+import {
+  headOf,
+  headsOf,
+  membersOf,
+  type Detection,
+  type DetectionStatus,
+  type OperatorName,
+} from './types'
 
 export interface PendingMissedSelection {
   readonly locator: SegmentLocator
@@ -113,6 +120,13 @@ export interface ReviewState {
   appendDetection: (detection: Detection) => void
   /** Remove a single detection (used by reject-on-user-added DELETE). */
   removeDetection: (id: string) => void
+  /**
+   * Refresh where existing detections sit (segment, offsets, text, group
+   * fields) from an engine refetch, plus their previews. Verdicts, focus
+   * and undo history are kept. Used after a hand-marked span splits a
+   * linked finding and the engine renumbers the surviving pieces.
+   */
+  refreshDetections: (updates: readonly Detection[], previews: Record<string, string>) => void
   clear: () => void
 
   /**
@@ -254,7 +268,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     const sorted = sortByDocumentOrder(detections, get().segmentOrder)
     set({
       detections: sorted,
-      focusedId: sorted[0]?.id ?? null,
+      focusedId: headsOf(sorted)[0]?.id ?? null,
       undoStack: [],
       pendingMissedSelection: null,
       commitPanelOpen: false,
@@ -288,6 +302,37 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     }))
   },
 
+  refreshDetections: (updates, previews) => {
+    set((state) => {
+      const byId = new Map(updates.map((u) => [u.id, u]))
+      const detections = state.detections.map((d) => {
+        const u = byId.get(d.id)
+        if (u === undefined) return d
+        return {
+          ...d,
+          segmentId: u.segmentId,
+          start: u.start,
+          end: u.end,
+          text: u.text,
+          groupId: u.groupId,
+          groupIndex: u.groupIndex,
+          groupText: u.groupText,
+        }
+      })
+      const nextPreviews = { ...state.previews }
+      for (const id of byId.keys()) {
+        const preview = previews[id]
+        if (preview !== undefined) nextPreviews[id] = preview
+      }
+      return {
+        detections: sortByDocumentOrder(detections, state.segmentOrder),
+        previews: nextPreviews,
+        focusedId:
+          state.focusedId === null ? null : (headOf(detections, state.focusedId)?.id ?? null),
+      }
+    })
+  },
+
   setLastSyncError: (error) => {
     if (error === null) {
       set({ lastSyncError: null })
@@ -313,7 +358,15 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   },
 
   setPreview: (id, preview) => {
-    set((state) => ({ previews: { ...state.previews, [id]: preview } }))
+    set((state) => {
+      // A linked finding renders its replacement once, on the head; the
+      // other pieces render empty — the same split the engine's previews use.
+      const head = headOf(state.detections, id)
+      if (head?.groupId === undefined) return { previews: { ...state.previews, [id]: preview } }
+      const next = { ...state.previews }
+      for (const m of membersOf(state.detections, id)) next[m.id] = m.id === head.id ? preview : ''
+      return { previews: next }
+    })
   },
 
   clearPreview: (id) => {
@@ -346,21 +399,28 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
   setStatus: (id, status) => {
     set((state) => {
-      const target = state.detections.find((d) => d.id === id)
-      if (target === undefined || target.status === status) return state
+      // Deciding any piece of a linked finding decides every piece; the
+      // undo entry is keyed by the head and restores the whole group.
+      const head = headOf(state.detections, id)
+      if (head === undefined) return state
+      const members = new Set(membersOf(state.detections, id).map((d) => d.id))
+      if (state.detections.every((d) => !members.has(d.id) || d.status === status)) return state
       return {
-        detections: state.detections.map((d) => (d.id === id ? { ...d, status } : d)),
-        undoStack: [...state.undoStack, { kind: 'status', id, previous: target.status }],
+        detections: state.detections.map((d) => (members.has(d.id) ? { ...d, status } : d)),
+        undoStack: [...state.undoStack, { kind: 'status', id: head.id, previous: head.status }],
       }
     })
   },
 
   setFocused: (id) => {
-    set({ focusedId: id })
+    set((state) => ({
+      focusedId: id === null ? null : (headOf(state.detections, id)?.id ?? id),
+    }))
   },
 
   focusNext: () => {
-    const { detections, focusedId } = get()
+    const detections = headsOf(get().detections)
+    const { focusedId } = get()
     if (detections.length === 0) return
     const currentIdx = detections.findIndex((d) => d.id === focusedId)
     const nextIdx = currentIdx === -1 ? 0 : (currentIdx + 1) % detections.length
@@ -368,7 +428,8 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   },
 
   focusPrev: () => {
-    const { detections, focusedId } = get()
+    const detections = headsOf(get().detections)
+    const { focusedId } = get()
     if (detections.length === 0) return
     const currentIdx = detections.findIndex((d) => d.id === focusedId)
     const prevIdx =
@@ -379,7 +440,8 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   },
 
   focusNextPending: () => {
-    const { detections, focusedId } = get()
+    const detections = headsOf(get().detections)
+    const { focusedId } = get()
     if (detections.length === 0) return
     const currentIdx = detections.findIndex((d) => d.id === focusedId)
     // Walk the list once starting from the slot after the current
@@ -406,12 +468,13 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       const last = state.undoStack[state.undoStack.length - 1]
       if (last === undefined) return state
       if (last.kind === 'status') {
+        const members = new Set(membersOf(state.detections, last.id).map((d) => d.id))
         return {
           detections: state.detections.map((d) =>
-            d.id === last.id ? { ...d, status: last.previous } : d,
+            members.has(d.id) ? { ...d, status: last.previous } : d,
           ),
           undoStack: state.undoStack.slice(0, -1),
-          focusedId: last.id,
+          focusedId: headOf(state.detections, last.id)?.id ?? last.id,
         }
       }
       // last.kind === 'user-add'
@@ -462,17 +525,23 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   },
 
   setOperator: (id, operator) => {
-    set((state) => ({
-      detections: state.detections.map((d) => (d.id === id ? { ...d, operator } : d)),
-    }))
+    set((state) => {
+      const members = new Set(membersOf(state.detections, id).map((d) => d.id))
+      return {
+        detections: state.detections.map((d) => (members.has(d.id) ? { ...d, operator } : d)),
+      }
+    })
   },
 
   setCustomReplacement: (id, replacement) => {
-    set((state) => ({
-      detections: state.detections.map((d) =>
-        d.id === id ? { ...d, customReplacement: replacement ?? undefined } : d,
-      ),
-    }))
+    set((state) => {
+      const members = new Set(membersOf(state.detections, id).map((d) => d.id))
+      return {
+        detections: state.detections.map((d) =>
+          members.has(d.id) ? { ...d, customReplacement: replacement ?? undefined } : d,
+        ),
+      }
+    })
   },
 
   setDefaultOperator: (operator) => {

@@ -29,7 +29,7 @@ export function useReviewSurface(args: {
     const unwrappable = wrapDetections(host, detections)
     onUnwrappable?.(unwrappable)
     const resolved = resolveDetections(host, detections)
-    applyHighlightRegistries(resolved, focusedId)
+    applyHighlightRegistries(resolved, focusedId, detections)
   }, [hostRef, ready, detections, focusedId, onUnwrappable])
 
   useEffect(() => {

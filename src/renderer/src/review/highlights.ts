@@ -14,7 +14,7 @@
  */
 
 import { findSegmentRange } from './segments'
-import type { Detection } from './types'
+import { membersOf, type Detection } from './types'
 
 const REGISTRY_NAMES = {
   pending: 'sanctum-pending',
@@ -104,6 +104,7 @@ function escapeAttr(value: string): string {
 export function applyHighlightRegistries(
   resolved: readonly ResolvedDetection[],
   focusedId: string | null,
+  detections: readonly Detection[] = resolved.map((r) => r.detection),
 ): boolean {
   if (!hasHighlightApi()) return false
 
@@ -118,14 +119,29 @@ export function applyHighlightRegistries(
     registry[name].clear()
   }
 
+  const focused = focusedIdsOf(detections, focusedId)
   for (const { detection, range } of resolved) {
     registry[REGISTRY_NAMES[detection.status]].add(range)
-    if (detection.id === focusedId) {
+    if (focused.has(detection.id)) {
       registry[REGISTRY_NAMES.focused].add(range)
     }
   }
 
   return true
+}
+
+/**
+ * Ids painted with the focused style: the focused detection and, for a
+ * linked finding, every other piece of it — the reviewer sees the whole
+ * name light up, not just the head's run.
+ */
+export function focusedIdsOf(
+  detections: readonly Detection[],
+  focusedId: string | null,
+): ReadonlySet<string> {
+  if (focusedId === null) return new Set()
+  const members = membersOf(detections, focusedId)
+  return new Set(members.length === 0 ? [focusedId] : members.map((d) => d.id))
 }
 
 function ensureRegistry(name: RegistryName): Highlight {

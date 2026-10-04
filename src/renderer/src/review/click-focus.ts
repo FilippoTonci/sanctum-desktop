@@ -13,6 +13,9 @@
  * `review/selection-tracker.ts`, so we return null rather than moving focus
  * out from under a selection the reviewer is about to act on.
  *
+ * A click on any piece of a linked finding returns that piece's id; the
+ * store's `setFocused` resolves it to the finding's head.
+ *
  * Returning null for a click on blank document space is deliberate: focus
  * stays where it is. `Esc` (see `review/keyboard.ts`) remains the single
  * explicit way to clear focus.
