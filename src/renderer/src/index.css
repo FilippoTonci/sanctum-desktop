@@ -339,8 +339,17 @@ button:disabled {
   justify-content: space-between;
 }
 
-.btn.is-current {
+.btn.is-active {
   box-shadow: inset 0 0 0 2px var(--accent-ring);
+}
+
+.btn-primary.is-active {
+  background: var(--accent-hover);
+}
+
+.btn-secondary.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .link-button {

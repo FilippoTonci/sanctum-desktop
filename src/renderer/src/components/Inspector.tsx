@@ -200,24 +200,26 @@ function FocusedDetection({
       <section className="inspector-section inspector-actions">
         <button
           type="button"
-          className={`btn btn-primary btn-block${detection.status === 'accepted' ? ' is-current' : ''}`}
+          className={`btn btn-primary btn-block${detection.status === 'accepted' ? ' is-active' : ''}`}
+          aria-pressed={detection.status === 'accepted'}
           onClick={() => {
             actions.accept(detection.id)
             focusNextPending()
           }}
         >
-          Redact
+          {detection.status === 'accepted' ? 'Redacted' : 'Redact'}
           <Kbd keys={['↵']} />
         </button>
         <button
           type="button"
-          className={`btn btn-secondary btn-block${detection.status === 'rejected' ? ' is-current' : ''}`}
+          className={`btn btn-secondary btn-block${detection.status === 'rejected' ? ' is-active' : ''}`}
+          aria-pressed={detection.status === 'rejected'}
           onClick={() => {
             actions.reject(detection.id)
             focusNextPending()
           }}
         >
-          Keep original
+          {detection.status === 'rejected' ? 'Original kept' : 'Keep original'}
           <Kbd keys={['⌫']} />
         </button>
       </section>
