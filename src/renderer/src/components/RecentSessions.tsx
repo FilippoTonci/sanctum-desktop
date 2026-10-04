@@ -75,19 +75,20 @@ export function pickStale(
  * delete (network blip, terminal session that already shed state)
  * isn't surfaced — the row just won't disappear until next mount.
  *
- * The DELETE is idempotent on the sidecar side: terminal sessions
- * (committed / abandoned) accept the call as a no-op-style cleanup
- * and open sessions transition to abandoned. Either way, the row
- * stops appearing in subsequent /review-sessions responses.
+ * Only open sessions are sent: the sidecar answers 409 for terminal
+ * ones (committed / abandoned), so calling it for them just logs
+ * errors. Open sessions transition to abandoned.
  */
-async function pruneOldSessions(
+export async function pruneOldSessions(
   client: SessionsClient,
   stale: readonly ReviewSessionIndexEntry[],
   signal: AbortSignal,
 ): Promise<void> {
   if (stale.length === 0) return
   await Promise.allSettled(
-    stale.map((s) => client.abandonSession(s.id, signal).catch(() => undefined)),
+    stale
+      .filter((s) => s.status === 'open')
+      .map((s) => client.abandonSession(s.id, signal).catch(() => undefined)),
   )
 }
 

@@ -1,6 +1,10 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest'
-import { pickRecent, pickStale } from '../../../src/renderer/src/components/RecentSessions'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  pickRecent,
+  pickStale,
+  pruneOldSessions,
+} from '../../../src/renderer/src/components/RecentSessions'
 import type { ReviewSessionIndexEntry } from '../../../src/renderer/src/api/types'
 
 function entry(
@@ -103,5 +107,23 @@ describe('pickStale', () => {
     ]
     const stale = pickStale(sessions, 1)
     expect(stale.map((s) => s.id).sort()).toEqual(['a', 'b'])
+  })
+})
+
+describe('pruneOldSessions', () => {
+  it('abandons only open sessions (terminal ones answer 409)', async () => {
+    const abandonSession = vi.fn().mockResolvedValue(undefined)
+    const client = { abandonSession } as unknown as Parameters<typeof pruneOldSessions>[0]
+    await pruneOldSessions(
+      client,
+      [
+        entry('o', '2026-01-01T00:00:00Z', 'open'),
+        entry('c', '2026-01-02T00:00:00Z', 'committed'),
+        entry('a', '2026-01-03T00:00:00Z', 'abandoned'),
+      ],
+      new AbortController().signal,
+    )
+    expect(abandonSession).toHaveBeenCalledTimes(1)
+    expect(abandonSession.mock.calls[0]?.[0]).toBe('o')
   })
 })
