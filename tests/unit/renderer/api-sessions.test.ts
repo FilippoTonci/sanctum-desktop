@@ -391,3 +391,27 @@ describe('clientFromCredentials', () => {
     expect(typeof client?.listSessions).toBe('function')
   })
 })
+
+describe('createSessionsClient.getLayout', () => {
+  it('GETs /review-sessions/{id}/layout and returns the JSON layout', async () => {
+    const layout = { format: 'pptx', pages: [], unscanned: [] }
+    const fetchImpl = vi.fn((input: Request | string | URL, init?: RequestInit) => {
+      expect(urlOf(input)).toBe('http://127.0.0.1:9000/review-sessions/sess%2F7/layout')
+      expect(init?.method).toBe('GET')
+      const headers = init?.headers as Record<string, string>
+      expect(headers.Authorization).toBe('Bearer t')
+      return Promise.resolve(jsonResponse(200, layout))
+    })
+    const client = createSessionsClient({ baseUrl: 'http://127.0.0.1:9000', token: 't', fetchImpl })
+    expect(await client.getLayout('sess/7')).toEqual(layout)
+  })
+
+  it('throws ApiError(415) for formats without a layout', async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(jsonResponse(415, { error: 'no layout for docx' })),
+    )
+    const client = createSessionsClient({ baseUrl: 'http://127.0.0.1:9000', token: 't', fetchImpl })
+    await expect(client.getLayout('s')).rejects.toMatchObject({ status: 415 })
+    await expect(client.getLayout('s')).rejects.toBeInstanceOf(ApiError)
+  })
+})

@@ -1,12 +1,23 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell, type WebContents } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  session,
+  shell,
+  type WebContents,
+} from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pollHealth } from './health'
-import { SettingsStore, settingsToEnv, type AppSettings } from './settings'
+import { buildMenuTemplate, type MenuCommand } from './menu'
+import { needsRespawn, SettingsStore, settingsToEnv, type AppSettings } from './settings'
 import { spawnSidecar, type SidecarHandle } from './sidecar'
 import { StatusBus, toPublicStatus } from './status'
 
 const APP_URL_ALLOWLIST = new Set<string>(['https://github.com/FilippoTonci/sanctum'])
+const MENU_COMMAND_CHANNEL = 'sanctum:menu-command'
 const STATUS_CHANNEL = 'sanctum:status-change'
 const STATUS_GET_CHANNEL = 'sanctum:get-status'
 const SAVE_DIALOG_CHANNEL = 'sanctum:show-save-dialog'
@@ -68,6 +79,14 @@ function createWindow(): void {
   win.on('ready-to-show', () => {
     win.show()
   })
+
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      buildMenuTemplate((cmd: MenuCommand) => {
+        if (!win.isDestroyed()) win.webContents.send(MENU_COMMAND_CHANNEL, cmd)
+      }, process.platform),
+    ),
+  )
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (APP_URL_ALLOWLIST.has(url)) {
@@ -181,12 +200,14 @@ ipcMain.handle(
   SETTINGS_UPDATE_CHANNEL,
   async (_event, patch: Partial<AppSettings>): Promise<AppSettings | null> => {
     if (settingsStore === null) return null
+    const prev = settingsStore.read()
     const next = await settingsStore.update(patch)
-    // Respawn so the new env lands on the sidecar. Don't block the
-    // IPC response on the full ready handshake — the renderer
-    // observes the status bus directly and surfaces the transient
-    // 'starting' / 'waiting-for-health' states via Splash.
-    void respawnSidecar()
+    // Respawn only when the sidecar's env actually changes (NLP tier,
+    // threshold, operator). Renderer-only preferences — theme, output
+    // naming, entity filter — apply without a restart. Don't block the
+    // IPC response on the full ready handshake — the renderer observes
+    // the status bus directly and surfaces the transient states.
+    if (needsRespawn(prev, next)) void respawnSidecar()
     return next
   },
 )

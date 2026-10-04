@@ -49,4 +49,61 @@ export interface Detection {
   readonly operator?: OperatorName
   /** Reviewer-provided literal replacement; wins over operator when set. */
   readonly customReplacement?: string
+  /**
+   * Linked finding: a name split across Word runs or PDF lines arrives as
+   * several pieces sharing a group id. Unset for a single-piece finding.
+   */
+  readonly groupId?: string
+  /** Position within the group; the lowest present index is the head. */
+  readonly groupIndex?: number
+  /** The whole finding's text ("Jennifer Martin"), shown in place of `text`. */
+  readonly groupText?: string
+}
+
+/**
+ * The piece that stands for a linked finding in lists, counts, focus and
+ * engine requests: the member with the lowest `groupIndex` (the engine
+ * renumbers so this is 0, but a locally pruned group may briefly lack it).
+ * A detection with no group is its own head. `undefined` for an unknown id.
+ */
+export function headOf(detections: readonly Detection[], id: string): Detection | undefined {
+  const target = detections.find((d) => d.id === id)
+  if (target?.groupId === undefined) return target
+  let head = target
+  for (const d of detections) {
+    if (d.groupId === target.groupId && (d.groupIndex ?? 0) < (head.groupIndex ?? 0)) head = d
+  }
+  return head
+}
+
+/** Every piece of `id`'s finding, in list order; just itself when ungrouped. */
+export function membersOf(detections: readonly Detection[], id: string): Detection[] {
+  const target = detections.find((d) => d.id === id)
+  if (target === undefined) return []
+  if (target.groupId === undefined) return [target]
+  return detections.filter((d) => d.groupId === target.groupId)
+}
+
+/** Whether `detection` is the head of its finding (always true when ungrouped). */
+export function isHead(detections: readonly Detection[], detection: Detection): boolean {
+  if (detection.groupId === undefined) return true
+  return headOf(detections, detection.id)?.id === detection.id
+}
+
+/** One detection per finding — the heads — in list order. */
+export function headsOf(detections: readonly Detection[]): Detection[] {
+  const heads = new Map<string, Detection>()
+  for (const d of detections) {
+    if (d.groupId === undefined) continue
+    const current = heads.get(d.groupId)
+    if (current === undefined || (d.groupIndex ?? 0) < (current.groupIndex ?? 0)) {
+      heads.set(d.groupId, d)
+    }
+  }
+  return detections.filter((d) => d.groupId === undefined || heads.get(d.groupId) === d)
+}
+
+/** The text a finding is listed under: the whole group's text, or its own. */
+export function findingText(detection: Detection): string {
+  return detection.groupText ?? detection.text
 }

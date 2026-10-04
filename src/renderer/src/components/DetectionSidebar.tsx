@@ -1,17 +1,22 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { countDetections, decideAllPendingOfType } from '../review/bulk'
+import { entityLabel } from '../review/entities'
+import { groupDetectionsBySlide, slideIndexOfSegment } from '../review/pptx-render'
 import { useReviewStore } from '../review/store'
 import {
-  OPERATOR_NAMES,
+  findingText,
+  headsOf,
   type Detection,
   type DetectionStatus,
   type OperatorName,
 } from '../review/types'
 import { useReviewActions } from '../review/use-actions'
+import { Icon } from './Icon'
 
-const STATUS_LABEL: Record<DetectionStatus, string> = {
-  pending: 'Pending',
-  accepted: 'Accepted',
-  rejected: 'Rejected',
+export const STATUS_LABEL: Record<DetectionStatus, string> = {
+  pending: 'To review',
+  accepted: 'Redacted',
+  rejected: 'Kept',
 }
 
 export interface FocusedControlsState {
@@ -22,11 +27,12 @@ export interface FocusedControlsState {
 }
 
 /**
- * Pure helper deciding what shape the focused row's controls block
- * should render in. Returns `null` for non-focused rows so callers can
- * skip the controls entirely.
+ * Pure helper deciding what shape the focused detection's controls
+ * should render in (the Inspector consumes it). Returns `null` for
+ * non-focused rows so callers can skip the controls entirely.
  *
- * Exported for unit testing — the JSX consumer below is a thin wrapper.
+ * Operator fields survive for the engine contract; the UI only ever
+ * uses `replace`, so the Inspector reads `editing` and nothing else.
  */
 export function pickFocusedControlsState(
   detection: Detection,
@@ -48,10 +54,10 @@ export function pickFocusedControlsState(
 export type ReplacementVariant = 'firm' | 'faint' | 'muted'
 
 /**
- * Decide the visual tier for the sidebar's "→ replacement" line:
+ * Visual tier for a replacement preview:
  *
  *   accepted → firm   (the decision is made; the replacement matters)
- *   rejected → muted  (greyed; user opted out, replacement is now history)
+ *   rejected → muted  (user opted out, replacement is now history)
  *   pending  → faint  (preview hint, not yet decided)
  *
  * Returns `null` when there's no preview to render.
@@ -66,25 +72,107 @@ export function pickReplacementVariant(
   return 'faint'
 }
 
-export function DetectionSidebar(): ReactElement {
+type Filter = 'all' | DetectionStatus
+
+const FILTERS: readonly { readonly id: Filter; readonly label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'pending', label: 'To review' },
+  { id: 'accepted', label: 'Redacted' },
+  { id: 'rejected', label: 'Kept' },
+]
+
+interface Group {
+  /** Collapse key: the entity type, or `slide:<i>` for slide groups. */
+  readonly key: string
+  /** Set for entity-type groups, which offer a "Redact all" bulk action. */
+  readonly type: string | null
+  readonly label: string
+  readonly items: readonly Detection[]
+  readonly pending: number
+}
+
+/** Group detections by entity type, groups ordered by first appearance. */
+function groupByType(detections: readonly Detection[]): Group[] {
+  const map = new Map<string, Detection[]>()
+  for (const d of detections) {
+    const list = map.get(d.entityType)
+    if (list === undefined) map.set(d.entityType, [d])
+    else list.push(d)
+  }
+  return [...map.entries()].map(([type, items]) => ({
+    key: type,
+    type,
+    label: entityLabel(type),
+    items,
+    pending: countDetections(items).pending,
+  }))
+}
+
+/** Group detections by slide (pptx), slides in deck order. */
+function groupBySlide(detections: readonly Detection[]): Group[] {
+  return groupDetectionsBySlide(detections).map(({ slide, detections: items }) => ({
+    key: slideKey(slide),
+    type: null,
+    label: slide === -1 ? 'Elsewhere in the deck' : `Slide ${String(slide + 1)}`,
+    items,
+    pending: countDetections(items).pending,
+  }))
+}
+
+function slideKey(slide: number): string {
+  return `slide:${String(slide)}`
+}
+
+interface DetectionSidebarProps {
+  /** Group by slide instead of entity type (PowerPoint decks). */
+  readonly bySlide?: boolean
+  /** Called after a row is chosen (and focused); the narrow-width overlay closes on it. */
+  readonly onRowChosen?: () => void
+}
+
+/**
+ * The document's detections as a layer list: grouped by entity type, or
+ * by slide for PowerPoint decks (`bySlide`), filterable by status, with per-group bulk actions. Lives in the left
+ * sidebar during review; the right-hand Inspector edits the focused one.
+ */
+export function DetectionSidebar({
+  bySlide = false,
+  onRowChosen,
+}: DetectionSidebarProps): ReactElement {
   const detections = useReviewStore((s) => s.detections)
   const focusedId = useReviewStore((s) => s.focusedId)
   const setFocused = useReviewStore((s) => s.setFocused)
-  const openCommit = useReviewStore((s) => s.openCommitPanel)
-  const editingReplacementId = useReviewStore((s) => s.editingReplacementId)
   const previews = useReviewStore((s) => s.previews)
-  const startEditingReplacement = useReviewStore((s) => s.startEditingReplacement)
-  const defaultOperator = useReviewStore((s) => s.defaultOperator)
-  const mappingUnlocked = useReviewStore((s) => s.mappingStoreUnlocked) === true
   const pendingMissedSelection = useReviewStore((s) => s.pendingMissedSelection)
   const actions = useReviewActions()
 
+  const [filter, setFilter] = useState<Filter>('all')
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
   const focusedRowRef = useRef<HTMLLIElement | null>(null)
 
+  const counts = countDetections(detections)
+  const focused = detections.find((d) => d.id === focusedId)
+  const focusedKey =
+    focused === undefined
+      ? undefined
+      : bySlide
+        ? slideKey(slideIndexOfSegment(focused.segmentId) ?? -1)
+        : focused.entityType
+
+  // A collapsed group must never hide the row keyboard focus lands on.
+  useEffect(() => {
+    if (focusedKey === undefined) return
+    setCollapsed((prev) => {
+      if (!prev.has(focusedKey)) return prev
+      const next = new Set(prev)
+      next.delete(focusedKey)
+      return next
+    })
+  }, [focusedKey])
+
   // Keyboard navigation and click-to-focus both move focusedId; keep the
-  // matching row on screen so its Accept/Reject/Edit controls are reachable.
-  // `block: 'nearest'` is a no-op when the row is already visible, so
-  // clicking a row directly does not jolt the list.
+  // matching row on screen. `block: 'nearest'` is a no-op when the row is
+  // already visible, so clicking a row directly does not jolt the list.
   useEffect(() => {
     const row = focusedRowRef.current
     if (row === null) return
@@ -92,267 +180,172 @@ export function DetectionSidebar(): ReactElement {
     row.scrollIntoView({ block: 'nearest' })
   }, [focusedId])
 
-  const counts = aggregate(detections)
-  const canCommit = detections.length > 0 && counts.pending === 0
+  // One row per finding: a linked finding (a name split across runs or
+  // lines) lists its head only, under the whole name.
+  const groups = useMemo(() => {
+    const heads = headsOf(detections)
+    const visible = filter === 'all' ? heads : heads.filter((d) => d.status === filter)
+    return bySlide ? groupBySlide(visible) : groupByType(visible)
+  }, [bySlide, detections, filter])
+
+  const toggleGroup = (key: string): void => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   return (
-    <aside className="detection-sidebar" aria-label="Detection list">
-      <header className="sidebar-header">
-        <div className="sidebar-header-row">
-          <h2>Detections</h2>
-          <button
-            type="button"
-            className="sidebar-mark-missed"
-            disabled={pendingMissedSelection === null}
-            onClick={() => {
-              if (pendingMissedSelection !== null) {
-                actions.addMissed(pendingMissedSelection)
-              }
-            }}
-            title={
-              pendingMissedSelection === null
-                ? 'Select text in the document to mark missed PII'
-                : 'Mark selection as missed PII · M'
-            }
-          >
-            + Mark missed PII
-          </button>
-        </div>
-        <p className="sidebar-counts">
-          <span>{String(counts.pending)} pending</span>
-          {' · '}
-          <span>{String(counts.accepted)} accepted</span>
-          {' · '}
-          <span>{String(counts.rejected)} rejected</span>
-        </p>
-      </header>
-      {detections.length === 0 ? (
-        <p className="sidebar-empty">No detections yet.</p>
-      ) : (
-        <ul className="sidebar-list">
-          {detections.map((d) => {
-            const focusedState = pickFocusedControlsState(
-              d,
-              focusedId,
-              editingReplacementId,
-              defaultOperator,
-              mappingUnlocked,
-            )
-            return (
-              <li key={d.id} ref={d.id === focusedId ? focusedRowRef : null}>
-                <button
-                  type="button"
-                  className={`sidebar-item sidebar-item-${d.status}${
-                    d.id === focusedId ? ' sidebar-item-focused' : ''
-                  }`}
-                  onClick={() => {
-                    setFocused(d.id)
-                  }}
-                  aria-pressed={d.id === focusedId}
-                >
-                  <span className="sidebar-item-text">{d.text}</span>
-                  <SidebarReplacementLine detection={d} preview={previews[d.id]} />
-                  <span className="sidebar-item-meta">
-                    <span className="sidebar-item-entity">{d.entityType}</span>
-                    <span className={`sidebar-item-status sidebar-item-status-${d.status}`}>
-                      {STATUS_LABEL[d.status]}
-                    </span>
-                  </span>
-                </button>
-                {focusedState !== null ? (
-                  <FocusedControls
-                    detection={d}
-                    state={focusedState}
-                    onSetOperator={(op) => {
-                      actions.setOperator(d.id, op)
-                    }}
-                    onAccept={() => {
-                      actions.accept(d.id)
-                    }}
-                    onReject={() => {
-                      actions.reject(d.id)
-                    }}
-                    onStartEdit={() => {
-                      startEditingReplacement(d.id)
-                    }}
-                    onCancelEdit={() => {
-                      startEditingReplacement(null)
-                    }}
-                    onCommitReplacement={(value) => {
-                      actions.setCustomReplacement(d.id, value.length === 0 ? null : value)
-                      startEditingReplacement(null)
-                    }}
-                  />
-                ) : null}
-              </li>
-            )
-          })}
-        </ul>
-      )}
-      <footer className="sidebar-footer">
+    <section className="detections" aria-label="Detection list">
+      <header className="panel-head">
+        <h2 className="panel-title">
+          Detections <span className="panel-count">{String(counts.total)}</span>
+        </h2>
         <button
           type="button"
-          className="sidebar-commit"
-          disabled={!canCommit}
-          onClick={openCommit}
+          className="btn btn-ghost btn-xs"
+          disabled={pendingMissedSelection === null}
+          onClick={() => {
+            if (pendingMissedSelection !== null) actions.addMissed(pendingMissedSelection)
+          }}
           title={
-            canCommit
-              ? 'Open commit panel (Ctrl/Cmd + Enter)'
-              : 'Resolve every pending detection before committing'
+            pendingMissedSelection === null
+              ? 'Select text in the document first, then press M'
+              : 'Mark the selected text as missed PII (M)'
           }
         >
-          Commit…
+          <Icon name="marker" size={14} />
+          Mark missed PII
         </button>
-      </footer>
-    </aside>
-  )
-}
+      </header>
 
-interface FocusedControlsProps {
-  readonly detection: Detection
-  readonly state: FocusedControlsState
-  readonly onSetOperator: (op: OperatorName) => void
-  readonly onAccept: () => void
-  readonly onReject: () => void
-  readonly onStartEdit: () => void
-  readonly onCancelEdit: () => void
-  readonly onCommitReplacement: (value: string) => void
-}
+      <div className="segmented segmented-sm" role="radiogroup" aria-label="Filter detections">
+        {FILTERS.map((f) => {
+          const n =
+            f.id === 'all'
+              ? counts.total
+              : f.id === 'pending'
+                ? counts.pending
+                : f.id === 'accepted'
+                  ? counts.accepted
+                  : counts.rejected
+          return (
+            <button
+              key={f.id}
+              type="button"
+              role="radio"
+              aria-checked={filter === f.id}
+              className="segmented-item"
+              onClick={() => {
+                setFilter(f.id)
+              }}
+            >
+              {f.label}
+              {/* "All" needs no count: the panel head already shows the total. */}
+              {f.id !== 'all' && <span className="segmented-count">{String(n)}</span>}
+            </button>
+          )
+        })}
+      </div>
 
-function FocusedControls({
-  detection,
-  state,
-  onSetOperator,
-  onAccept,
-  onReject,
-  onStartEdit,
-  onCancelEdit,
-  onCommitReplacement,
-}: FocusedControlsProps): ReactElement {
-  const [draft, setDraft] = useState('')
-  const inputRef = useRef<HTMLInputElement | null>(null)
-  const hasCustomReplacement = detection.customReplacement !== undefined
-
-  useEffect(() => {
-    if (state.editing) {
-      setDraft(detection.customReplacement ?? '')
-      inputRef.current?.focus()
-      inputRef.current?.select()
-    }
-  }, [state.editing, detection.customReplacement])
-
-  return (
-    <div className="detection-sidebar-item-controls" data-testid="focused-controls">
-      <label
-        className={`detection-sidebar-item-operator${
-          hasCustomReplacement ? ' detection-sidebar-item-operator-bypassed' : ''
-        }`}
-      >
-        Operator
-        <select
-          value={state.effectiveOperator}
-          disabled={hasCustomReplacement}
-          onChange={(e) => {
-            onSetOperator(e.currentTarget.value as OperatorName)
-          }}
-        >
-          {OPERATOR_NAMES.map((op) => {
-            const locked = op === 'pseudonymize' && state.pseudonymizeLocked
-            const isDefault = op === state.defaultOperator && detection.operator === undefined
+      {detections.length === 0 ? (
+        <p className="panel-empty">No detections yet.</p>
+      ) : groups.length === 0 ? (
+        <p className="panel-empty">Nothing in this filter.</p>
+      ) : (
+        <div className="detection-groups">
+          {groups.map((g) => {
+            const isCollapsed = collapsed.has(g.key)
+            const bulkType = g.type
             return (
-              <option key={op} value={op} disabled={locked}>
-                {op}
-                {isDefault ? ' (default)' : ''}
-                {locked ? ' — mapping store locked' : ''}
-              </option>
+              <div key={g.key} className="detection-group">
+                <div className="group-head">
+                  <button
+                    type="button"
+                    className="group-toggle"
+                    aria-expanded={!isCollapsed}
+                    onClick={() => {
+                      toggleGroup(g.key)
+                    }}
+                  >
+                    <Icon name={isCollapsed ? 'chevronRight' : 'chevronDown'} size={12} />
+                    <span className="group-name">{g.label}</span>
+                    {bulkType === null ? (
+                      <span className="group-count">
+                        {g.pending > 0 ? ` · ${String(g.pending)} to review` : ' · reviewed'}
+                      </span>
+                    ) : (
+                      <span className="group-count">{String(g.items.length)}</span>
+                    )}
+                  </button>
+                  {bulkType !== null && g.pending > 0 ? (
+                    <button
+                      type="button"
+                      className="group-bulk"
+                      onClick={() => {
+                        decideAllPendingOfType(detections, bulkType, 'accept', actions)
+                      }}
+                      title={`Redact the ${String(g.pending)} ${g.label} detections still to review (Shift+A)`}
+                    >
+                      Redact all
+                    </button>
+                  ) : null}
+                </div>
+                {isCollapsed ? null : (
+                  <ul className="detection-rows">
+                    {g.items.map((d) => {
+                      const isFocused = d.id === focusedId
+                      const variant = pickReplacementVariant(d, previews[d.id])
+                      return (
+                        <li key={d.id} ref={isFocused ? focusedRowRef : null}>
+                          <button
+                            type="button"
+                            className={`detection-row status-${d.status}${
+                              isFocused ? ' is-focused' : ''
+                            }`}
+                            aria-pressed={isFocused}
+                            onClick={() => {
+                              setFocused(d.id)
+                              onRowChosen?.()
+                            }}
+                          >
+                            <StatusGlyph status={d.status} />
+                            <span className="detection-row-text">{findingText(d)}</span>
+                            {bySlide && variant !== 'firm' ? (
+                              <span className="detection-row-type">
+                                {entityLabel(d.entityType)}
+                              </span>
+                            ) : null}
+                            {variant === 'firm' ? (
+                              <span
+                                className="detection-row-token"
+                                data-testid="sidebar-replacement"
+                              >
+                                {d.customReplacement ?? previews[d.id]}
+                              </span>
+                            ) : null}
+                            <span className="visually-hidden">{STATUS_LABEL[d.status]}</span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
             )
           })}
-        </select>
-        {state.pseudonymizeLocked && state.effectiveOperator === 'pseudonymize' ? (
-          <span className="detection-sidebar-item-hint">
-            Unlock the mapping store before committing.
-          </span>
-        ) : hasCustomReplacement ? (
-          <span className="detection-sidebar-item-hint">Bypassed by custom replacement below.</span>
-        ) : null}
-      </label>
-
-      {state.editing ? (
-        <div className="detection-sidebar-item-edit">
-          <input
-            ref={inputRef}
-            type="text"
-            value={draft}
-            placeholder="Custom replacement…"
-            onChange={(e) => {
-              setDraft(e.currentTarget.value)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                onCommitReplacement(draft)
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                onCancelEdit()
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="detection-sidebar-item-edit-cancel"
-            onClick={onCancelEdit}
-          >
-            Cancel
-          </button>
         </div>
-      ) : hasCustomReplacement ? (
-        <p className="detection-sidebar-item-replacement">
-          Replace with: <code>{detection.customReplacement}</code>
-          <button type="button" className="detection-sidebar-item-edit-start" onClick={onStartEdit}>
-            Edit
-          </button>
-        </p>
-      ) : (
-        <button type="button" className="detection-sidebar-item-edit-start" onClick={onStartEdit}>
-          Edit replacement
-        </button>
       )}
-
-      <div className="detection-sidebar-item-actions">
-        <button type="button" className="detection-sidebar-item-accept" onClick={onAccept}>
-          Accept ↵
-        </button>
-        <button type="button" className="detection-sidebar-item-reject" onClick={onReject}>
-          Reject ⌫
-        </button>
-      </div>
-    </div>
+    </section>
   )
 }
 
-interface SidebarReplacementLineProps {
-  readonly detection: Detection
-  readonly preview: string | undefined
-}
-
-function SidebarReplacementLine({
-  detection,
-  preview,
-}: SidebarReplacementLineProps): ReactElement | null {
-  const variant = pickReplacementVariant(detection, preview)
-  if (variant === null) return null
+export function StatusGlyph({ status }: { readonly status: DetectionStatus }): ReactElement {
   return (
-    <span
-      className={`sidebar-item-replacement sidebar-item-replacement-${variant}`}
-      data-testid="sidebar-replacement"
-    >
-      → {preview}
+    <span className={`status-glyph status-glyph-${status}`} aria-hidden="true">
+      {status === 'accepted' ? <Icon name="check" size={10} /> : null}
     </span>
   )
-}
-
-function aggregate(detections: readonly Detection[]): Record<DetectionStatus, number> {
-  const out: Record<DetectionStatus, number> = { pending: 0, accepted: 0, rejected: 0 }
-  for (const d of detections) out[d.status]++
-  return out
 }

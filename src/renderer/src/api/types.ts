@@ -33,6 +33,14 @@ export interface TextSegment {
   readonly id: string
   readonly text: string
   readonly metadata?: Record<string, unknown>
+  /**
+   * Paragraph key (engine Ruling 14): segments sharing a block are joined
+   * in order, with `join_before` between them, for detection and the leak
+   * check. `null` = the segment stands alone. Optional for older engines.
+   */
+  readonly block?: string | null
+  /** Text placed between the previous segment of the block and this one. */
+  readonly join_before?: string
 }
 
 export interface ReviewProposal {
@@ -45,6 +53,15 @@ export interface ReviewProposal {
   readonly start: number
   /** Exclusive char offset within the segment's text — added in WS1.5. */
   readonly end: number
+  /**
+   * Linked finding (E6): pieces of one name split across runs or lines
+   * share a group id. `null`/absent for a single-piece finding.
+   */
+  readonly group_id?: string | null
+  /** 0 for the head piece, which carries the replacement preview. */
+  readonly group_index?: number
+  /** The whole finding's text; `null` for a single-piece finding. */
+  readonly group_original?: string | null
 }
 
 export type ProposalDecisionStatus = 'accept' | 'reject'
@@ -157,6 +174,93 @@ export interface ReviewSessionResponse {
   /** Per-detection-id preview text (slice 4 renders this as ghost text). */
   readonly previews: Record<string, string>
 }
+
+/*
+ * Review-surface layout — `GET /review-sessions/{id}/layout` (the engine's
+ * shared pptx/pdf layout contract).
+ * Points (1/72 in), top-left origin, items in paint order. Fields marked
+ * "addition" are optional extensions the pptx prototype introduced.
+ */
+
+export interface LayoutRun {
+  readonly segment_id: string
+  readonly text: string
+  readonly size: number
+  readonly bold?: boolean
+  readonly italic?: boolean
+  readonly color?: string | null
+  readonly font?: string | null
+}
+
+export type LayoutAlign = 'left' | 'center' | 'right' | 'justify'
+
+export interface LayoutParagraph {
+  readonly align?: LayoutAlign
+  readonly runs: readonly LayoutRun[]
+}
+
+interface LayoutBox {
+  readonly x: number
+  readonly y: number
+  readonly w: number
+  readonly h: number
+}
+
+export interface LayoutTextboxItem extends LayoutBox {
+  readonly kind: 'textbox'
+  readonly paragraphs: readonly LayoutParagraph[]
+  /** addition: vertical anchor of the text frame. */
+  readonly anchor?: 'top' | 'middle' | 'bottom'
+}
+
+export interface LayoutTextlineItem extends LayoutBox {
+  readonly kind: 'textline'
+  readonly segment_id: string
+  readonly text: string
+  readonly size: number
+  /** addition: PDF base font name. Optional — the engine does not send it. */
+  readonly font?: string | null
+}
+
+export interface LayoutImageItem extends LayoutBox {
+  readonly kind: 'image'
+  /** data: URI, or null when the format can't be shown in a browser. */
+  readonly src: string | null
+  /** addition: picture alt-text segment. */
+  readonly alt?: { readonly segment_id: string; readonly text: string } | null
+}
+
+export interface LayoutShapeItem extends LayoutBox {
+  readonly kind: 'shape'
+  readonly fill: string | null
+}
+
+export type LayoutItem = LayoutTextboxItem | LayoutTextlineItem | LayoutImageItem | LayoutShapeItem
+
+export interface LayoutPage {
+  readonly index: number
+  readonly width: number
+  readonly height: number
+  readonly items: readonly LayoutItem[]
+  /** addition: speaker notes (pptx). */
+  readonly notes?: readonly LayoutParagraph[] | null
+}
+
+export interface LayoutUnscanned {
+  readonly where: string
+  readonly what: string
+  /** addition: 0-based page index, null for document-level entries. */
+  readonly page?: number | null
+}
+
+export interface ReviewSessionLayout {
+  readonly format: 'pptx' | 'pdf'
+  readonly pages: readonly LayoutPage[]
+  readonly unscanned?: readonly LayoutUnscanned[]
+}
+
+/** Wire name of the engine's response model; same shape. */
+export type ReviewSessionLayoutResponse = ReviewSessionLayout
 
 export interface ApiErrorBody {
   readonly error: string

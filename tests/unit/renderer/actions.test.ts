@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionsClient } from '../../../src/renderer/src/api/sessions'
 import { ApiError } from '../../../src/renderer/src/api/types'
-import { syncedActions } from '../../../src/renderer/src/review/actions'
+import { serializeMutations, syncedActions } from '../../../src/renderer/src/review/actions'
 import { useReviewStore } from '../../../src/renderer/src/review/store'
 import type { Detection } from '../../../src/renderer/src/review/types'
 
@@ -26,6 +26,7 @@ function fakeClient(overrides: Partial<SessionsClient> = {}): SessionsClient {
     createSession: noop,
     getSession: noop,
     getSessionInput: noop,
+    getLayout: noop,
     patchDecision: noop,
     addUserAdded: noop,
     deleteUserAdded: noop,
@@ -196,6 +197,54 @@ describe('syncedActions.setOperator', () => {
       'det-1',
       expect.objectContaining({ status: 'accept', operator: 'mask' }),
     )
+  })
+})
+
+describe('addMissedAndWait', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+
+  it('resolves true once the finding is in the store, with an undo entry', async () => {
+    const addUserAdded = vi.fn(() =>
+      Promise.resolve({
+        decision: {
+          kind: 'user_added' as const,
+          id: 'ua-1',
+          segment_anchor: 'page2/line4',
+          entity_type: 'USER_ADDED',
+          original: 'Priya',
+          start: 0,
+          end: 5,
+        },
+        preview: '<PERSON>',
+      }),
+    )
+    const actions = syncedActions({ client: fakeClient({ addUserAdded }), sessionId: 'sess-1' })
+
+    const ok = await actions.addMissedAndWait({
+      locator: { segmentId: 'page2/line4', start: 0, end: 5 },
+      text: 'Priya',
+    })
+
+    expect(ok).toBe(true)
+    const state = useReviewStore.getState()
+    expect(state.detections.map((d) => d.id)).toEqual(['user:ua-1'])
+    expect(state.previews['user:ua-1']).toBe('<PERSON>')
+    expect(state.undoStack.at(-1)).toMatchObject({ kind: 'user-add', id: 'user:ua-1' })
+  })
+
+  it('resolves false and reports the error when the POST fails', async () => {
+    const addUserAdded = vi.fn(() => Promise.reject(new ApiError(400, null, 'bad span')))
+    const actions = syncedActions({ client: fakeClient({ addUserAdded }), sessionId: 'sess-1' })
+
+    const ok = await actions.addMissedAndWait({
+      locator: { segmentId: 's', start: 0, end: 1 },
+      text: 'x',
+    })
+
+    expect(ok).toBe(false)
+    expect(useReviewStore.getState().lastSyncError?.message).toContain('bad span')
   })
 })
 
@@ -608,5 +657,37 @@ describe('syncedActions.undoLastDecision', () => {
 
     expect(patchDecision).not.toHaveBeenCalled()
     expect(useReviewStore.getState().detections[0]?.status).toBe('pending')
+  })
+})
+
+describe('serializeMutations', () => {
+  it('starts each request only after the previous one settles, even when one fails', async () => {
+    const log: string[] = []
+    const resolvers: (() => void)[] = []
+    let call = 0
+    const patchDecision = vi.fn((_s: string, id: string) => {
+      log.push(`start ${id}`)
+      const n = call++
+      return new Promise<never>((resolve, reject) => {
+        resolvers.push(() => {
+          log.push(`end ${id}`)
+          if (n === 0) reject(new Error('boom'))
+          else resolve({ decision: {}, preview: '' } as never)
+        })
+      })
+    })
+    const client = serializeMutations(fakeClient({ patchDecision }))
+    const body = { status: 'accept' as const, operator: null, custom_replacement: null }
+    const first = client.patchDecision('s', 'a', body)
+    const second = client.patchDecision('s', 'b', body)
+    await Promise.resolve()
+    expect(log).toEqual(['start a'])
+    resolvers[0]?.()
+    await expect(first).rejects.toThrow('boom')
+    await Promise.resolve()
+    expect(log).toEqual(['start a', 'end a', 'start b'])
+    resolvers[1]?.()
+    await second
+    expect(log).toEqual(['start a', 'end a', 'start b', 'end b'])
   })
 })

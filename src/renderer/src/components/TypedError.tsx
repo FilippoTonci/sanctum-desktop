@@ -76,7 +76,7 @@ export function describeStatus(status: number | null): ErrorCopy {
     case 415:
       return {
         title: 'Unsupported document format',
-        hint: 'Only .docx documents are supported in the current Sanctum release.',
+        hint: 'Only .docx and .pptx documents are supported in the current Sanctum release.',
       }
     case 503:
       return {

@@ -31,8 +31,8 @@ follow-up.
 
 ## Workstreams, branches, commits
 
-Work is organised around the Phase 3 plan in
-[`sanctum/plans/phase-3-desktop-ui.md`](https://github.com/FilippoTonci/sanctum/blob/main/plans/phase-3-desktop-ui.md).
+Work is organised by workstream; the README roadmap lists them. Plans and
+one-off scripts are kept out of the repo.
 
 - **One PR per workstream.** A WS is the unit of review. Open the PR against
   `main` when the WS starts; keep it in draft while substeps land.
@@ -67,12 +67,13 @@ These are load-bearing for the project's positioning. PRs that violate them
 will be sent back regardless of how clean the diff is.
 
 1. **Airgap.** No runtime network calls. The sidecar's environment sets
-   `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`. The renderer has a
+   `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`. PDF.js and its worker
+   are bundled, never fetched. The renderer has a
    `webRequest` filter blocking everything except `127.0.0.1`. The one
    exception is the user-confirmed model-download flow (WS3 substep 6),
    which fetches from a Sanctum-owned CDN.
 2. **Renderer is paint-only.** The Electron renderer never mutates the
-   `.docx` locally. It renders, captures decisions, and posts them to the
+   document (`.docx`, `.pptx`, `.pdf`) locally. It renders, captures decisions, and posts them to the
    backend; the backend writes the output file.
 3. **Sidecar lifecycle is the main process's job.** The renderer never
    spawns the Python backend, never reads tokens from disk, and never

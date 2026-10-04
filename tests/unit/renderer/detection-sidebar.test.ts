@@ -21,6 +21,7 @@ vi.mock('../../../src/renderer/src/review/use-actions', () => {
     setOperator: vi.fn(),
     setCustomReplacement: vi.fn(),
     addMissed: vi.fn(),
+    addMissedAndWait: vi.fn(),
     undoLastDecision: vi.fn(),
   }
   return {
@@ -195,5 +196,71 @@ describe('DetectionSidebar focus scrolling', () => {
     })
 
     expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+})
+
+describe('DetectionSidebar grouped by slide (pptx)', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('renders one header per slide with its to-review count, in slide order', () => {
+    useReviewStore
+      .getState()
+      .setDetections([
+        detection({ id: 'a', segmentId: 'slide2/shape0/p0/r0' }),
+        detection({ id: 'b', segmentId: 'slide0/notes/p0/r0', entityType: 'EMAIL_ADDRESS' }),
+        detection({ id: 'c', segmentId: 'slide2/shape1/alt', status: 'accepted' }),
+        detection({ id: 'd', segmentId: 'slide2/shape2/p0/r0' }),
+      ])
+    const { getAllByRole } = render(React.createElement(DetectionSidebar, { bySlide: true }))
+    const heads = getAllByRole('button', { expanded: true }).map((b) => b.textContent)
+    expect(heads).toEqual(['Slide 1 · 1 to review', 'Slide 3 · 2 to review'])
+  })
+
+  it('keeps entity-type groups when not a slide deck', () => {
+    useReviewStore
+      .getState()
+      .setDetections([detection({ id: 'a', segmentId: 'slide2/shape0/p0/r0' })])
+    const { getAllByRole } = render(React.createElement(DetectionSidebar))
+    const heads = getAllByRole('button', { expanded: true }).map((b) => b.textContent)
+    expect(heads[0]).toMatch(/^Person/i)
+  })
+})
+
+describe('DetectionSidebar linked findings', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('lists a finding split across runs as one row under the whole name', async () => {
+    const group = { groupId: 'g1', groupText: 'Jennifer Martin' }
+    useReviewStore
+      .getState()
+      .setDetections([
+        detection({ id: 'a', text: 'Jennifer', groupIndex: 0, ...group }),
+        detection({ id: 'b', segmentId: 'body/p0/r2', text: 'Martin', groupIndex: 1, ...group }),
+        detection({ id: 's', segmentId: 'body/p1/r0', text: 'Ann' }),
+      ])
+    const { getAllByRole, getByRole } = render(React.createElement(DetectionSidebar))
+    const rows = getAllByRole('button', { pressed: undefined }).filter((b) =>
+      b.className.includes('detection-row'),
+    )
+    expect(rows.map((r) => r.querySelector('.detection-row-text')?.textContent)).toEqual([
+      'Jennifer Martin',
+      'Ann',
+    ])
+    expect(getByRole('heading').textContent).toMatch(/Detections\s*2/)
+    await userEvent.click(rows[1]!)
+    await userEvent.click(rows[0]!)
+    expect(useReviewStore.getState().focusedId).toBe('a')
+    await act(() => Promise.resolve())
   })
 })

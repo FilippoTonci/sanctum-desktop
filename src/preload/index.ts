@@ -1,5 +1,19 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 
+const MENU_COMMAND_CHANNEL = 'sanctum:menu-command'
+// Keep in sync with MENU_COMMANDS in src/main/menu.ts and src/renderer/src/sanctum.d.ts.
+const MENU_COMMANDS = [
+  'open',
+  'close',
+  'save',
+  'settings',
+  'undo',
+  'toggle-sidebar',
+  'palette',
+] as const
+
+export type MenuCommand = (typeof MENU_COMMANDS)[number]
+
 const STATUS_CHANNEL = 'sanctum:status-change'
 const STATUS_GET_CHANNEL = 'sanctum:get-status'
 const SAVE_DIALOG_CHANNEL = 'sanctum:show-save-dialog'
@@ -9,11 +23,19 @@ const SETTINGS_GET_CHANNEL = 'sanctum:get-settings'
 const SETTINGS_UPDATE_CHANNEL = 'sanctum:update-settings'
 
 export type NerBackend = 'spacy' | 'gliner'
+export type ReplacementStyle = 'label' | 'fixed'
+export type ThemePreference = 'system' | 'light' | 'dark'
 
 export interface AppSettings {
   readonly nerBackend: NerBackend
   readonly scoreThreshold: number
   readonly defaultOperator: string
+  readonly entityTypes: readonly string[] | null
+  readonly replacementStyle: ReplacementStyle
+  readonly replacementText: string
+  readonly outputSuffix: string
+  readonly saveNextToOriginal: boolean
+  readonly theme: ThemePreference
 }
 
 export interface SaveDialogOptions {
@@ -83,10 +105,13 @@ export interface SanctumApi {
    */
   getSettings(): Promise<AppSettings | null>
   /**
-   * Persist a settings patch and trigger a sidecar respawn so the new
-   * env lands on the Python process. Returns the merged settings.
+   * Persist a settings patch. The main process respawns the sidecar
+   * only when the patch changes its env (NLP tier, threshold, operator).
+   * Returns the merged settings.
    */
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings | null>
+  /** Subscribe to native menu commands. Returns an unsubscribe function. */
+  onMenuCommand(cb: (cmd: MenuCommand) => void): () => void
 }
 
 const api: SanctumApi = {
@@ -119,6 +144,17 @@ const api: SanctumApi = {
   },
   async updateSettings(patch) {
     return (await ipcRenderer.invoke(SETTINGS_UPDATE_CHANNEL, patch)) as AppSettings | null
+  },
+  onMenuCommand(cb) {
+    const subscription = (_event: IpcRendererEvent, cmd: unknown): void => {
+      if (typeof cmd === 'string' && (MENU_COMMANDS as readonly string[]).includes(cmd)) {
+        cb(cmd as MenuCommand)
+      }
+    }
+    ipcRenderer.on(MENU_COMMAND_CHANNEL, subscription)
+    return () => {
+      ipcRenderer.off(MENU_COMMAND_CHANNEL, subscription)
+    }
   },
 }
 

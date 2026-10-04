@@ -49,9 +49,10 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 
 ### 🖱️ Drag-and-Drop Review
 
-- **Drop a `.docx`** onto the window and the app spawns the Sanctum engine, analyses the file, and opens a review surface in seconds.
-- **Inline highlights** — every detected PII span is painted directly over the rendered document using the CSS Custom Highlight API. No modal dialogs, no separate "findings" tab.
-- **Keyboard-first navigation** — step through detections with `↓` / `↑` (or `Tab` / `Shift+Tab`), `Enter` to accept, `Delete` / `Backspace` to reject — both auto-advance to the next pending detection so a long document reviews in one continuous flow. `e` edits the replacement, `m` marks a missed span. Designed for professionals who review hundreds of detections per document.
+- **Drop a `.docx`, `.pptx` or `.pdf`** onto the window (or use ⌘O) and the app spawns the Sanctum engine, analyses the file, and opens a review surface in seconds.
+- **A three-pane studio.** A sidebar lists every finding (one row per finding — pieces of a linked finding share a row), the canvas shows the document with every detected span painted in place via the CSS Custom Highlight API, and an inspector on the right shows the focused finding, its verdict buttons and the bulk actions for its type. A narrow window collapses the sidebar to a rail; the findings list then opens as an overlay from the toolbar.
+- **Keyboard-first navigation** — step through detections with `↓` / `↑` (or `Tab` / `Shift+Tab`), `Enter` to accept, `Delete` / `Backspace` to reject — both auto-advance to the next pending detection so a long document reviews in one continuous flow. `Shift+A` / `Shift+R` redact or keep every pending finding of the focused type. `e` edits the replacement, `m` marks a missed span. `⌘K` opens a command palette for everything else.
+- **Save check.** After writing the copy the engine re-reads it. If a value you redacted still appears elsewhere it refuses the save (HTTP 422) and the app shows a sheet listing each leaked value and where it sits, with "Redact these too" to add them and retry. Places you chose to keep are flagged, and values the app can't reach (a footnote, text box or chart) are called out so you can fix the original.
 
 ### 🔒 Air-Gapped by Construction
 
@@ -62,15 +63,16 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 
 ### 📄 Fidelity-Preserving Renderer
 
-- Renders `.docx` files with [docx-preview](https://github.com/VolodymyrBaydalka/docxjs) — tables, images, headers, footers, lists, and tracked changes all render without reprocessing the file.
+- **Word:** rendered with [docx-preview](https://github.com/VolodymyrBaydalka/docxjs) — tables, images, headers, footers, lists, and tracked changes render without reprocessing the file.
+- **PowerPoint:** `PptxView` draws the engine's `/layout` as positioned slides, findings grouped by slide. Only inline raster images (`data:image/…`) are drawn.
+- **PDF:** `PdfView` paints each page with PDF.js (`pdfjs-dist`, bundled locally — no CDN) under a transparent text layer from `/layout`, with zoom (Fit / 100% / 150%) and page thumbnails.
 - **The renderer is paint-only.** It never mutates the document. It captures decisions; the backend writes the output.
 - **Single document model.** The backend's per-run `TextSegment` offsets are the source of truth; the renderer's DOM is just a projection.
 
 ### 🧠 Powered by the Sanctum Engine
 
 - Dual-tier NER: **Standard** (spaCy `en_core_web_sm`, ~15 MB bundled) or **Professional** (GLiNER-medium v2.1, +0.17 macro-F1, fetched on-demand from a Sanctum-owned CDN with explicit user consent).
-- Five anonymization operators — `hips` (synthetic replacement), `replace`, `redact`, `mask`, `encrypt`, `pseudonymize` — selectable per detection.
-- Encrypted mapping store (ChaCha20-Poly1305 + Argon2id) for reversible pseudonymization, unlocked from the app's title bar.
+- The app creates every session with the `replace` operator (entity-tag placeholders, editable per finding). The engine also supports `hips`, `redact`, `mask`, `encrypt` and `pseudonymize` and an encrypted mapping store; the studio UI does not expose them.
 
 ---
 
@@ -82,8 +84,8 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 │            Electron + Vite + React 19 + TypeScript              │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │ Renderer  (sandboxed, contextIsolation=true)              │  │
-│  │   docx-preview  +  CSS Custom Highlight API overlay       │  │
-│  │   Detection sidebar  +  keyboard map  +  inline edits     │  │
+│  │   docx-preview / PptxView / PdfView + highlight overlay   │  │
+│  │   Studio: sidebar, inspector, ⌘K palette, keyboard map    │  │
 │  └────────────────────────┬──────────────────────────────────┘  │
 │                           │ preload: window.sanctum             │
 │  ┌────────────────────────▼──────────────────────────────────┐  │
@@ -91,6 +93,7 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 │  │   sidecar.ts   spawn + health-poll + SIGTERM on quit      │  │
 │  │   models.ts    one-shot model download (user-confirmed)   │  │
 │  │   settings.ts  persist settings → sidecar env on respawn  │  │
+│  │   menu.ts      native menu → renderer commands            │  │
 │  └────────────────────────┬──────────────────────────────────┘  │
 └───────────────────────────│─────────────────────────────────────┘
                             │  HTTP on 127.0.0.1 only
@@ -98,7 +101,7 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 ┌───────────────────────────▼─────────────────────────────────────┐
 │          Sanctum Python sidecar (from `sanctum` repo)           │
 │    Flask API → Analyzer → Anonymizer → Document writers         │
-│    GET /health   POST /review-sessions   POST .../commit        │
+│  /health  /review-sessions  .../layout  .../commit              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -118,7 +121,7 @@ The renderer's wire types (`src/renderer/src/api/types.ts`) are hand-written tod
 
 ## 🚀 Getting Started
 
-> **Status:** Workstreams 1–5 of Phase 3 are shipped — backend contract hardening (`sanctum`), Electron scaffold, sidecar integration, the `.docx` review surface, and the full session workflow UI (landing page, real session create/commit/abandon with sync, mapping-store unlock, settings + sidecar respawn, typed error surfaces, and resume from a Recent Sessions row). Packaged unsigned builds run end-to-end on Linux and macOS (Apple Silicon). WS6 (signing, notarization, release pipeline) is the next major milestone — no signed installers yet.
+> **Status:** Workstreams 1–5 of Phase 3 are shipped — backend contract hardening (`sanctum`), Electron scaffold, sidecar integration, the `.docx` review surface, and the full session workflow UI — plus the studio redesign and `.pptx` / `.pdf` review (0.2.0-rc.1). Packaged unsigned builds run end-to-end on Linux and macOS (Apple Silicon). WS6 (signing, notarization, release pipeline) is the next major milestone — no signed installers yet.
 
 ### Prerequisites
 
@@ -164,27 +167,29 @@ On macOS prefix `npm run make` with `CSC_IDENTITY_AUTO_DISCOVERY=false` so elect
 
 ## ⌨️ Keyboard Reference
 
-| Key                    | Action                                       |
-| ---------------------- | -------------------------------------------- |
-| `↓` / `Tab`            | Step to next detection                       |
-| `↑` / `Shift + Tab`    | Step to previous detection                   |
-| `Enter`                | Accept the focused detection (auto-advances) |
-| `Delete` / `Backspace` | Reject the focused detection (auto-advances) |
-| `e`                    | Edit the replacement text                    |
-| `m`                    | Mark selected text as missed PII             |
-| `Ctrl/Cmd + Z`         | Undo the last decision                       |
-| `Esc`                  | Close tooltip / clear focus                  |
-| `Ctrl/Cmd + Enter`     | Open the commit panel                        |
+| Key                    | Action                                           |
+| ---------------------- | ------------------------------------------------ |
+| `↓` / `Tab`            | Step to next detection                           |
+| `↑` / `Shift + Tab`    | Step to previous detection                       |
+| `n`                    | Jump to the next detection still pending         |
+| `Enter`                | Accept the focused detection (auto-advances)     |
+| `Delete` / `Backspace` | Reject the focused detection (auto-advances)     |
+| `Shift + A`            | Redact every pending finding of the focused type |
+| `Shift + R`            | Keep every pending finding of the focused type   |
+| `e`                    | Edit the replacement text                        |
+| `m`                    | Mark selected text as missed PII                 |
+| `Esc`                  | Clear focus                                      |
+| `Ctrl/Cmd + Enter`     | Open the commit panel                            |
 
-After Accept or Reject, focus jumps to the next still-pending detection — keep your hands on the home row and a long document reviews in one continuous flow. All shortcuts are suspended while an input is focused. `Tab` / `Shift+Tab` only step through detections when no other element holds focus, so native focus traversal in the sidebar / modals keeps working.
+Menu bar (native accelerators, forwarded to the renderer): `⌘O` open, `⌘W` close the document, `⌘S` save the redacted copy, `⌘,` Settings, `⌘K` command palette, `⌘\` toggle sidebar, `⌘Z` undo the last decision (or a text field's own undo while one has focus), `⇧⌘Z` redo in text fields. Settings → Keyboard lists the same bindings in the app.
+
+After Accept or Reject, focus jumps to the next still-pending detection — keep your hands on the home row and a long document reviews in one continuous flow. Bare-key shortcuts are suspended while an input is focused. `Tab` / `Shift+Tab` only step through detections when no other element holds focus, so native focus traversal in the sidebar / modals keeps working.
 
 Clicking a detection in the document focuses it too — on the highlighted text or on its inline replacement preview — and the matching sidebar row scrolls into view. Clicking blank space leaves focus where it is; `Esc` is the way to clear it.
 
 ---
 
 ## 🗺️ Roadmap
-
-This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop-ui.md` in the `sanctum` repo).
 
 ### WS1 — Backend contract hardening ✅ _(shipped in `sanctum`)_
 
@@ -237,6 +242,14 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [x] Accept/Reject UX redesign — sidebar-driven controls, no floating tooltip (issue #23)
 - [x] Inline substitution on accept — replacement substitutes the original in document flow; sidebar always shows the proposed change (issue #27)
 
+### 0.2.0-rc.1 — Studio UI and `.pptx` / `.pdf` review ✅ _(shipped, unsigned)_
+
+- [x] Studio layout: findings sidebar, canvas, inspector, ⌘K command palette, Settings view, bulk actions
+- [x] Native menu bar with ⌘O / ⌘W / ⌘S / ⌘, / ⌘K / ⌘Z
+- [x] `.pptx` review (slides from `/layout`, findings grouped by slide)
+- [x] `.pdf` review (PDF.js page raster + text layer, zoom, thumbnails)
+- [x] Save-check sheet on a 422, linked findings (one row per group)
+
 ### WS6 — Polish, signing, release
 
 - [ ] i18n (English + French, human-translated)
@@ -250,11 +263,9 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 - [ ] Split auto-update channels (shell vs. models)
 - [ ] One-click release workflow (`workflow_dispatch` → bump, tag, build, publish — see [`RELEASE.md`](RELEASE.md))
 
-### Phase 3.5 — Deferred formats _(post-MVP)_
+### Deferred _(post-MVP)_
 
-- [ ] `.pdf` review surface (PDF.js + text-layer overlay)
 - [ ] `.xlsx` review surface (SheetJS + custom cell grid)
-- [ ] `.pptx` review surface (server-rendered slide PNGs + overlay)
 - [ ] Batch processing and queues
 - [ ] Opt-in local-only crash reporting
 
@@ -268,7 +279,7 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 | Build       | [`electron-vite`](https://electron-vite.org/) + `electron-builder`                                         |
 | UI          | React 19 + TypeScript                                                                                      |
 | State       | Zustand                                                                                                    |
-| Renderer    | [`docx-preview`](https://github.com/VolodymyrBaydalka/docxjs) + CSS Custom Highlight API                   |
+| Renderer    | `docx-preview`, `PptxView` (DOM from `/layout`), `pdfjs-dist` 6.3.289 + CSS Custom Highlight API           |
 | Floating UI | `@floating-ui/react`                                                                                       |
 | Wire types  | Hand-written in `src/renderer/src/api/types.ts`, mirroring the pinned `schema/openapi.json`                |
 | i18n        | _Not wired yet_ — `react-i18next` is a WS6 item                                                            |
@@ -284,12 +295,12 @@ This roadmap mirrors Phase 3 of the Sanctum project plan (`plans/phase-3-desktop
 Before the first signed release ships, the following must be green:
 
 - Electron fuses reviewed — Node integration off, sandbox on, ASAR integrity on, `contextIsolation` enforced.
-- CSP on the renderer: `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'` (the `unsafe-inline` allowance is for `docx-preview`'s inline styles; to be revisited in Phase 3.5).
+- CSP on the renderer: `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'` (the `unsafe-inline` allowance is for `docx-preview`'s inline styles).
 - `shell.openExternal` is scheme-allowlisted.
 - `webRequest` filter blocks every destination other than `127.0.0.1`.
 - No telemetry or analytics at any point.
 - The bearer token is never written to disk or appears in logs.
-- The mapping-store passphrase lives in memory only for the duration of the unlock action, then cleared.
+- The mapping-store passphrase (when that engine feature is used) lives in memory only for the duration of the unlock action, then cleared.
 
 See [`sanctum/resources/presidio-architecture.md`](https://github.com/FilippoTonci/sanctum/blob/main/resources/presidio-architecture.md) for the engine-side network-call audit.
 
@@ -327,7 +338,6 @@ The Sanctum backend is licensed separately under MIT; see [`sanctum/LICENSE`](ht
 ## 🔗 Related
 
 - [Sanctum — the engine](https://github.com/FilippoTonci/sanctum) — Python backend, CLI, HTTP API, document adapters
-- [Phase 3 implementation plan](https://github.com/FilippoTonci/sanctum/blob/main/plans/phase-3-desktop-ui.md) — full Workstream-by-Workstream plan for this repo and the contract hardening it depends on
 - [Microsoft Presidio](https://microsoft.github.io/presidio/) — the PII detection engine Sanctum wraps
 - [Electron security checklist](https://www.electronjs.org/docs/latest/tutorial/security) — the posture this repo holds itself to
 

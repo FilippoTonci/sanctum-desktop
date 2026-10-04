@@ -23,8 +23,9 @@
 
 import type { SessionsClient } from '../api/sessions'
 import { ApiError, type DecisionWithPreviewResponse } from '../api/types'
+import { sessionToDetections, previewsForStore } from './from-session'
 import { useReviewStore } from './store'
-import type { Detection, OperatorName } from './types'
+import { headOf, type Detection, type OperatorName } from './types'
 import type { MissedSpan } from './store'
 
 export interface ReviewActions {
@@ -33,6 +34,13 @@ export interface ReviewActions {
   setOperator(id: string, operator: OperatorName): void
   setCustomReplacement(id: string, replacement: string | null): void
   addMissed(span: MissedSpan): void
+  /**
+   * `addMissed`, awaitable: resolves true once the finding is in the
+   * store (with its preview and undo entry), false if the engine refused
+   * it (the error is reported like `addMissed`'s). Used by the leak sheet
+   * to add findings one at a time before retrying the save.
+   */
+  addMissedAndWait(span: MissedSpan): Promise<boolean>
   undoLastDecision(): void
 }
 
@@ -52,9 +60,46 @@ export const localActions: ReviewActions = {
   addMissed(span) {
     useReviewStore.getState().addMissed(span)
   },
+  addMissedAndWait(span) {
+    useReviewStore.getState().addMissed(span)
+    return Promise.resolve(true)
+  },
   undoLastDecision() {
     useReviewStore.getState().undoLastDecision()
   },
+}
+
+/**
+ * Run a session's mutations one at a time, in the order they were issued.
+ *
+ * The engine handles each decision by loading the whole session, changing
+ * it and saving it back, on several worker threads. A burst of concurrent
+ * requests (a bulk "redact all Person", or holding Enter) races on that
+ * read-modify-write: some requests fail with a 500 and others can
+ * overwrite each other's verdicts. Queueing them here keeps every request
+ * applied on top of the previous one. A failed request does not block the
+ * queue; its caller still sees the rejection.
+ */
+export function serializeMutations(
+  client: SessionsClient,
+): Pick<SessionsClient, 'patchDecision' | 'addUserAdded' | 'deleteUserAdded'> {
+  let tail: Promise<unknown> = Promise.resolve()
+  let inFlight = 0
+  const enqueue = <T>(run: () => Promise<T>): Promise<T> => {
+    // Idle queue: call straight through so a lone request costs no extra tick.
+    const result = inFlight === 0 ? run() : tail.then(run, run)
+    inFlight++
+    const settled = (): void => {
+      inFlight--
+    }
+    tail = result.then(settled, settled)
+    return result
+  }
+  return {
+    patchDecision: (...args) => enqueue(() => client.patchDecision(...args)),
+    addUserAdded: (...args) => enqueue(() => client.addUserAdded(...args)),
+    deleteUserAdded: (...args) => enqueue(() => client.deleteUserAdded(...args)),
+  }
 }
 
 export interface SyncedActionsContext {
@@ -72,6 +117,10 @@ export interface SyncedActionsContext {
  * accept/reject; operator + custom-replacement edits read the prior
  * value from the live store before mutating.
  *
+ * Linked findings (several pieces sharing a `groupId`) are addressed by
+ * their head: one request carries the head's id, the engine records the
+ * verdict on every piece, and the store mirrors that on every piece.
+ *
  * Out-of-scope edges (documented for slice 5+):
  *
  * - User-added decisions don't have a backend PATCH endpoint.
@@ -87,10 +136,32 @@ export interface SyncedActionsContext {
  *   as a follow-up — see CHANGELOG.
  */
 export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
-  const { client, sessionId } = ctx
+  const { sessionId } = ctx
+  const client = serializeMutations(ctx.client)
 
   const detectionById = (id: string): Detection | undefined =>
     useReviewStore.getState().detections.find((d) => d.id === id)
+
+  /** The detection a request should name: the head of `id`'s finding. */
+  const findingById = (id: string): Detection | undefined =>
+    headOf(useReviewStore.getState().detections, id)
+
+  /**
+   * A hand-marked span that ate some pieces of a linked finding leaves the
+   * others with new offsets, text and head (the engine renumbers them).
+   * Refetch and refresh just those pieces; everything else is untouched.
+   */
+  const resyncGroups = async (groups: ReadonlySet<string>): Promise<void> => {
+    try {
+      const session = await ctx.client.getSession(sessionId)
+      const updates = sessionToDetections(session).filter(
+        (d) => d.groupId !== undefined && groups.has(d.groupId),
+      )
+      useReviewStore.getState().refreshDetections(updates, previewsForStore(session))
+    } catch (err) {
+      reportError('addMissed (refresh)', err)
+    }
+  }
 
   const isUserAdded = (id: string): boolean => id.startsWith('user:')
 
@@ -132,10 +203,70 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
     useReviewStore.getState().setPreview(id, response.preview)
   }
 
+  const addUserAddedSpan = async (span: MissedSpan): Promise<boolean> => {
+    try {
+      const response = await client.addUserAdded(sessionId, {
+        segment_anchor: span.locator.segmentId,
+        entity_type: 'USER_ADDED',
+        original: span.text,
+        start: span.locator.start,
+        end: span.locator.end,
+      })
+      if (response.decision.kind !== 'user_added') {
+        useReviewStore.getState().setLastSyncError({
+          status: null,
+          message: `addMissed: unexpected ${response.decision.kind} decision in the response`,
+        })
+        return false
+      }
+      // Backend drops any model proposal whose char range overlapped
+      // the new UA span (sanctum#31). Mirror the cascade locally so
+      // the listing matches what a refetch would show.
+      const removedIds = response.removed_proposal_ids ?? []
+      const touchedGroups = new Set<string>()
+      for (const id of removedIds) {
+        const groupId = detectionById(id)?.groupId
+        if (groupId !== undefined) touchedGroups.add(groupId)
+      }
+      for (const id of removedIds) {
+        useReviewStore.getState().removeDetection(id)
+        useReviewStore.getState().clearPreview(id)
+      }
+      const ua = response.decision
+      const detectionId = `user:${ua.id}`
+      useReviewStore.getState().appendDetection({
+        id: detectionId,
+        segmentId: ua.segment_anchor,
+        start: ua.start,
+        end: ua.end,
+        text: ua.original,
+        entityType: 'USER_ADDED',
+        status: 'accepted',
+      })
+      useReviewStore.getState().setPreview(detectionId, response.preview)
+      useReviewStore.getState().pushUserAddUndo({
+        kind: 'user-add',
+        id: detectionId,
+        segmentId: ua.segment_anchor,
+        start: ua.start,
+        end: ua.end,
+        text: ua.original,
+        entityType: 'USER_ADDED',
+        preview: response.preview,
+      })
+      if (touchedGroups.size > 0) await resyncGroups(touchedGroups)
+      return true
+    } catch (err) {
+      reportError('addMissed', err)
+      return false
+    }
+  }
+
   return {
-    accept(id) {
-      const detection = detectionById(id)
+    accept(target) {
+      const detection = findingById(target)
       if (detection === undefined) return
+      const id = detection.id
       const previous = detection.status
 
       // Optimistic local flip first so the UI is responsive.
@@ -158,9 +289,10 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       })()
     },
 
-    reject(id) {
-      const detection = detectionById(id)
+    reject(target) {
+      const detection = findingById(target)
       if (detection === undefined) return
+      const id = detection.id
       const previous = detection.status
 
       useReviewStore.getState().setStatus(id, 'rejected')
@@ -192,9 +324,10 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       })()
     },
 
-    setOperator(id, operator) {
-      const detection = detectionById(id)
+    setOperator(target, operator) {
+      const detection = findingById(target)
       if (detection === undefined) return
+      const id = detection.id
       const previous = detection.operator
       useReviewStore.getState().setOperator(id, operator)
 
@@ -229,9 +362,10 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       })()
     },
 
-    setCustomReplacement(id, replacement) {
-      const detection = detectionById(id)
+    setCustomReplacement(target, replacement) {
+      const detection = findingById(target)
       if (detection === undefined) return
+      const id = detection.id
       const previous = detection.customReplacement ?? null
       useReviewStore.getState().setCustomReplacement(id, replacement)
 
@@ -262,50 +396,11 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
       // user-added detection so it's the one the reviewer can immediately
       // tweak (operator, custom replacement, …).
       useReviewStore.getState().setFocused(null)
-      void (async () => {
-        try {
-          const response = await client.addUserAdded(sessionId, {
-            segment_anchor: span.locator.segmentId,
-            entity_type: 'USER_ADDED',
-            original: span.text,
-            start: span.locator.start,
-            end: span.locator.end,
-          })
-          if (response.decision.kind !== 'user_added') return
-          // Backend drops any model proposal whose char range overlapped
-          // the new UA span (sanctum#31). Mirror the cascade locally so
-          // the listing matches what a refetch would show.
-          const removedIds = response.removed_proposal_ids ?? []
-          for (const id of removedIds) {
-            useReviewStore.getState().removeDetection(id)
-            useReviewStore.getState().clearPreview(id)
-          }
-          const ua = response.decision
-          const detectionId = `user:${ua.id}`
-          useReviewStore.getState().appendDetection({
-            id: detectionId,
-            segmentId: ua.segment_anchor,
-            start: ua.start,
-            end: ua.end,
-            text: ua.original,
-            entityType: 'USER_ADDED',
-            status: 'accepted',
-          })
-          useReviewStore.getState().setPreview(detectionId, response.preview)
-          useReviewStore.getState().pushUserAddUndo({
-            kind: 'user-add',
-            id: detectionId,
-            segmentId: ua.segment_anchor,
-            start: ua.start,
-            end: ua.end,
-            text: ua.original,
-            entityType: 'USER_ADDED',
-            preview: response.preview,
-          })
-        } catch (err) {
-          reportError('addMissed', err)
-        }
-      })()
+      void addUserAddedSpan(span)
+    },
+
+    addMissedAndWait(span) {
+      return addUserAddedSpan(span)
     },
 
     undoLastDecision() {

@@ -28,12 +28,30 @@ export interface SaveDialogResult {
 }
 
 export type NerBackend = 'spacy' | 'gliner'
+export type ReplacementStyle = 'label' | 'fixed'
+export type ThemePreference = 'system' | 'light' | 'dark'
 
 export interface AppSettings {
   readonly nerBackend: NerBackend
   readonly scoreThreshold: number
   readonly defaultOperator: string
+  readonly entityTypes: readonly string[] | null
+  readonly replacementStyle: ReplacementStyle
+  readonly replacementText: string
+  readonly outputSuffix: string
+  readonly saveNextToOriginal: boolean
+  readonly theme: ThemePreference
 }
+
+// Keep in sync with MENU_COMMANDS in src/main/menu.ts and src/preload/index.ts.
+export type MenuCommand =
+  | 'open'
+  | 'close'
+  | 'save'
+  | 'settings'
+  | 'undo'
+  | 'toggle-sidebar'
+  | 'palette'
 
 export interface SanctumApi {
   getStatus(): Promise<SanctumStatus>
@@ -48,6 +66,7 @@ export interface SanctumApi {
   getMappingStorePath(): Promise<string>
   getSettings(): Promise<AppSettings | null>
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings | null>
+  onMenuCommand(cb: (cmd: MenuCommand) => void): () => void
 }
 
 declare global {
