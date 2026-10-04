@@ -1,5 +1,5 @@
 /**
- * PDF.js loader for PdfView (Phase 3.5 WS4).
+ * PDF.js loader for PdfView.
  *
  * - Imported lazily (`await import('./pdfjs')`) so the ~1.6 MB of PDF.js
  *   only loads when a PDF is opened; .docx review never pays for it.
@@ -26,8 +26,8 @@ export function loadPdf(data: ArrayBuffer): Promise<pdfjs.PDFDocumentProxy> {
     data,
     // Offline hardening: never fetch anything. Standard-14 fonts that are
     // not embedded fall back to system fonts (useSystemFonts); CMaps,
-    // wasm image decoders and ICC profiles are not bundled (see the
-    // WS4 report for what that costs).
+    // wasm image decoders and ICC profiles are not bundled, so some fonts
+    // and images may render with reduced fidelity.
     useSystemFonts: true,
     useWorkerFetch: false,
     enableXfa: false,

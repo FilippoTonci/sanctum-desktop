@@ -1,5 +1,5 @@
 /**
- * Render a `/layout` payload (Phase 3.5 shared layout contract) as plain
+ * Render a `/layout` payload (the engine's shared layout contract) as plain
  * DOM: one `.pptx-slide` per page with absolutely positioned items.
  *
  * Built imperatively into a host element — the same model as

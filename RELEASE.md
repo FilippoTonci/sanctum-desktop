@@ -7,9 +7,14 @@ One deliberate release per click. Nothing is released by merging to
 
 1. **Actions → Release → Run workflow.**
 2. Leave the branch on `main`, type a version with **no leading `v`**
-   (e.g. `0.1.0-rc.1`), and click **Run workflow**.
+   (e.g. `0.2.0-rc.1`), and click **Run workflow**. Don't bump
+   `package.json` yourself — the `prepare` job does it.
+3. When the run finishes, edit the published GitHub release and paste the
+   release notes under the generated unsigned-build warning. For
+   0.2.0-rc.1 the notes are the `<details>` block in the body of PR #52;
+   notes are not kept in the repo.
 
-That is the whole ritual. The workflow does the rest:
+The workflow does the rest of the work:
 
 | Job                         | What it does                                                                                                                       |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |

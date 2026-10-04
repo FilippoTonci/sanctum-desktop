@@ -176,8 +176,8 @@ export interface ReviewSessionResponse {
 }
 
 /*
- * Review-surface layout — `GET /review-sessions/{id}/layout` (Phase 3.5
- * shared layout contract, see sanctum `plans/phase-3-5-pptx-pdf.md`).
+ * Review-surface layout — `GET /review-sessions/{id}/layout` (the engine's
+ * shared pptx/pdf layout contract).
  * Points (1/72 in), top-left origin, items in paint order. Fields marked
  * "addition" are optional extensions the pptx prototype introduced.
  */

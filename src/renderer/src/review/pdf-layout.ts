@@ -1,6 +1,5 @@
 /**
- * Point → CSS-pixel geometry and the positioned text layer for PDF review
- * (Phase 3.5 WS4).
+ * Point → CSS-pixel geometry and the positioned text layer for PDF review.
  *
  * The engine's `/layout` endpoint describes each PDF page as `textline`
  * items in points, top-left origin. PdfView paints the page raster with

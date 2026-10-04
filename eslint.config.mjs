@@ -83,24 +83,4 @@ export default tseslint.config(
       '@typescript-eslint/no-require-imports': 'off',
     },
   },
-  // Standalone ESM scripts (walkthrough launcher). Same untyped treatment
-  // as the .cjs block; `*.config.mjs` stays ignored above.
-  {
-    files: ['scripts/**/*.mjs'],
-    ...tseslint.configs.disableTypeChecked,
-    languageOptions: {
-      sourceType: 'module',
-      parserOptions: {
-        project: false,
-        projectService: false,
-        program: null,
-      },
-      globals: {
-        ...globals.node,
-      },
-    },
-    rules: {
-      ...tseslint.configs.disableTypeChecked.rules,
-    },
-  },
 )

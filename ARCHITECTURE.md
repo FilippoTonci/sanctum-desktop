@@ -81,13 +81,19 @@ Two important design choices:
   settings change → sidecar respawn → backend picks up the new config.
 - `models.ts` — Professional-tier model download flow (SHA-256 verified;
   the Standard tier is bundled into the PyInstaller output).
+- `menu.ts` — the native application menu (`buildMenuTemplate`). Document
+  commands (open, close, save, settings, undo, toggle-sidebar, palette) are
+  forwarded to the renderer as `MENU_COMMANDS`; Edit → Undo is a command, not
+  the native role, because studio's undo reverts a review decision.
 
 ### `src/preload/` — IPC bridge
 
 - `index.ts` — runs in a sandboxed preload context;
   `contextBridge.exposeInMainWorld('sanctum', api)` is the **only** thing
   the renderer can see. Everything else (`require`, `process`, raw
-  `ipcRenderer`) is hidden.
+  `ipcRenderer`) is hidden. `onMenuCommand(cb)` is the narrow channel for
+  menu commands: it hands the callback only a validated `MenuCommand`
+  string and returns an unsubscribe function.
 - `sanctum.d.ts` — the `Window['sanctum']` type the renderer imports.
   Treat this as a **stable contract**: every change here ripples through
   every consumer in `src/renderer/`.
@@ -95,7 +101,10 @@ Two important design choices:
 ### `src/renderer/src/` — React UI
 
 - `App.tsx` — top-level wiring: status, doc state, sessions client,
-  drop-zone vs review-mode switch, providers.
+  home vs review vs Settings view, menu-command handling, the command
+  palette's command list, providers.
+- `menu-undo.ts` — what menu Undo does: a focused text field gets native
+  undo, otherwise the last review decision is reverted.
 - `main.tsx` — React 19 root + Zustand provider boot.
 - `index.css` — global styles (we don't use a CSS-in-JS library).
 - `sanctum.d.ts` — re-export of the bridge types so renderer code can
@@ -117,28 +126,52 @@ Wraps the sidecar's REST API. Both clients are constructed once per
 One file per visible surface; all consume the Zustand store and the API
 clients via props.
 
+The window is a studio: `Sidebar` | canvas (`ReviewToolbar` + a format
+view) | `Inspector`.
+
+- `Sidebar.tsx` — persistent left sidebar: recent documents, then in review
+  the findings list (one row per finding; pieces of a linked finding share
+  a row). Collapses to a rail (⌘\\, automatically on narrow windows).
+  `DetectionSidebar.tsx` is that findings list.
+- `FindingsOverlay.tsx` — the same findings list as an overlay, offered
+  from the toolbar while the sidebar is collapsed.
+- `Inspector.tsx` — the focused finding: what it is, what it becomes,
+  verdict buttons, replacement edit, and the bulk actions for its type.
+- `ReviewToolbar.tsx` — document name, progress, view-specific controls
+  (PDF zoom) and the primary save action.
 - `DocxView.tsx` — wraps `docx-preview` (with a `patches/` patch that
   emits `data-segment-id`), exposes the rendered root for highlight
   registration.
-- `DetectionSidebar.tsx` — the review surface's only navigation and
-  verdict control: list, per-detection operator picker, proposed
-  replacement line, and the "mark missed PII" trigger. There is no
-  floating tooltip (removed in issue #23).
+- `PptxView.tsx` — renders the engine's `/layout` via
+  `review/pptx-render.ts`; findings are grouped by slide; only
+  `data:image/` raster sources are drawn.
+- `PdfView.tsx` — PDF.js page raster plus the `/layout` text layer
+  (`review/pdf-layout.ts`), zoom, and page thumbnails with detection marks.
+- `CommandPalette.tsx` — ⌘K command search (prefix-word scoring).
+- `SettingsView.tsx` — full-window Settings (a view, not a
+  modal); changes apply as they are made and respawn the sidecar.
+- `LeakSheet.tsx` — save-check sheet shown on a 422 from commit: lists each
+  leaked value, offers "Redact these too" (warning when that overrides
+  places the reviewer chose to keep), and flags values the desktop can't
+  locate. Driven by `review/leaks.ts`.
+- `CommitPanel.tsx` — save panel (attestation, output name, result).
+- `ConfirmDialog.tsx` — small destructive-confirmation dialog.
+- `Icon.tsx` — inline SVG icon set.
 - `EditReplacement.tsx` — decorates the `.sanctum-edit` wrappers emitted
   by `review/edit-wrap.ts` with `data-status`, and inserts the
   replacement text inline when a preview exists.
-- `MappingStoreChip.tsx` — header chip showing lock state; opens
-  `UnlockModal` when clicked.
 - `Splash.tsx` — pre-ready surface (idle / starting / waiting-for-health
   / error) keyed off `SanctumStatus`.
 - `TypedError.tsx` — routes API errors to user-friendly copy keyed on
   status code (409, 413, 415, 503).
 - `RecentSessions.tsx` — landing-page list backed by
   `GET /review-sessions`.
-- `DropZone.tsx` — landing-page `.docx` drop target + file picker.
+- `DropZone.tsx` — landing-page drop target + file picker for `.docx`,
+  `.pptx` and `.pdf`.
 - `SanctumEmblem.tsx` — decorative header wordmark (`aria-hidden`).
-- `CommitPanel.tsx`, `SettingsModal.tsx`, `UnlockModal.tsx` —
-  modal/bottom-panel flows; all dismiss via Cancel button.
+- `MappingStoreChip.tsx`, `UnlockModal.tsx` — mapping-store lock/unlock UI.
+  Not mounted by the studio (the app only uses the `replace` operator); the
+  `MappingClient` and IPC remain.
 
 #### `src/renderer/src/review/` — Review-surface state
 
@@ -150,6 +183,20 @@ clients via props.
   `localActions` (fake-detection mode) and `syncedActions(client, sessionId)`
   (real backend with optimistic+rollback). The keyboard handler and
   components see one uniform interface.
+- `bulk.ts` — "redact/keep all pending of this type" (Shift+A / Shift+R);
+  each id is its own undo entry, decided rows are left alone, a linked
+  finding is decided through its head.
+- `entities.ts` — plain-language names and groupings for the engine's
+  entity types (what Settings and the UI show instead of raw tags).
+- `leaks.ts` — reads a 422 save refusal and locates each leaked value in
+  the reviewable text, for `LeakSheet`.
+- `use-review-surface.ts` — format-agnostic wrap + highlight + click-focus
+  passes for a rendered view (used by `PptxView` and `PdfView`).
+- `pptx-render.ts` — `/layout` payload → positioned slide DOM.
+- `pdf-layout.ts` — point → CSS-pixel geometry, zoom scale, and the
+  positioned text layer for a PDF page.
+- `pdfjs.ts` — lazy PDF.js loader; `pdfjs-dist` is bundled with a local
+  worker asset, so no CDN or runtime network.
 - `use-actions.tsx` — React context provider for the chosen actions
   factory; switches based on whether a session is open.
 - `keyboard.ts` — global keyboard map, suspended while an input holds
@@ -158,7 +205,8 @@ clients via props.
   "⌨️ Keyboard Reference"** — that table is the source of truth; don't
   restate the keys here.
 - `from-session.ts` — projector: backend `ReviewSessionResponse` →
-  renderer `Detection[]` + previews.
+  renderer `Detection[]` + previews, carrying the linked-finding group
+  fields (`groupId`, `groupIndex`, `groupText`).
 - `segments.ts` + `highlights.ts` — DOM-side helpers: locate
   `data-segment-id` ranges, register CSS Custom Highlight API entries
   (pending / accepted / rejected / focused).
@@ -233,7 +281,9 @@ tests/
 | New review action / keyboard shortcut | `src/renderer/src/review/actions.ts` + `keyboard.ts`                                   |
 | New REST call to the sidecar          | `src/renderer/src/api/sessions.ts` (or `mapping.ts`) + `types.ts`                      |
 | New visible surface                   | `src/renderer/src/components/<Name>.tsx`, mount in `App.tsx`                           |
-| New runtime setting                   | `src/main/settings.ts` (shape + projection) + `SettingsModal.tsx` (UI)                 |
+| New menu item / palette command       | `src/main/menu.ts` (+ preload/`sanctum.d.ts` `MenuCommand`), handler in `App.tsx`      |
+| New document format                   | a `<Fmt>View.tsx` using `review/use-review-surface.ts`; accept it in `DropZone.tsx`    |
+| New runtime setting                   | `src/main/settings.ts` (shape + projection) + `SettingsView.tsx` (UI)                  |
 | Sidecar lifecycle change              | `src/main/sidecar.ts` (spawn) + `health.ts` (readiness)                                |
 | Backend bundling fix                  | `scripts/build-sidecar.sh` (PyInstaller flags)                                         |
 
@@ -250,7 +300,8 @@ tests/
   endpoints add a method on the client + a wire type in `types.ts`.
 - **The `window.sanctum` bridge is a stable contract.** Treat changes
   there like API changes: rename → both sides must update; add → no
-  rush; remove → coordinate.
+  rush; remove → coordinate. The menu channel (`onMenuCommand`) stays
+  narrow: a fixed command list, never raw IPC.
 - **Sidecar respawns on settings save.** `src/main/index.ts` kills the
   old sidecar, projects the new settings to env vars, spawns a fresh
   one. The renderer's existing splash UX handles the transient

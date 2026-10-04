@@ -17,10 +17,9 @@ This file is the operating manual when working _with Claude_ in this repo.
 
 ## Work plans, commits, PRs
 
-This repo's plan lives in
-[`sanctum/plans/phase-3-desktop-ui.md`](https://github.com/FilippoTonci/sanctum/blob/main/plans/phase-3-desktop-ui.md)
-(versioned in the backend repo so cross-repo references stay coherent).
-Mirror that structure onto git the same way the backend does:
+Work is organised by workstream (the README roadmap lists them). Plans and
+one-off helper scripts are not committed to this repo. Mirror the
+workstreams onto git:
 
 - **One PR per workstream** — a WS is the unit of review. Open the PR
   against `main` when the WS starts; keep it in draft while substeps land.
@@ -85,8 +84,15 @@ installer line items require **signed** builds before they flip.
 ```
 src/main/         Node main process — sidecar lifecycle + IPC handlers
 src/preload/      contextBridge surface exposed as window.sanctum
-src/renderer/     React UI (Chromium, sandboxed)
-scripts/          PyInstaller build of the Python sidecar
+                  (incl. the narrow onMenuCommand for menu commands)
+src/renderer/     React UI (Chromium, sandboxed): studio layout —
+                  components/ (Sidebar, Inspector, Docx/Pptx/PdfView,
+                  LeakSheet, CommandPalette, SettingsView) and
+                  review/ (store, actions, bulk, leaks, pdf/pptx layout)
+scripts/          PyInstaller build of the sidecar + before-pack.cjs
+
+Native menu: `src/main/menu.ts` (⌘O/⌘W/⌘S/⌘,/⌘K/⌘Z/⇧⌘Z). Supported files:
+.docx, .pptx, .pdf. PDF.js (`pdfjs-dist`) is bundled locally — never a CDN.
 ```
 
 Hard rule: the renderer talks to the sidecar **directly via fetch()**
@@ -127,8 +133,9 @@ SHA-256 verification).
   union narrowing must be exhaustive.
 - Vitest unit suites must pass; renderer specs use happy-dom (mark
   with `@vitest-environment happy-dom`).
+- `npm run format:check` (Prettier) — CI runs it.
 - Playwright e2e launches the built `out/` bundle with the sidecar
-  skipped; not run in pre-commit (slow), but kept green in CI. It does
+  skipped, in its own throwaway user-data dir; not run in pre-commit (slow), but kept green in CI. It does
   not cover the packaged artifact — see "Running things".
 
 ## Running things
