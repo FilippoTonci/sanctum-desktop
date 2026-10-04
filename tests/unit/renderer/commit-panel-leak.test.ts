@@ -218,4 +218,68 @@ describe('CommitPanel leak sheet', () => {
     await screen.findByText('Save redacted copy')
     expect(screen.getByTestId('commit-panel').textContent).not.toContain('boom')
   })
+
+  it('flags places the reviewer kept and asks for explicit confirmation', async () => {
+    useReviewStore.getState().setDetections([
+      ...useReviewStore.getState().detections,
+      {
+        id: 'kept',
+        segmentId: 'p0/r0',
+        start: 5,
+        end: 8,
+        text: 'Pri',
+        entityType: 'PERSON',
+        status: 'rejected',
+      },
+    ])
+    useReviewStore.getState().openCommitPanel()
+    const commitSession = vi
+      .fn()
+      .mockRejectedValueOnce(leak422([{ leak: 'Priya', occurrences: 1 }]))
+    renderPanel(fakeClient({ commitSession, addUserAdded }))
+
+    await attestAndSave()
+    await screen.findByTestId('leak-sheet')
+    expect(screen.getByTestId('leak-sheet').textContent).toContain(
+      'Priya — 1 more place, including 1 place you chose to keep',
+    )
+    expect(screen.queryByRole('button', { name: 'Redact these too' })).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Redact these too, including kept places' }),
+    ).toBeTruthy()
+  })
+
+  it('returns to the sheet with the error inline when an add fails, and Try again resumes', async () => {
+    let calls = 0
+    const flakyAdd = vi.fn((sid: string, body: Parameters<SessionsClient['addUserAdded']>[1]) => {
+      calls += 1
+      if (calls === 2) return Promise.reject(new ApiError(500, { error: 'disk full' }, 'disk full'))
+      return addUserAdded(sid, body)
+    })
+    const commitSession = vi
+      .fn()
+      .mockRejectedValueOnce(leak422([{ leak: 'Priya', occurrences: 1 }]))
+      .mockResolvedValueOnce({
+        session_id: 'sess-1',
+        output_path: '/out/letter_anonymized.docx',
+        committed_at: '2026-10-03T00:00:00Z',
+      })
+    renderPanel(fakeClient({ commitSession, addUserAdded: flakyAdd }))
+    const user = userEvent.setup()
+
+    await attestAndSave()
+    await user.click(await screen.findByRole('button', { name: 'Redact these too' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Could not redact "ya"')
+    expect(alert.textContent).toContain('disk full')
+    expect(screen.getByTestId('leak-sheet')).toBeTruthy()
+    expect(commitSession).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    await screen.findByText('Redacted copy saved')
+    // "Pri" was added before the failure and is not added twice.
+    expect(flakyAdd.mock.calls.map((c) => c[1].original)).toEqual(['Pri', 'ya', 'ya'])
+    expect(commitSession).toHaveBeenCalledTimes(2)
+  })
 })

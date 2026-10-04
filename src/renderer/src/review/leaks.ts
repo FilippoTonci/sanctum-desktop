@@ -49,6 +49,13 @@ export interface LeakFix {
   /** Spans to add as user findings (may be empty for a reachable value
    *  whose copies are covered by another value's spans). */
   readonly spans: readonly Occurrence[]
+  /**
+   * How many of `spans` overlap a detection the reviewer chose to keep
+   * (rejected). Adding a finding there makes the engine drop that
+   * proposal, so the keep is lost and undo does not bring it back: the
+   * sheet says so and asks for explicit confirmation.
+   */
+  readonly keptPlaces: number
 }
 
 /** The leak details of a commit refusal, or null for any other error. */
@@ -94,7 +101,16 @@ interface JoinedBlock {
   readonly text: string
 }
 
-/** Group by `block` in document order; segments without one stand alone. */
+/**
+ * Group by `block` in document order; segments without one stand alone.
+ *
+ * The search never crosses a block boundary, matching how detection reads
+ * the document. The engine's leak check, though, reads the whole output as
+ * one whitespace-normalized text, so it can report a value that straddles
+ * two blocks (the end of one paragraph and the start of the next). Such a
+ * value has no hit here, is labelled unreachable, and the save stays
+ * blocked until the reviewer edits the original.
+ */
 function joinBlocks(segments: readonly SearchSegment[]): JoinedBlock[] {
   const groups = new Map<string, SearchSegment[]>()
   const order: SearchSegment[][] = []
@@ -170,6 +186,9 @@ export function findOccurrences(
 const overlaps = (a: Occurrence, b: Occurrence): boolean =>
   a.segmentId === b.segmentId && a.start < b.end && b.start < a.end
 
+const overlapsKept = (span: Occurrence, existing: readonly Detection[]): boolean =>
+  existing.some((d) => d.status === 'rejected' && overlaps(span, d))
+
 /**
  * Work out what "Redact these too" adds for each leaked value, in report
  * order. Longer values claim their spans first so "Priya Raghunathan"
@@ -199,5 +218,6 @@ export function planLeakFixes(
     occurrences: leak.occurrences,
     reachable: (found[i]?.length ?? 0) > 0,
     spans: spans[i] ?? [],
+    keptPlaces: (spans[i] ?? []).filter((span) => overlapsKept(span, existing)).length,
   }))
 }

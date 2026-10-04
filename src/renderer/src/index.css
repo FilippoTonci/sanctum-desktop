@@ -1879,6 +1879,12 @@ button:disabled {
   font-weight: 600;
 }
 
+.leak-list + .field-hint,
+.leak-list ~ .leak-error {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
 .leak-row-note {
   font-size: 12px;
   color: var(--text-2);

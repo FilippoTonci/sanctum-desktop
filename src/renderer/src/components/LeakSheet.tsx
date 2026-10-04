@@ -8,21 +8,32 @@ interface LeakSheetProps {
   readonly fixes: readonly LeakFix[]
   /** True while the findings are being added and the save retried. */
   readonly busy: boolean
+  /** An add failed part-way; shown inline, and the primary becomes "Try again". */
+  readonly error: string | null
   readonly onRedact: () => void
   readonly onBack: () => void
 }
 
 const places = (n: number): string => `${String(n)} more place${n === 1 ? '' : 's'}`
+const kept = (n: number): string => `${String(n)} place${n === 1 ? '' : 's'} you chose to keep`
 
 /**
  * Shown when the engine refuses a save because text the reviewer redacted
  * somewhere still appears elsewhere in the copy (HTTP 422 from commit).
  * Same structure and classes as `ConfirmDialog`.
  */
-export function LeakSheet({ fixes, busy, onRedact, onBack }: LeakSheetProps): ReactElement {
+export function LeakSheet({ fixes, busy, error, onRedact, onBack }: LeakSheetProps): ReactElement {
   const primaryRef = useRef<HTMLButtonElement | null>(null)
   const backRef = useRef<HTMLButtonElement | null>(null)
   const canRedact = fixes.some((f) => f.reachable)
+  const overridesKeep = fixes.some((f) => f.keptPlaces > 0)
+  const primaryLabel = busy
+    ? 'Redacting…'
+    : error !== null
+      ? 'Try again'
+      : overridesKeep
+        ? 'Redact these too, including kept places'
+        : 'Redact these too'
 
   useEffect(() => {
     ;(canRedact ? primaryRef.current : backRef.current)?.focus()
@@ -58,11 +69,22 @@ export function LeakSheet({ fixes, busy, onRedact, onBack }: LeakSheetProps): Re
             <li key={`${fix.value}-${String(i)}`} className="leak-row">
               <span>
                 <strong className="mono">{fix.value}</strong> — {places(fix.occurrences)}
+                {fix.keptPlaces > 0 ? `, including ${kept(fix.keptPlaces)}` : null}
               </span>
               {fix.reachable ? null : <span className="leak-row-note">{UNREACHABLE_TEXT}</span>}
             </li>
           ))}
         </ul>
+        {overridesKeep ? (
+          <p className="field-hint">
+            Redacting a place you chose to keep replaces that decision. Undo will not bring it back.
+          </p>
+        ) : null}
+        {error !== null ? (
+          <div className="notice notice-warn leak-error" role="alert">
+            <p>{error}</p>
+          </div>
+        ) : null}
         <div className="sheet-actions">
           <span className="sheet-actions-spacer" />
           <button
@@ -82,7 +104,7 @@ export function LeakSheet({ fixes, busy, onRedact, onBack }: LeakSheetProps): Re
               onClick={onRedact}
               disabled={busy}
             >
-              {busy ? 'Redacting…' : 'Redact these too'}
+              {primaryLabel}
             </button>
           ) : null}
         </div>

@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import type { SessionsClient } from '../api/sessions'
 import { countDetections } from '../review/bulk'
-import { parseLeakError, planLeakFixes, type LeakFix } from '../review/leaks'
+import {
+  parseLeakError,
+  planLeakFixes,
+  type LeakFix,
+  type LeakReport,
+  type SearchSegment,
+} from '../review/leaks'
 import { useReviewStore } from '../review/store'
 import { useReviewActions } from '../review/use-actions'
 import { Icon, Kbd } from './Icon'
@@ -34,8 +40,20 @@ type SubmitState =
   | { kind: 'form' }
   | { kind: 'submitting' }
   | { kind: 'error'; error: unknown }
-  /** The engine refused the save (422 leak check); `fixing` while adding findings. */
-  | { kind: 'leak'; fixes: readonly LeakFix[]; outputPath: string; fixing: boolean }
+  /**
+   * The engine refused the save (422 leak check). `fixing` while findings
+   * are being added; `error` when an add failed part-way (shown inline,
+   * with "Try again").
+   */
+  | {
+      kind: 'leak'
+      report: LeakReport
+      segments: readonly SearchSegment[]
+      fixes: readonly LeakFix[]
+      outputPath: string
+      fixing: boolean
+      error: string | null
+    }
 
 export function CommitPanel({
   client,
@@ -138,36 +156,56 @@ export function CommitPanel({
       try {
         const session = await api.getSession(sid)
         const fixes = planLeakFixes(leak, session.segments, useReviewStore.getState().detections)
-        setSubmitState({ kind: 'leak', fixes, outputPath, fixing: false })
+        setSubmitState({
+          kind: 'leak',
+          report: leak,
+          segments: session.segments,
+          fixes,
+          outputPath,
+          fixing: false,
+          error: null,
+        })
       } catch (fetchErr) {
         setSubmitState({ kind: 'error', error: fetchErr })
       }
     }
   }
 
-  /** "Redact these too": add each span as a user finding, then save again. */
+  /**
+   * "Redact these too" (and "Try again"): plan against the current
+   * detections, so findings an earlier attempt already added are not added
+   * twice, add each span as a user finding one at a time, then save again.
+   * A failed add returns to the sheet with the error inline.
+   */
   const handleRedactLeaks = (): void => {
     if (submitState.kind !== 'leak' || client === null || sessionId === null) return
-    const { fixes, outputPath } = submitState
-    setSubmitState({ ...submitState, fixing: true })
+    const leakState = submitState
+    const plan = (): LeakFix[] =>
+      planLeakFixes(leakState.report, leakState.segments, useReviewStore.getState().detections)
+    const fixes = plan()
+    setSubmitState({ ...leakState, fixes, fixing: true, error: null })
     void (async () => {
       for (const fix of fixes) {
         for (const span of fix.spans) {
+          useReviewStore.getState().setLastSyncError(null)
           const ok = await actions.addMissedAndWait({
             locator: { segmentId: span.segmentId, start: span.start, end: span.end },
             text: span.text,
           })
           if (!ok) {
-            const reason = useReviewStore.getState().lastSyncError?.message ?? 'unknown error'
+            const reason =
+              useReviewStore.getState().lastSyncError?.message ?? 'the engine refused it'
             setSubmitState({
-              kind: 'error',
-              error: new Error(`Could not redact "${span.text}": ${reason}`),
+              ...leakState,
+              fixes: plan(),
+              fixing: false,
+              error: `Could not redact "${span.text}": ${reason}`,
             })
             return
           }
         }
       }
-      await commitTo(client, sessionId, outputPath)
+      await commitTo(client, sessionId, leakState.outputPath)
     })()
   }
 
@@ -203,6 +241,7 @@ export function CommitPanel({
       <LeakSheet
         fixes={submitState.fixes}
         busy={submitState.fixing}
+        error={submitState.error}
         onRedact={handleRedactLeaks}
         onBack={handleBackToReview}
       />

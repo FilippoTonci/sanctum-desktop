@@ -150,8 +150,9 @@ describe('planLeakFixes', () => {
         occurrences: 1,
         reachable: true,
         spans: [{ segmentId: 's0', start: 0, end: 5, text: 'Priya' }],
+        keptPlaces: 0,
       },
-      { value: 'Footnote Name', occurrences: 1, reachable: false, spans: [] },
+      { value: 'Footnote Name', occurrences: 1, reachable: false, spans: [], keptPlaces: 0 },
     ])
   })
 
@@ -176,5 +177,27 @@ describe('planLeakFixes', () => {
     expect(plan[1]?.spans).toEqual([
       { segmentId: 's0', start: 0, end: 17, text: 'Priya Raghunathan' },
     ])
+  })
+
+  it('counts the planned spans that override a place the reviewer kept', () => {
+    const segs = [seg('s0', 'Priya met Priya and Priya')]
+    const existing = [
+      detection({ id: 'kept', segmentId: 's0', start: 10, end: 15, status: 'rejected' }),
+      detection({ id: 'done', segmentId: 's0', start: 0, end: 5, status: 'accepted' }),
+    ]
+    const plan = planLeakFixes({ leaks: [{ value: 'Priya', occurrences: 2 }] }, segs, existing)
+    expect(plan[0]?.spans.map((s) => s.start)).toEqual([10, 20])
+    expect(plan[0]?.keptPlaces).toBe(1)
+  })
+
+  it('counts a kept detection that only partly overlaps the span', () => {
+    const segs = [seg('s0', 'Priya Raghunathan')]
+    const existing = [detection({ segmentId: 's0', start: 6, end: 17, status: 'rejected' })]
+    const plan = planLeakFixes(
+      { leaks: [{ value: 'Priya Raghunathan', occurrences: 1 }] },
+      segs,
+      existing,
+    )
+    expect(plan[0]?.keptPlaces).toBe(1)
   })
 })

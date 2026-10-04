@@ -186,7 +186,13 @@ export function syncedActions(ctx: SyncedActionsContext): ReviewActions {
         start: span.locator.start,
         end: span.locator.end,
       })
-      if (response.decision.kind !== 'user_added') return false
+      if (response.decision.kind !== 'user_added') {
+        useReviewStore.getState().setLastSyncError({
+          status: null,
+          message: `addMissed: unexpected ${response.decision.kind} decision in the response`,
+        })
+        return false
+      }
       // Backend drops any model proposal whose char range overlapped
       // the new UA span (sanctum#31). Mirror the cascade locally so
       // the listing matches what a refetch would show.
