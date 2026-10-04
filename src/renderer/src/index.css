@@ -2673,3 +2673,32 @@ section > .choice-cards {
     scroll-behavior: auto !important;
   }
 }
+
+/* Findings list as an overlay when the sidebar is collapsed. */
+.findings-backdrop {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: default;
+  position: absolute;
+  inset: var(--bar-h) 0 0 0;
+  z-index: 14;
+}
+
+.findings-overlay {
+  position: absolute;
+  top: var(--bar-h);
+  bottom: 0;
+  left: 0;
+  width: min(340px, 86%);
+  z-index: 15;
+  overflow-y: auto;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.18);
+}
+
+.findings-overlay .detections {
+  margin-top: 0;
+  border-top: 0;
+}

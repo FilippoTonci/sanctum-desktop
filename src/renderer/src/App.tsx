@@ -13,6 +13,7 @@ import { CommandPalette, type Command } from './components/CommandPalette'
 import { CommitPanel } from './components/CommitPanel'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { DetectionSidebar } from './components/DetectionSidebar'
+import { FindingsOverlay } from './components/FindingsOverlay'
 import { DocxView } from './components/DocxView'
 import {
   ACCEPTED_EXTENSIONS,
@@ -41,7 +42,7 @@ import { useMissedSelectionTracker } from './review/selection-tracker'
 import type { ZoomMode } from './review/pdf-layout'
 import { extractSegmentOrder } from './review/segments'
 import { useReviewStore } from './review/store'
-import { OPERATOR_NAMES, type OperatorName } from './review/types'
+import { headsOf, OPERATOR_NAMES, type OperatorName } from './review/types'
 import { localActions, syncedActions, type ReviewActions } from './review/actions'
 import { ReviewActionsProvider } from './review/use-actions'
 import type { AppSettings, SanctumStatus, ThemePreference } from './sanctum'
@@ -544,9 +545,11 @@ export function App(): ReactElement {
           },
         },
       )
-      const types = [...new Set(detections.map((d) => d.entityType))]
+      // Findings, not pieces: a linked finding counts once, by its head.
+      const heads = headsOf(detections)
+      const types = [...new Set(heads.map((d) => d.entityType))]
       for (const t of types) {
-        const pending = detections.filter((d) => d.entityType === t && d.status === 'pending')
+        const pending = heads.filter((d) => d.entityType === t && d.status === 'pending')
         if (pending.length === 0) continue
         const isFocusedType = focused?.entityType === t
         list.push(
@@ -742,12 +745,14 @@ export function App(): ReactElement {
                 onUndo={() => {
                   reviewActions.undoLastDecision()
                 }}
+                showFindingsToggle={sidebarCollapsed}
                 extra={
                   isPdfFile(doc) ? (
                     <PdfZoomControl value={pdfZoom} onChange={setPdfZoom} />
                   ) : undefined
                 }
               />
+              {sidebarCollapsed ? <FindingsOverlay bySlide={isPptxFile(doc)} /> : null}
               {isPdfFile(doc) ? (
                 <PdfView
                   file={doc}

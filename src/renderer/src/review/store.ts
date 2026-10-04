@@ -80,6 +80,8 @@ export interface ReviewState {
   readonly pendingMissedSelection: PendingMissedSelection | null
   readonly defaultOperator: OperatorName
   readonly commitPanelOpen: boolean
+  /** Narrow windows: the findings list shown as an overlay panel. */
+  readonly findingsOverlayOpen: boolean
   /** Backend session id once a real `/review-sessions` round-trip lands. */
   readonly sessionId: string | null
 
@@ -195,6 +197,8 @@ export interface ReviewState {
   startEditingReplacement: (id: string | null) => void
   readonly editingReplacementId: string | null
 
+  setFindingsOverlayOpen: (open: boolean) => void
+  toggleFindingsOverlay: () => void
   openCommitPanel: () => void
   closeCommitPanel: () => void
   buildCommitPayload: (attestation: string) => CommitPayload
@@ -233,6 +237,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   pendingMissedSelection: null,
   defaultOperator: 'replace',
   commitPanelOpen: false,
+  findingsOverlayOpen: false,
   editingReplacementId: null,
   sessionId: null,
   lastSyncError: null,
@@ -272,6 +277,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       undoStack: [],
       pendingMissedSelection: null,
       commitPanelOpen: false,
+      findingsOverlayOpen: false,
       editingReplacementId: null,
       unwrappableIds: [],
     })
@@ -387,6 +393,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
       undoStack: [],
       pendingMissedSelection: null,
       commitPanelOpen: false,
+      findingsOverlayOpen: false,
       editingReplacementId: null,
       sessionId: null,
       lastSyncError: null,
@@ -550,6 +557,14 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
   startEditingReplacement: (id) => {
     set({ editingReplacementId: id })
+  },
+
+  setFindingsOverlayOpen: (open) => {
+    set({ findingsOverlayOpen: open })
+  },
+
+  toggleFindingsOverlay: () => {
+    set((s) => ({ findingsOverlayOpen: !s.findingsOverlayOpen }))
   },
 
   openCommitPanel: () => {

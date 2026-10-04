@@ -126,6 +126,8 @@ function slideKey(slide: number): string {
 interface DetectionSidebarProps {
   /** Group by slide instead of entity type (PowerPoint decks). */
   readonly bySlide?: boolean
+  /** Called after a row is chosen (and focused); the narrow-width overlay closes on it. */
+  readonly onRowChosen?: () => void
 }
 
 /**
@@ -133,7 +135,10 @@ interface DetectionSidebarProps {
  * by slide for PowerPoint decks (`bySlide`), filterable by status, with per-group bulk actions. Lives in the left
  * sidebar during review; the right-hand Inspector edits the focused one.
  */
-export function DetectionSidebar({ bySlide = false }: DetectionSidebarProps): ReactElement {
+export function DetectionSidebar({
+  bySlide = false,
+  onRowChosen,
+}: DetectionSidebarProps): ReactElement {
   const detections = useReviewStore((s) => s.detections)
   const focusedId = useReviewStore((s) => s.focusedId)
   const setFocused = useReviewStore((s) => s.setFocused)
@@ -303,6 +308,7 @@ export function DetectionSidebar({ bySlide = false }: DetectionSidebarProps): Re
                             aria-pressed={isFocused}
                             onClick={() => {
                               setFocused(d.id)
+                              onRowChosen?.()
                             }}
                           >
                             <StatusGlyph status={d.status} />

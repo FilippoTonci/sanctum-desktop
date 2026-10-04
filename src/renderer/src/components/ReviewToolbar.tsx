@@ -9,6 +9,8 @@ interface ReviewToolbarProps {
   readonly fileSize: number
   readonly onClose: () => void
   readonly onUndo: () => void
+  /** The findings list is out of sight (collapsed sidebar): offer it as an overlay. */
+  readonly showFindingsToggle?: boolean
   /** View-specific controls (the PDF zoom), shown before the actions. */
   readonly extra?: ReactNode
 }
@@ -22,11 +24,14 @@ export function ReviewToolbar({
   fileSize,
   onClose,
   onUndo,
+  showFindingsToggle = false,
   extra,
 }: ReviewToolbarProps): ReactElement {
   const detections = useReviewStore((s) => s.detections)
   const canUndo = useReviewStore((s) => s.undoStack.length > 0)
   const openCommit = useReviewStore((s) => s.openCommitPanel)
+  const overlayOpen = useReviewStore((s) => s.findingsOverlayOpen)
+  const toggleOverlay = useReviewStore((s) => s.toggleFindingsOverlay)
   const counts = countDetections(detections)
   const done = counts.total > 0 && counts.pending === 0
   const pct = (n: number): string =>
@@ -34,6 +39,17 @@ export function ReviewToolbar({
 
   return (
     <header className="toolbar">
+      {showFindingsToggle ? (
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm findings-toggle"
+          aria-expanded={overlayOpen}
+          aria-controls="findings-overlay"
+          onClick={toggleOverlay}
+        >
+          Findings ({String(counts.total)})
+        </button>
+      ) : null}
       <div className="toolbar-doc">
         <Icon name="doc" className="toolbar-doc-icon" />
         <span className="toolbar-doc-name" title={fileName}>

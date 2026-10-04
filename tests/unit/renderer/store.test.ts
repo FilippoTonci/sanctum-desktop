@@ -589,3 +589,27 @@ describe('pendingMissedSelection', () => {
     expect(useReviewStore.getState().pendingMissedSelection).toBeNull()
   })
 })
+
+describe('findings overlay', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+
+  it('opens, closes and toggles', () => {
+    const s = useReviewStore.getState()
+    expect(s.findingsOverlayOpen).toBe(false)
+    s.toggleFindingsOverlay()
+    expect(useReviewStore.getState().findingsOverlayOpen).toBe(true)
+    s.setFindingsOverlayOpen(false)
+    expect(useReviewStore.getState().findingsOverlayOpen).toBe(false)
+  })
+
+  it('closes when the document is cleared or replaced', () => {
+    useReviewStore.getState().setFindingsOverlayOpen(true)
+    useReviewStore.getState().setDetections([makeDetection('a')])
+    expect(useReviewStore.getState().findingsOverlayOpen).toBe(false)
+    useReviewStore.getState().setFindingsOverlayOpen(true)
+    useReviewStore.getState().clear()
+    expect(useReviewStore.getState().findingsOverlayOpen).toBe(false)
+  })
+})
