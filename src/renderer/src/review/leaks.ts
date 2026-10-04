@@ -51,9 +51,10 @@ export interface LeakFix {
   readonly spans: readonly Occurrence[]
   /**
    * How many of `spans` overlap a detection the reviewer chose to keep
-   * (rejected). Adding a finding there makes the engine drop that
-   * proposal, so the keep is lost and undo does not bring it back: the
-   * sheet says so and asks for explicit confirmation.
+   * (rejected), or a redacted piece of a linked finding. Adding a finding
+   * there makes the engine drop that proposal, so the decision is lost and
+   * undo does not bring it back: the sheet says so and asks for explicit
+   * confirmation.
    */
   readonly keptPlaces: number
 }
@@ -150,11 +151,46 @@ const isCovered = (span: Occurrence, existing: readonly Detection[]): boolean =>
   )
 
 /**
+ * Adding a user finding that overlaps a detection makes the engine drop
+ * that detection. When the reviewer chose to redact it, the added span
+ * must still cover all of its text, or the part outside the leaked value
+ * ("Corp" in "Jennifer Martin Corp" with "Martin Corp" redacted) would
+ * survive unredacted and unchecked. So widen the span to the union with
+ * every accepted single-piece detection it partly overlaps in the same
+ * segment, repeating while the union grows. A linked piece (`groupId`) is
+ * not widened over: dropping one piece breaks its group, so the plan
+ * discloses it instead (see `overridesDecision`).
+ */
+function widenOverRedacted(
+  span: Occurrence,
+  segText: string,
+  existing: readonly Detection[],
+): Occurrence {
+  let { start, end } = span
+  for (let grown = true; grown; ) {
+    grown = false
+    for (const d of existing) {
+      if (d.status !== 'accepted' || d.groupId !== undefined || d.segmentId !== span.segmentId)
+        continue
+      if (d.start < end && start < d.end && (d.start < start || d.end > end)) {
+        start = Math.min(start, d.start)
+        end = Math.max(end, d.end)
+        grown = true
+      }
+    }
+  }
+  if (start === span.start && end === span.end) return span
+  return { segmentId: span.segmentId, start, end, text: segText.slice(start, end) }
+}
+
+/**
  * Every place `value` still appears, one span per segment a hit covers.
  * Pieces are trimmed of edge whitespace (a run holding only the space
  * between two names is left alone), and pieces an accepted detection in
- * `existing` already covers are skipped. A rejected detection does not
- * count: the reviewer kept that copy, which is why it leaked.
+ * `existing` already covers are skipped. A piece that partly overlaps an
+ * accepted detection is widened to cover it too (`widenOverRedacted`). A
+ * rejected detection does not count: the reviewer kept that copy, which
+ * is why it leaked.
  */
 export function findOccurrences(
   segments: readonly SearchSegment[],
@@ -176,7 +212,7 @@ export function findOccurrences(
         while (e > s && /\s/u.test(seg.text.charAt(e - 1))) e--
         if (s >= e) return // outside this segment, inside join_before, or blank
         const span = { segmentId: seg.id, start: s, end: e, text: seg.text.slice(s, e) }
-        if (!isCovered(span, existing)) out.push(span)
+        if (!isCovered(span, existing)) out.push(widenOverRedacted(span, seg.text, existing))
       })
     }
   }
@@ -186,8 +222,18 @@ export function findOccurrences(
 const overlaps = (a: Occurrence, b: Occurrence): boolean =>
   a.segmentId === b.segmentId && a.start < b.end && b.start < a.end
 
-const overlapsKept = (span: Occurrence, existing: readonly Detection[]): boolean =>
-  existing.some((d) => d.status === 'rejected' && overlaps(span, d))
+/**
+ * True when adding `span` would make the engine drop a decision it cannot
+ * keep whole: a detection the reviewer kept (rejected), or a piece of a
+ * linked finding the reviewer redacted (a span is never widened over
+ * those). The sheet discloses these and asks for explicit confirmation.
+ */
+const overridesDecision = (span: Occurrence, existing: readonly Detection[]): boolean =>
+  existing.some(
+    (d) =>
+      overlaps(span, d) &&
+      (d.status === 'rejected' || (d.status === 'accepted' && d.groupId !== undefined)),
+  )
 
 /**
  * Work out what "Redact these too" adds for each leaked value, in report
@@ -218,6 +264,6 @@ export function planLeakFixes(
     occurrences: leak.occurrences,
     reachable: (found[i]?.length ?? 0) > 0,
     spans: spans[i] ?? [],
-    keptPlaces: (spans[i] ?? []).filter((span) => overlapsKept(span, existing)).length,
+    keptPlaces: (spans[i] ?? []).filter((span) => overridesDecision(span, existing)).length,
   }))
 }

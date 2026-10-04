@@ -200,4 +200,72 @@ describe('planLeakFixes', () => {
     )
     expect(plan[0]?.keptPlaces).toBe(1)
   })
+
+  it('widens a span over a redacted detection it partly overlaps', () => {
+    // "Martin Corp" was redacted; the leak "Jennifer Martin" overlaps it.
+    // The added finding makes the engine drop "Martin Corp", so it must
+    // cover "Corp" as well.
+    const segs = [seg('s0', 'Jennifer Martin Corp signed.')]
+    const existing = [
+      detection({ id: 'org', segmentId: 's0', start: 9, end: 20, text: 'Martin Corp' }),
+    ]
+    const plan = planLeakFixes(
+      { leaks: [{ value: 'Jennifer Martin', occurrences: 1 }] },
+      segs,
+      existing,
+    )
+    expect(plan[0]).toMatchObject({
+      reachable: true,
+      keptPlaces: 0,
+      spans: [{ segmentId: 's0', start: 0, end: 20, text: 'Jennifer Martin Corp' }],
+    })
+  })
+
+  it('keeps widening while the union overlaps further redacted detections', () => {
+    const segs = [seg('s0', 'Ann Lee Ray Co')]
+    const existing = [
+      detection({ id: 'a', segmentId: 's0', start: 4, end: 11, text: 'Lee Ray' }),
+      detection({ id: 'b', segmentId: 's0', start: 8, end: 14, text: 'Ray Co' }),
+    ]
+    const plan = planLeakFixes({ leaks: [{ value: 'Ann Lee', occurrences: 1 }] }, segs, existing)
+    expect(plan[0]?.spans).toEqual([{ segmentId: 's0', start: 0, end: 14, text: 'Ann Lee Ray Co' }])
+  })
+
+  it('does not widen over a redacted detection in another segment', () => {
+    const segs = [seg('s0', 'Jennifer Martin'), seg('s1', 'Martin Corp')]
+    const existing = [detection({ id: 'org', segmentId: 's1', start: 0, end: 11 })]
+    const plan = planLeakFixes(
+      { leaks: [{ value: 'Jennifer Martin', occurrences: 1 }] },
+      segs,
+      existing,
+    )
+    expect(plan[0]?.spans).toEqual([
+      { segmentId: 's0', start: 0, end: 15, text: 'Jennifer Martin' },
+    ])
+  })
+
+  it('discloses a redacted linked piece it would break instead of widening over it', () => {
+    const segs = [seg('s0', 'Jennifer Martin Corp')]
+    const existing = [
+      detection({
+        id: 'piece',
+        segmentId: 's0',
+        start: 9,
+        end: 20,
+        text: 'Martin Corp',
+        groupId: 'g1',
+        groupIndex: 1,
+        groupText: 'Big Martin Corp',
+      }),
+    ]
+    const plan = planLeakFixes(
+      { leaks: [{ value: 'Jennifer Martin', occurrences: 1 }] },
+      segs,
+      existing,
+    )
+    expect(plan[0]).toMatchObject({
+      keptPlaces: 1,
+      spans: [{ segmentId: 's0', start: 0, end: 15, text: 'Jennifer Martin' }],
+    })
+  })
 })
