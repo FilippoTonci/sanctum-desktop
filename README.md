@@ -125,7 +125,7 @@ The renderer's wire types (`src/renderer/src/api/types.ts`) are hand-written tod
 ### Prerequisites
 
 - Node 20 LTS or newer
-- A sibling checkout of [`sanctum`](https://github.com/FilippoTonci/sanctum) at `../sanctum`, with `pip install -e '.[security,api,documents]'` inside its `.venv`, for dev-mode sidecar spawning (see below)
+- A sibling checkout of [`sanctum`](https://github.com/FilippoTonci/sanctum) at `../sanctum`, with `pip install -e '.[security,api,documents]'` inside its `.venv` and the NER model fetched once with `python scripts/fetch_ner_model.py`, for dev-mode sidecar spawning (see below)
 - Python 3.10+ (for the sidecar — macOS's built-in `python3` is 3.9 and will not work; see [CLAUDE.md](CLAUDE.md) "Platform notes")
 
 ### Developer install
@@ -248,6 +248,12 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 - [x] `.pptx` review (slides from `/layout`, findings grouped by slide)
 - [x] `.pdf` review (PDF.js page raster + text layer, zoom, thumbnails)
 - [x] Save-check sheet on a 422, linked findings (one row per group)
+
+### Next release — bundled GLiNER-PII NER model _(in review)_
+
+- [ ] One bundled NER model (GLiNER-PII, ~200 MB ONNX, no PyTorch) replaces the Standard / Professional choice; misses drop from 101 to 21 of 487 entities on the [sanctum-research](https://github.com/FilippoTonci/sanctum-research) hard corpus
+- [ ] Settings: the recognition-model choice is gone; "ID number" joins the ID types
+- [ ] No download path left in the app
 
 ### WS6 — Polish, signing, release
 
