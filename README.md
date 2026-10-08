@@ -91,7 +91,6 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 │  ┌────────────────────────▼──────────────────────────────────┐  │
 │  │ Main process                                              │  │
 │  │   sidecar.ts   spawn + health-poll + SIGTERM on quit      │  │
-│  │   models.ts    one-shot model download (user-confirmed)   │  │
 │  │   settings.ts  persist settings → sidecar env on respawn  │  │
 │  │   menu.ts      native menu → renderer commands            │  │
 │  └────────────────────────┬──────────────────────────────────┘  │
@@ -215,7 +214,7 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 - [x] `spawnSidecar()` / `killSidecar()` lifecycle manager
 - [x] Health polling + splash screen (cold start can exceed 30 s)
 - [x] `contextBridge` exposure of `{ baseUrl, token }`
-- [x] User-confirmed Professional-tier model download (1.4 GB)
+- [x] ~~User-confirmed Professional-tier model download (1.4 GB)~~ _— removed (2026-10-08): the one NER model ships inside the app_
 - [x] Graceful-shutdown hooks
 
 ### WS4 — `.docx` review surface ✅ _(shipped)_
@@ -260,7 +259,7 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 - [ ] macOS signing + notarization (Apple Developer ID)
 - [ ] Windows signing (Azure Trusted Signing or Sectigo/DigiCert EV + YubiKey)
 - [ ] Linux AppImage + deb with GPG signatures
-- [ ] Split auto-update channels (shell vs. models)
+- [ ] ~~Split auto-update channels (shell vs. models)~~ _— dropped (2026-10-08): the model ships with the app, so one channel_
 - [ ] One-click release workflow (`workflow_dispatch` → bump, tag, build, publish — see [`RELEASE.md`](RELEASE.md))
 
 ### Deferred _(post-MVP)_

@@ -79,8 +79,6 @@ Two important design choices:
 - `settings.ts` — JSON-backed `SettingsStore` under `app.getPath('userData')`;
   `settingsToEnv()` projects to `SANCTUM_<SECTION>__<KEY>` env vars so a
   settings change → sidecar respawn → backend picks up the new config.
-- `models.ts` — Professional-tier model download flow (SHA-256 verified;
-  the Standard tier is bundled into the PyInstaller output).
 - `menu.ts` — the native application menu (`buildMenuTemplate`). Document
   commands (open, close, save, settings, undo, toggle-sidebar, palette) are
   forwarded to the renderer as `MENU_COMMANDS`; Edit → Undo is a command, not
