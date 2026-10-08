@@ -242,9 +242,14 @@ view) | `Inspector`.
 
 The sidecar bundle itself is built separately by `scripts/build-sidecar.sh`
 — see its docstring for the PyInstaller flag rationale (in particular
-`--onedir` and the `--collect-all` chain). Run that **before** `npm run
-make`; `scripts/before-pack.cjs` aborts the package step if the bundle for
-the target `<os>-<arch>` isn't there.
+`--onedir` and the `--collect-all` chain). It also places the NER model
+(GLiNER-PII, ~200 MB ONNX, with its LICENSE and NOTICE) at
+`sidecar-build/<os>-<arch>/models/`, next to the executable, where the frozen
+sidecar looks for it; the model is fetched at build time by the backend's
+checksum-pinned `scripts/fetch_ner_model.py`, never by the installed app.
+Run that **before** `npm run make`; `scripts/before-pack.cjs` aborts the
+package step if the bundle for the target `<os>-<arch>`, or its model, isn't
+there.
 
 ## Tests
 

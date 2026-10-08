@@ -22,12 +22,18 @@
 #                  Any relative path works — it is resolved to an
 #                  absolute one below, because pip reads a bare name
 #                  with no separator as a PyPI project, not a directory.
-#   MODEL_TIER     `standard` bundles `en_core_web_sm` (~15 MB).
-#                  `none` bundles no NLP model — the desktop app must
-#                  download one before analysis. Default: standard.
-#                  The Professional tier (`en_core_web_lg` + GLiNER,
-#                  ~1.4 GB) is always downloaded at first launch via
-#                  `src/main/models.ts` — never bundled.
+#   MODEL_TIER     `standard` bundles `en_core_web_sm` (~15 MB), which
+#                  the engine uses as a tokenizer for the pattern
+#                  recognizers' context words. `none` leaves it out (the
+#                  sidecar then fails at startup). Default: standard.
+#
+# The NER model (knowledgator/gliner-pii-base-v1.0, uint8 ONNX, ~200 MB)
+# is always bundled, at sidecar-build/<os>-<arch>/models/, which is where
+# the frozen sidecar looks for it (sanctum/analyzer/ner_model.py). It is
+# fetched here — build time — by sanctum's scripts/fetch_ner_model.py,
+# which pins the revision and verifies every SHA-256, then cached under
+# $BUILD_ROOT/models so rebuilds don't download it again. The installed
+# app never downloads a model.
 #   BUILD_ROOT     Output directory. Default: ./sidecar-build
 #   PYTHON         Python interpreter to use. Default: python3
 set -euo pipefail
@@ -122,9 +128,17 @@ pip install pyinstaller
 pip install --force-reinstall --no-deps "$SANCTUM_REPO"
 pip install "$SANCTUM_REPO[security,api,documents]"
 
-if [ "$MODEL_TIER" = "standard" ]; then
+# Skip when already installed: `spacy download` re-runs pip unconditionally,
+# and pip intermittently reads 0 bytes from GitHub's release redirect and
+# rejects the wheel as "invalid". Pre-installing the wheel unblocks a build.
+if [ "$MODEL_TIER" = "standard" ] && ! python -c 'import en_core_web_sm' 2>/dev/null; then
   python -m spacy download en_core_web_sm
 fi
+
+# The NER model (build-time download, checksum-verified; see header).
+MODEL_NAME="$(python -c 'from sanctum.analyzer.ner_model import DIR_NAME; print(DIR_NAME)')"
+MODEL_CACHE="$BUILD_ROOT/models/$MODEL_NAME"
+python "$SANCTUM_REPO/scripts/fetch_ner_model.py" --dest "$MODEL_CACHE"
 
 # PyInstaller collectors:
 #   --collect-all sanctum          — the entry-point package itself; the
@@ -134,6 +148,8 @@ fi
 #                                    default collector misses.
 #   --collect-all en_core_web_sm   — bundles the Standard-tier model.
 #   --collect-all presidio_analyzer
+#   --collect-all onnxruntime      — the NER model's runtime: native
+#                                    libraries plus the capi package.
 #   --collect-all presidio_anonymizer
 #                                  — Presidio dynamically discovers
 #                                    recognizers AND ships YAML config
@@ -157,6 +173,7 @@ PYINSTALLER_ARGS=(
   --collect-all spacy
   --collect-all presidio_analyzer
   --collect-all presidio_anonymizer
+  --collect-all onnxruntime
   --noconfirm
 )
 
@@ -169,6 +186,12 @@ pyinstaller "${PYINSTALLER_ARGS[@]}" "$REPO_ROOT/scripts/sidecar_entry.py"
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 cp -R "$BUILD_ROOT/dist-$OS-$ARCH/sanctum-sidecar/." "$OUT_DIR/"
+
+# Next to the executable, where the frozen sidecar resolves it. Re-verify
+# the copy (offline) so a truncated cp can't ship.
+mkdir -p "$OUT_DIR/models"
+cp -R "$MODEL_CACHE" "$OUT_DIR/models/"
+python "$SANCTUM_REPO/scripts/fetch_ner_model.py" --check --dest "$OUT_DIR/models/$MODEL_NAME"
 
 echo "[build-sidecar] done: $OUT_DIR"
 echo "[build-sidecar] binary: $OUT_DIR/sanctum-sidecar$([ "$OS" = "win" ] && echo .exe || true)"
