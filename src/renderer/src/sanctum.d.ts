@@ -27,12 +27,10 @@ export interface SaveDialogResult {
   readonly filePath: string | null
 }
 
-export type NerBackend = 'spacy' | 'gliner'
 export type ReplacementStyle = 'label' | 'fixed'
 export type ThemePreference = 'system' | 'light' | 'dark'
 
 export interface AppSettings {
-  readonly nerBackend: NerBackend
   readonly scoreThreshold: number
   readonly defaultOperator: string
   readonly entityTypes: readonly string[] | null
