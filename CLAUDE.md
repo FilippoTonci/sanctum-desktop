@@ -106,12 +106,13 @@ Read `ARCHITECTURE.md` before touching cross-process boundaries.
 
 ## Airgap invariant
 
-No runtime network calls. The sidecar is always spawned with
-`HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` so a missing model
-fails fast instead of triggering an HTTP fetch. The only allowed
-network usage is the user-confirmed model download in
-`src/main/models.ts` (Pro-tier weights at install/upgrade time, with
-SHA-256 verification).
+No runtime network calls, none at all: the app has no download path.
+The NER model ships inside the sidecar bundle (`build-sidecar.sh`
+fetches it at build time, checksum-pinned by the backend), and the
+sidecar refuses to start without it rather than fetch it. It is still
+spawned with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` as a
+backstop. Don't add a runtime downloader back without re-reading the
+threat model.
 
 ## Sidecar contract
 

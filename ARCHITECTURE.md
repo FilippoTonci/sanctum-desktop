@@ -79,8 +79,6 @@ Two important design choices:
 - `settings.ts` — JSON-backed `SettingsStore` under `app.getPath('userData')`;
   `settingsToEnv()` projects to `SANCTUM_<SECTION>__<KEY>` env vars so a
   settings change → sidecar respawn → backend picks up the new config.
-- `models.ts` — Professional-tier model download flow (SHA-256 verified;
-  the Standard tier is bundled into the PyInstaller output).
 - `menu.ts` — the native application menu (`buildMenuTemplate`). Document
   commands (open, close, save, settings, undo, toggle-sidebar, palette) are
   forwarded to the renderer as `MENU_COMMANDS`; Edit → Undo is a command, not
@@ -242,9 +240,14 @@ view) | `Inspector`.
 
 The sidecar bundle itself is built separately by `scripts/build-sidecar.sh`
 — see its docstring for the PyInstaller flag rationale (in particular
-`--onedir` and the `--collect-all` chain). Run that **before** `npm run
-make`; `scripts/before-pack.cjs` aborts the package step if the bundle for
-the target `<os>-<arch>` isn't there.
+`--onedir` and the `--collect-all` chain). It also places the NER model
+(GLiNER-PII, ~200 MB ONNX, with its LICENSE and NOTICE) at
+`sidecar-build/<os>-<arch>/models/`, next to the executable, where the frozen
+sidecar looks for it; the model is fetched at build time by the backend's
+checksum-pinned `scripts/fetch_ner_model.py`, never by the installed app.
+Run that **before** `npm run make`; `scripts/before-pack.cjs` aborts the
+package step if the bundle for the target `<os>-<arch>`, or its model, isn't
+there.
 
 ## Tests
 

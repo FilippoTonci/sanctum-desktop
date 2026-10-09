@@ -22,12 +22,10 @@ const MAPPING_STORE_PATH_CHANNEL = 'sanctum:get-mapping-store-path'
 const SETTINGS_GET_CHANNEL = 'sanctum:get-settings'
 const SETTINGS_UPDATE_CHANNEL = 'sanctum:update-settings'
 
-export type NerBackend = 'spacy' | 'gliner'
 export type ReplacementStyle = 'label' | 'fixed'
 export type ThemePreference = 'system' | 'light' | 'dark'
 
 export interface AppSettings {
-  readonly nerBackend: NerBackend
   readonly scoreThreshold: number
   readonly defaultOperator: string
   readonly entityTypes: readonly string[] | null

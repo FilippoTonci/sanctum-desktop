@@ -23,7 +23,7 @@ const DEFAULT_INTERVAL_MS = 500
  * Poll `GET /health` with the bearer token until it returns 200 OK and
  * a decodable JSON body, or the timeout elapses. The sidecar's
  * `SANCTUM_READY` stdout line signals "HTTP listener bound", but the
- * NLP models (especially GLiNER on the Professional tier) can still
+ * NLP models (spaCy plus the bundled GLiNER-PII ONNX model) can still
  * be loading for tens of seconds afterwards. `/health` is authoritative
  * for engine-ready.
  */

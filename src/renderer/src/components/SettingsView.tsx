@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { ALL_ENTITY_TYPES, ENTITY_GROUPS, entityLabel } from '../review/entities'
-import type { AppSettings, NerBackend, SanctumStatus, ThemePreference } from '../sanctum'
+import type { AppSettings, SanctumStatus, ThemePreference } from '../sanctum'
 import { suggestedOutputName } from './CommitPanel'
 import { Icon, Kbd } from './Icon'
 import { REVIEW_SHORTCUTS } from './Inspector'
@@ -201,24 +201,22 @@ function DetectionSection({
   readonly status: SanctumStatus
   readonly onChange: (patch: Partial<AppSettings>) => Promise<void>
 }): ReactElement {
-  const [backend, setBackend] = useState<NerBackend>(settings.nerBackend)
   const [threshold, setThreshold] = useState<number>(settings.scoreThreshold)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setBackend(settings.nerBackend)
     setThreshold(settings.scoreThreshold)
-  }, [settings.nerBackend, settings.scoreThreshold])
+  }, [settings.scoreThreshold])
 
-  const dirty = backend !== settings.nerBackend || threshold !== settings.scoreThreshold
+  const dirty = threshold !== settings.scoreThreshold
   const preset = SENSITIVITY_PRESETS.find((p) => Math.abs(p.threshold - threshold) < 1e-9)
   const restarting = status.state !== 'ready' && status.state !== 'error'
 
   const apply = (): void => {
     setSaving(true)
     setError(null)
-    onChange({ nerBackend: backend, scoreThreshold: threshold })
+    onChange({ scoreThreshold: threshold })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : String(err))
       })
@@ -284,27 +282,11 @@ function DetectionSection({
       <div className="setting-group">
         <div className="setting-group-head">
           <span className="setting-label">Recognition model</span>
-          <p className="setting-hint">Finds names, organizations and places.</p>
-        </div>
-        <div className="choice-cards" role="radiogroup" aria-label="Recognition model">
-          <ChoiceCard
-            checked={backend === 'spacy'}
-            onSelect={() => {
-              setBackend('spacy')
-            }}
-            title="Standard"
-            meta="About 15 MB · fast"
-            body="Good on clean, well-formatted documents. Opens a typical contract in a few seconds."
-          />
-          <ChoiceCard
-            checked={backend === 'gliner'}
-            onSelect={() => {
-              setBackend('gliner')
-            }}
-            title="Professional"
-            meta="About 1.4 GB · slower"
-            body="Catches more names and organizations in dense legal and consulting text. The Pro model must be installed on this computer."
-          />
+          <p className="setting-hint">
+            GLiNER-PII finds names, organizations, places, dates and ID numbers, and Sanctum then
+            marks every repeat of a name it found. The model ships inside the app and runs entirely
+            on this computer.
+          </p>
         </div>
       </div>
 
@@ -327,7 +309,6 @@ function DetectionSection({
             className="btn btn-secondary"
             disabled={!dirty || saving}
             onClick={() => {
-              setBackend(settings.nerBackend)
               setThreshold(settings.scoreThreshold)
             }}
           >

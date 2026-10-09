@@ -71,7 +71,7 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 
 ### 🧠 Powered by the Sanctum Engine
 
-- Dual-tier NER: **Standard** (spaCy `en_core_web_sm`, ~15 MB bundled) or **Professional** (GLiNER-medium v2.1, +0.17 macro-F1, fetched on-demand from a Sanctum-owned CDN with explicit user consent).
+- One bundled NER model: **GLiNER-PII** (`knowledgator/gliner-pii-base-v1.0`, Apache-2.0, ~200 MB ONNX, no PyTorch), plus Presidio's pattern recognizers and document-wide name propagation. It ships inside the app; nothing is downloaded.
 - The app creates every session with the `replace` operator (entity-tag placeholders, editable per finding). The engine also supports `hips`, `redact`, `mask`, `encrypt` and `pseudonymize` and an encrypted mapping store; the studio UI does not expose them.
 
 ---
@@ -91,7 +91,6 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 │  ┌────────────────────────▼──────────────────────────────────┐  │
 │  │ Main process                                              │  │
 │  │   sidecar.ts   spawn + health-poll + SIGTERM on quit      │  │
-│  │   models.ts    one-shot model download (user-confirmed)   │  │
 │  │   settings.ts  persist settings → sidecar env on respawn  │  │
 │  │   menu.ts      native menu → renderer commands            │  │
 │  └────────────────────────┬──────────────────────────────────┘  │
@@ -126,7 +125,7 @@ The renderer's wire types (`src/renderer/src/api/types.ts`) are hand-written tod
 ### Prerequisites
 
 - Node 20 LTS or newer
-- A sibling checkout of [`sanctum`](https://github.com/FilippoTonci/sanctum) at `../sanctum`, with `pip install -e '.[security,api,documents]'` inside its `.venv`, for dev-mode sidecar spawning (see below)
+- A sibling checkout of [`sanctum`](https://github.com/FilippoTonci/sanctum) at `../sanctum`, with `pip install -e '.[security,api,documents]'` inside its `.venv` and the NER model fetched once with `python scripts/fetch_ner_model.py`, for dev-mode sidecar spawning (see below)
 - Python 3.10+ (for the sidecar — macOS's built-in `python3` is 3.9 and will not work; see [CLAUDE.md](CLAUDE.md) "Platform notes")
 
 ### Developer install
@@ -215,7 +214,7 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 - [x] `spawnSidecar()` / `killSidecar()` lifecycle manager
 - [x] Health polling + splash screen (cold start can exceed 30 s)
 - [x] `contextBridge` exposure of `{ baseUrl, token }`
-- [x] User-confirmed Professional-tier model download (1.4 GB)
+- [x] ~~User-confirmed Professional-tier model download (1.4 GB)~~ _— removed (2026-10-08): the one NER model ships inside the app_
 - [x] Graceful-shutdown hooks
 
 ### WS4 — `.docx` review surface ✅ _(shipped)_
@@ -250,6 +249,12 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 - [x] `.pdf` review (PDF.js page raster + text layer, zoom, thumbnails)
 - [x] Save-check sheet on a 422, linked findings (one row per group)
 
+### Next release — bundled GLiNER-PII NER model _(in review)_
+
+- [ ] One bundled NER model (GLiNER-PII, ~200 MB ONNX, no PyTorch) replaces the Standard / Professional choice; misses drop from 101 to 21 of 487 entities on the [sanctum-research](https://github.com/FilippoTonci/sanctum-research) hard corpus
+- [ ] Settings: the recognition-model choice is gone; "ID number" joins the ID types
+- [ ] No download path left in the app
+
 ### WS6 — Polish, signing, release
 
 - [ ] i18n (English + French, human-translated)
@@ -260,7 +265,7 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 - [ ] macOS signing + notarization (Apple Developer ID)
 - [ ] Windows signing (Azure Trusted Signing or Sectigo/DigiCert EV + YubiKey)
 - [ ] Linux AppImage + deb with GPG signatures
-- [ ] Split auto-update channels (shell vs. models)
+- [ ] ~~Split auto-update channels (shell vs. models)~~ _— dropped (2026-10-08): the model ships with the app, so one channel_
 - [ ] One-click release workflow (`workflow_dispatch` → bump, tag, build, publish — see [`RELEASE.md`](RELEASE.md))
 
 ### Deferred _(post-MVP)_

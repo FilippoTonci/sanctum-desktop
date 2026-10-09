@@ -40,6 +40,25 @@ exports.default = async function beforePack(context) {
   const bundleDir = join(repoRoot, 'sidecar-build', `${os}-${arch}`)
   const binary = join(bundleDir, os === 'win' ? 'sanctum-sidecar.exe' : 'sanctum-sidecar')
 
+  // The bundled NER model sits next to the binary (build-sidecar.sh). A
+  // bundle without it starts, then fails every analysis: same silent class.
+  const model = join(bundleDir, 'models', 'gliner-pii-base-v1.0', 'onnx', 'model_quint8.onnx')
+  if (existsSync(binary) && !existsSync(model)) {
+    throw new Error(
+      [
+        '',
+        `Refusing to package: the ${os}-${arch} sidecar has no NER model.`,
+        '',
+        `  expected: ${model}`,
+        '',
+        'Rebuild the sidecar; build-sidecar.sh fetches and bundles it:',
+        '',
+        `  PYTHON=python3.12 SANCTUM_REPO=../sanctum bash scripts/build-sidecar.sh`,
+        '',
+      ].join('\n'),
+    )
+  }
+
   if (existsSync(binary)) return
 
   throw new Error(

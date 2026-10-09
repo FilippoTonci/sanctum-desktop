@@ -26,7 +26,7 @@ export interface SpawnOptions {
   /**
    * Extra environment variables merged on top of the resolver's default
    * env (which itself layers over `process.env`). Used by the settings
-   * IPC respawn flow to inject `SANCTUM_NLP__NER_BACKEND` etc. without
+   * IPC respawn flow to inject `SANCTUM_ANALYZER__DEFAULT_SCORE_THRESHOLD` etc. without
    * touching the resolver.
    */
   readonly envOverrides?: Record<string, string>

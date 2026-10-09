@@ -58,7 +58,15 @@ export const ENTITY_GROUPS: readonly EntityGroup[] = [
     id: 'ids',
     label: 'Government and medical IDs',
     hint: 'Social security, tax, passport, licence and health numbers.',
-    types: ['US_SSN', 'US_ITIN', 'US_PASSPORT', 'US_DRIVER_LICENSE', 'UK_NHS', 'MEDICAL_LICENSE'],
+    types: [
+      'US_SSN',
+      'US_ITIN',
+      'US_PASSPORT',
+      'US_DRIVER_LICENSE',
+      'UK_NHS',
+      'MEDICAL_LICENSE',
+      'ID_NUMBER',
+    ],
   },
 ]
 
@@ -85,6 +93,7 @@ const LABELS: Record<string, string> = {
   US_DRIVER_LICENSE: 'Driver licence',
   UK_NHS: 'NHS number',
   MEDICAL_LICENSE: 'Medical licence',
+  ID_NUMBER: 'ID number',
   USER_ADDED: 'Marked by you',
 }
 

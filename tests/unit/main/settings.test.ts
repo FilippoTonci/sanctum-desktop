@@ -29,12 +29,12 @@ describe('SettingsStore', () => {
 
   it('persists updates and re-reads them on a fresh store', async () => {
     const store = new SettingsStore(path)
-    await store.update({ nerBackend: 'gliner', scoreThreshold: 0.6 })
+    await store.update({ defaultOperator: 'mask', scoreThreshold: 0.6 })
 
     const fresh = new SettingsStore(path)
     expect(fresh.read()).toEqual({
       ...DEFAULT_SETTINGS,
-      nerBackend: 'gliner',
+      defaultOperator: 'mask',
       scoreThreshold: 0.6,
     })
   })
@@ -55,11 +55,11 @@ describe('SettingsStore', () => {
 
   it('merges partial updates without dropping unspecified fields', async () => {
     const store = new SettingsStore(path)
-    await store.update({ nerBackend: 'gliner' })
+    await store.update({ defaultOperator: 'mask' })
     await store.update({ scoreThreshold: 0.8 })
     expect(store.read()).toEqual({
       ...DEFAULT_SETTINGS,
-      nerBackend: 'gliner',
+      defaultOperator: 'mask',
       scoreThreshold: 0.8,
     })
   })
@@ -69,7 +69,9 @@ describe('SettingsStore', () => {
     const rc3 = { nerBackend: 'gliner', scoreThreshold: 0.5, defaultOperator: 'replace' }
     await writeFile(path, JSON.stringify(rc3, null, 2), 'utf8')
     const loaded = new SettingsStore(path).read()
-    expect(loaded).toEqual({ ...DEFAULT_SETTINGS, ...rc3 })
+    // nerBackend was retired with the single bundled model: dropped on read.
+    expect(loaded).toEqual({ ...DEFAULT_SETTINGS, scoreThreshold: 0.5, defaultOperator: 'replace' })
+    expect('nerBackend' in loaded).toBe(false)
     expect(loaded.entityTypes).toBeNull()
     expect(loaded.replacementStyle).toBe('label')
     expect(loaded.replacementText).toBe('[REDACTED]')
@@ -78,11 +80,20 @@ describe('SettingsStore', () => {
     expect(loaded.theme).toBe('system')
   })
 
+  it('drops a retired key on read so it is never written back', async () => {
+    await writeFile(path, JSON.stringify({ nerBackend: 'gliner', theme: 'dark' }), 'utf8')
+    const store = new SettingsStore(path)
+    await store.update({ scoreThreshold: 0.4 })
+    const onDisk = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+    expect(onDisk.theme).toBe('dark')
+    expect('nerBackend' in onDisk).toBe(false)
+  })
+
   it('caches reads so the second call does not re-stat the file', async () => {
     const store = new SettingsStore(path)
     const first = store.read()
     // Mutate the file outside the store; cached read should still return the original.
-    await writeFile(path, JSON.stringify({ nerBackend: 'gliner' }), 'utf8')
+    await writeFile(path, JSON.stringify({ scoreThreshold: 0.9 }), 'utf8')
     expect(store.read()).toBe(first)
   })
 })
@@ -92,12 +103,10 @@ describe('settingsToEnv', () => {
     expect(
       settingsToEnv({
         ...DEFAULT_SETTINGS,
-        nerBackend: 'gliner',
         scoreThreshold: 0.6,
         defaultOperator: 'mask',
       }),
     ).toEqual({
-      SANCTUM_NLP__NER_BACKEND: 'gliner',
       SANCTUM_ANALYZER__DEFAULT_SCORE_THRESHOLD: '0.6',
       SANCTUM_ANONYMIZER__DEFAULT_OPERATOR: 'mask',
     })
@@ -124,7 +133,9 @@ describe('needsRespawn', () => {
   })
 
   it('is true when an env-backed key changes', () => {
-    expect(needsRespawn(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, nerBackend: 'gliner' })).toBe(true)
+    expect(needsRespawn(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, defaultOperator: 'mask' })).toBe(
+      true,
+    )
     expect(needsRespawn(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, scoreThreshold: 0.5 })).toBe(true)
   })
 })

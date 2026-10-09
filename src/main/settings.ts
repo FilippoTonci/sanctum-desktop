@@ -10,7 +10,6 @@
  *
  * Settings map onto Sanctum's pydantic-settings env-var convention:
  *
- *   nerBackend         → SANCTUM_NLP__NER_BACKEND
  *   scoreThreshold     → SANCTUM_ANALYZER__DEFAULT_SCORE_THRESHOLD
  *   defaultOperator    → SANCTUM_ANONYMIZER__DEFAULT_OPERATOR
  *
@@ -29,13 +28,10 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-export type NerBackend = 'spacy' | 'gliner'
 export type ReplacementStyle = 'label' | 'fixed'
 export type ThemePreference = 'system' | 'light' | 'dark'
 
 export interface AppSettings {
-  /** spacy = Standard tier (~15 MB); gliner = Professional tier (~1.4 GB). */
-  readonly nerBackend: NerBackend
   /** Inclusive lower bound on Presidio's confidence score. 0–1. */
   readonly scoreThreshold: number
   /** Session-default operator. Same set as the renderer's OperatorName. */
@@ -53,7 +49,6 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  nerBackend: 'spacy',
   scoreThreshold: 0.35,
   defaultOperator: 'replace',
   entityTypes: null,
@@ -77,8 +72,13 @@ export class SettingsStore {
     }
     try {
       const raw = readFileSync(this.path, 'utf8')
-      const parsed = JSON.parse(raw) as Partial<AppSettings>
-      this.cache = { ...DEFAULT_SETTINGS, ...parsed }
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      // Keep only keys this build knows: a retired one (e.g. nerBackend,
+      // from before the single bundled model) must not be written back.
+      const known = Object.fromEntries(
+        Object.entries(parsed).filter(([key]) => key in DEFAULT_SETTINGS),
+      ) as Partial<AppSettings>
+      this.cache = { ...DEFAULT_SETTINGS, ...known }
     } catch {
       // Corrupt settings file: fall back to defaults rather than crashing
       // the app on boot. The user's next save will overwrite.
@@ -98,7 +98,6 @@ export class SettingsStore {
 
 export function settingsToEnv(settings: AppSettings): Record<string, string> {
   return {
-    SANCTUM_NLP__NER_BACKEND: settings.nerBackend,
     SANCTUM_ANALYZER__DEFAULT_SCORE_THRESHOLD: settings.scoreThreshold.toString(),
     SANCTUM_ANONYMIZER__DEFAULT_OPERATOR: settings.defaultOperator,
   }
