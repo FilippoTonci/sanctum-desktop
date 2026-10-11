@@ -20,6 +20,8 @@
 
 Sanctum Desktop is the end-user GUI for [Sanctum](https://github.com/FilippoTonci/sanctum) — a local-first, air-gapped PII anonymization engine for legal and consulting professionals. This repository ships the Electron shell: an installable desktop app (signing lands in WS6) that spawns the Sanctum Python backend as a loopback-only sidecar and drives it through a keyboard-first review workflow.
 
+**[Download at sanctum.me.uk](https://sanctum.me.uk)** · [Send feedback](mailto:feedback@sanctum.me.uk)
+
 [Getting Started](#-getting-started) · [How It Works](#-how-it-works) · [Architecture](#-architecture) · [Roadmap](#-roadmap) · [Contributing](#-contributing)
 
 ---
@@ -121,6 +123,8 @@ The renderer's wire types (`src/renderer/src/api/types.ts`) are hand-written tod
 ## 🚀 Getting Started
 
 > **Status:** Workstreams 1–5 of Phase 3 are shipped — backend contract hardening (`sanctum`), Electron scaffold, sidecar integration, the `.docx` review surface, and the full session workflow UI — plus the studio redesign and `.pptx` / `.pdf` review (0.2.0-rc.1). Packaged unsigned builds run end-to-end on Linux and macOS (Apple Silicon). WS6 (signing, notarization, release pipeline) is the next major milestone — no signed installers yet.
+
+**Just want to use it?** Download the app from **[sanctum.me.uk](https://sanctum.me.uk)**. The rest of this section is for developers building from source.
 
 ### Prerequisites
 
@@ -261,7 +265,7 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 - [ ] Accessibility audit (WCAG AA, screen-reader labels, focus management)
 - [ ] Diagnostic bundle export (no automated upload)
 - [ ] Verify `/health`'s `sanctum_commit` + `openapi_digest` against the pinned backend at startup, and fail fast on a mismatch
-- [ ] Download site distributing the unsigned builds to developers and testers (deliberately ahead of signing — see WS6 substep 9 and open decision 3 in the plan)
+- [x] Download site distributing the unsigned builds to developers and testers (deliberately ahead of signing — see WS6 substep 9 and open decision 3 in the plan) — live at [sanctum.me.uk](https://sanctum.me.uk)
 - [ ] macOS signing + notarization (Apple Developer ID)
 - [ ] Windows signing (Azure Trusted Signing or Sectigo/DigiCert EV + YubiKey)
 - [ ] Linux AppImage + deb with GPG signatures
@@ -354,6 +358,7 @@ The Sanctum backend is licensed separately under MIT; see [`sanctum/LICENSE`](ht
 
 ## 🔗 Related
 
+- [sanctum.me.uk](https://sanctum.me.uk) — the download site ([source](https://github.com/FilippoTonci/sanctum-site))
 - [Sanctum — the engine](https://github.com/FilippoTonci/sanctum) — Python backend, CLI, HTTP API, document adapters
 - [Microsoft Presidio](https://microsoft.github.io/presidio/) — the PII detection engine Sanctum wraps
 - [Electron security checklist](https://www.electronjs.org/docs/latest/tutorial/security) — the posture this repo holds itself to
