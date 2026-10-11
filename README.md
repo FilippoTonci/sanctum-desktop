@@ -311,6 +311,18 @@ See [`sanctum/resources/presidio-architecture.md`](https://github.com/FilippoTon
 
 ---
 
+## 💬 Feedback
+
+Something broke, Sanctum missed a name, or you have a comment? Email
+**[feedback@sanctum.me.uk](mailto:feedback@sanctum.me.uk)**, or use
+**Help → Send Feedback…** in the app. Describe the problem — never attach a
+client document or paste the names Sanctum missed. The app collects nothing,
+so this is the only way we hear about it.
+
+Developers can also [open an issue](https://github.com/FilippoTonci/sanctum-desktop/issues).
+
+---
+
 ## 🤝 Contributing
 
 Contributions welcome, especially around:
