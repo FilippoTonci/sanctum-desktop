@@ -122,7 +122,7 @@ The renderer's wire types (`src/renderer/src/api/types.ts`) are hand-written tod
 
 ## 🚀 Getting Started
 
-> **Status:** Workstreams 1–5 of Phase 3 are shipped — backend contract hardening (`sanctum`), Electron scaffold, sidecar integration, the `.docx` review surface, and the full session workflow UI — plus the studio redesign and `.pptx` / `.pdf` review (0.2.0-rc.1). Packaged unsigned builds run end-to-end on Linux and macOS (Apple Silicon). WS6 (signing, notarization, release pipeline) is the next major milestone — no signed installers yet.
+> **Status:** Workstreams 1–5 of Phase 3 are shipped — backend contract hardening (`sanctum`), Electron scaffold, sidecar integration, the `.docx` review surface, and the full session workflow UI — plus the studio redesign and `.pptx` / `.pdf` review (0.2.0-rc.1). Packaged unsigned builds run end-to-end on Linux and macOS (Apple Silicon); the unsigned Windows (x64) installer is built, installed and smoke-tested in CI, and ships with the next release. WS6 (signing, notarization, release pipeline) is the next major milestone — no signed installers yet.
 
 **Just want to use it?** Download the app from **[sanctum.me.uk](https://sanctum.me.uk)**. The rest of this section is for developers building from source.
 
@@ -267,6 +267,7 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 - [ ] Verify `/health`'s `sanctum_commit` + `openapi_digest` against the pinned backend at startup, and fail fast on a mismatch
 - [x] Download site distributing the unsigned builds to developers and testers (deliberately ahead of signing — see WS6 substep 9 and open decision 3 in the plan) — live at [sanctum.me.uk](https://sanctum.me.uk)
 - [ ] macOS signing + notarization (Apple Developer ID)
+- [ ] Unsigned Windows (x64) installer in releases and on the download site, installed and smoke-tested in CI before it publishes
 - [ ] Windows signing (Azure Trusted Signing or Sectigo/DigiCert EV + YubiKey)
 - [ ] Linux AppImage + deb with GPG signatures
 - [ ] ~~Split auto-update channels (shell vs. models)~~ _— dropped (2026-10-08): the model ships with the app, so one channel_
