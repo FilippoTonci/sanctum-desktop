@@ -38,7 +38,19 @@
 #   PYTHON         Python interpreter to use. Default: python3
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Absolute path of a directory, in the form the native tools below can
+# read. Under Git Bash `pwd` prints /d/a/..., which MSYS rewrites to D:\a\...
+# only when an argument is a bare path; `pip install "/d/a/x[extras]"` gets
+# it verbatim and fails. `pwd -W` prints D:/a/..., which Windows Python reads
+# as-is and bash still handles.
+abs_dir() {
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) (cd "$1" && pwd -W) ;;
+    *) (cd "$1" && pwd) ;;
+  esac
+}
+
+REPO_ROOT="$(abs_dir "$(dirname "$0")/..")"
 BUILD_ROOT="${BUILD_ROOT:-$REPO_ROOT/sidecar-build}"
 SANCTUM_REPO="${SANCTUM_REPO:-$REPO_ROOT/../sanctum}"
 MODEL_TIER="${MODEL_TIER:-standard}"
@@ -79,7 +91,7 @@ fi
 # above cannot catch that: the directory really does exist, it is only the
 # *shape* of the string that misleads pip. An absolute path has separators,
 # so it can only ever be read as a path. See issue #38.
-SANCTUM_REPO="$(cd "$SANCTUM_REPO" && pwd)"
+SANCTUM_REPO="$(abs_dir "$SANCTUM_REPO")"
 echo "[build-sidecar] sanctum repo resolved to: $SANCTUM_REPO"
 
 # The venv below is created from $PYTHON, so its interpreter version is
