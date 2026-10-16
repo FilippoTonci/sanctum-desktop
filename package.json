@@ -28,6 +28,7 @@
     "test:watch": "vitest",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
+    "test:package": "playwright test --config playwright.package.config.ts",
     "make": "electron-vite build && electron-builder",
     "prepare": "husky",
     "postinstall": "patch-package"
