@@ -20,6 +20,7 @@ The workflow does the rest of the work:
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `prepare`                   | Validates the version, bumps `package.json` + `package-lock.json`, commits to `main`, and pins the `sanctum` backend to one commit |
 | `build-macos`/`build-linux` | Check out that **commit**, build the PyInstaller sidecar, then the installer                                                       |
+| `build-windows`             | The same, via `build-windows.yml`, then installs the `.exe` on the runner and smoke-tests the installed app                        |
 | `publish`                   | Creates the tag `v<version>` at that commit, attaches the artifacts, publishes the release                                         |
 
 Bad input fails in seconds, before a runner starts: a version that
@@ -43,6 +44,7 @@ name, once under a name that never changes:
 | Moving name                       | Resolves via                                                                                         |
 | --------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `Sanctum-Desktop-arm64.dmg`       | `https://github.com/FilippoTonci/sanctum-desktop/releases/latest/download/Sanctum-Desktop-arm64.dmg` |
+| `Sanctum-Desktop-Setup-x64.exe`   | …`/releases/latest/download/Sanctum-Desktop-Setup-x64.exe`                                           |
 | `Sanctum-Desktop-x86_64.AppImage` | …`/releases/latest/download/Sanctum-Desktop-x86_64.AppImage`                                         |
 | `sanctum-desktop-amd64.deb`       | …`/releases/latest/download/sanctum-desktop-amd64.deb`                                               |
 
@@ -73,9 +75,9 @@ ls "release/mac-arm64/Sanctum Desktop.app/Contents/Resources/sidecar"
 
 ## Not covered here
 
-Signing, notarization, auto-update channels, and the Windows build are
-WS6 items that have not landed — see the roadmap in
-[`README.md`](README.md). `build-windows` in
-[`.github/workflows/release.yml`](.github/workflows/release.yml) stays
-`if: false` until a signing certificate exists, and `publish` does not
-wait on it.
+Signing, notarization and auto-update channels are WS6 items that have
+not landed — see the roadmap in [`README.md`](README.md). The Windows
+installer ships **unsigned**: SmartScreen warns, and "More info → Run
+anyway" gets past it on a personal PC, but managed machines may refuse
+it outright. [`build-windows.yml`](.github/workflows/build-windows.yml)
+signs as soon as a `WIN_CERTIFICATE` secret exists.
