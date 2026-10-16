@@ -120,13 +120,15 @@ else
   source "$VENV/bin/activate"
 fi
 
-pip install --upgrade pip wheel
-pip install pyinstaller
+# `python -m pip`, not `pip`: on Windows pip.exe cannot replace itself
+# ("To modify pip, please run ... python -m pip"), so the upgrade fails.
+python -m pip install --upgrade pip wheel
+python -m pip install pyinstaller
 # Force-reinstall in case a prior editable install of sanctum is
 # present in this venv — pip won't replace an editable install with
 # a non-editable one without the explicit reinstall flag.
-pip install --force-reinstall --no-deps "$SANCTUM_REPO"
-pip install "$SANCTUM_REPO[security,api,documents]"
+python -m pip install --force-reinstall --no-deps "$SANCTUM_REPO"
+python -m pip install "$SANCTUM_REPO[security,api,documents]"
 
 # Skip when already installed: `spacy download` re-runs pip unconditionally,
 # and pip intermittently reads 0 bytes from GitHub's release redirect and
