@@ -15,13 +15,21 @@ export const MENU_COMMANDS = [
 export type MenuCommand = (typeof MENU_COMMANDS)[number]
 
 /**
+ * Where testers send comments and complaints. A mailto: hands off to the
+ * user's mail client; the app itself sends nothing. Same address as the site.
+ */
+export const FEEDBACK_URL = 'mailto:feedback@sanctum.me.uk?subject=Sanctum%20feedback'
+
+/**
  * The application menu: standard Mac key equivalents, with every document
  * command forwarded to the renderer through `send`. Edit's Undo is a command
  * rather than the native role because studio's undo reverts a review decision.
+ * Help's feedback item calls `openExternal` from the main process directly.
  */
 export function buildMenuTemplate(
   send: (cmd: MenuCommand) => void,
   platform: NodeJS.Platform,
+  openExternal: (url: string) => void,
 ): MenuItemConstructorOptions[] {
   const isMac = platform === 'darwin'
   const settings: MenuItemConstructorOptions = {
@@ -129,6 +137,17 @@ export function buildMenuTemplate(
     {
       label: 'Window',
       submenu: [{ role: 'minimize' }, { role: 'zoom' }],
+    },
+    {
+      role: 'help',
+      submenu: [
+        {
+          label: 'Send Feedback…',
+          click: () => {
+            openExternal(FEEDBACK_URL)
+          },
+        },
+      ],
     },
   ]
 }

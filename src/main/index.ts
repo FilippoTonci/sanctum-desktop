@@ -82,9 +82,13 @@ function createWindow(): void {
 
   Menu.setApplicationMenu(
     Menu.buildFromTemplate(
-      buildMenuTemplate((cmd: MenuCommand) => {
-        if (!win.isDestroyed()) win.webContents.send(MENU_COMMAND_CHANNEL, cmd)
-      }, process.platform),
+      buildMenuTemplate(
+        (cmd: MenuCommand) => {
+          if (!win.isDestroyed()) win.webContents.send(MENU_COMMAND_CHANNEL, cmd)
+        },
+        process.platform,
+        (url) => void shell.openExternal(url),
+      ),
     ),
   )
 
