@@ -268,9 +268,12 @@ tests/
 - E2E tests launch `out/main/index.js` with `SANCTUM_SKIP_SIDECAR=1` —
   the electron-vite build, **not** the packaged `.app`/`.dmg`, and with no
   backend behind it. Slow; not run in pre-commit.
-- **Nothing automated exercises a packaged artifact.** Verifying that an
-  installer actually contains and can spawn its sidecar is still a manual
-  step.
+- Package tests (`tests/package/`, `npm run test:package`) launch an
+  **installed** app via `SANCTUM_INSTALLED_APP`, wait for its bundled
+  sidecar to report ready, run a real `/analyze`, and check that quitting
+  leaves no sidecar behind. CI runs them on Windows only
+  (`.github/workflows/build-windows.yml`, after a silent install); the
+  macOS and Linux installers are still checked by hand.
 
 ## Where to start when adding…
 

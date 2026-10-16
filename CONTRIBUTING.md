@@ -57,6 +57,12 @@ one-off scripts are kept out of the repo.
   touch `src/main/`.
 - `npm run build` cross-platform on `macos-latest`, `windows-latest`,
   `ubuntu-latest`.
+- `npm run test:package` drives an installed app at
+  `SANCTUM_INSTALLED_APP` against its real bundled backend. The
+  **Windows installer** workflow runs it after building and silently
+  installing the `.exe`, on PRs that touch packaging (or by hand from
+  the Actions tab); its run's `sanctum-desktop-windows` artifact is the
+  installer to try in a Windows VM.
 
 Pre-commit (`husky` + `lint-staged`) runs ESLint and Prettier on staged
 files before each commit.
