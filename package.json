@@ -28,6 +28,7 @@
     "test:watch": "vitest",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
+    "test:package": "playwright test --config playwright.package.config.ts",
     "make": "electron-vite build && electron-builder",
     "prepare": "husky",
     "postinstall": "patch-package"
@@ -52,7 +53,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.2.0",
-    "electron-builder": "^25.1.8",
+    "electron-builder": "26.15.3",
     "electron-vite": "^3.0.0",
     "eslint": "^9.17.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",

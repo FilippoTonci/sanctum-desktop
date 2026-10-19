@@ -90,7 +90,7 @@ jobs:
           # commit is pushed now and the build jobs check it out by SHA.
           #
           # The TAG is not created here. `publish` creates it, at this
-          # commit, only once both builds have succeeded — otherwise a
+          # commit, only once every build has succeeded — otherwise a
           # failed run strands a tag pointing at something that never
           # produced an artifact (it did, twice: v0.1.0-rc.1 and rc.2).
           #
@@ -181,62 +181,13 @@ jobs:
 
   build-windows:
     needs: prepare
-    # WS6: this job runs on a self-hosted runner with EV cert + YubiKey,
-    # OR on a GitHub-hosted windows-latest if Azure Trusted Signing is
-    # used (no hardware token required). Decision deferred to WS2.7
-    # procurement outcome. Until then the job is disabled, and `publish`
-    # does not wait on it.
-    if: false
-    runs-on: [self-hosted, Windows, signing]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare.outputs.sha }}
-      - name: Check out the sanctum backend
-        uses: actions/checkout@v4
-        with:
-          repository: FilippoTonci/sanctum
-          ref: ${{ needs.prepare.outputs.sanctum_sha }}
-          path: sanctum-src
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      # build-sidecar.sh detects MINGW/MSYS and emits win-x64; Git Bash
-      # ships with the Windows runners, hence the explicit bash shell.
-      - name: Build the Python sidecar
-        shell: bash
-        run: PYTHON=python SANCTUM_REPO=sanctum-src bash scripts/build-sidecar.sh
-      - name: Build + sign (WS6)
-        env:
-          # Azure Trusted Signing — US/Canada entities only.
-          AZURE_TRUSTED_SIGNING_CLIENT_ID: ${{ secrets.AZURE_TRUSTED_SIGNING_CLIENT_ID }}
-          AZURE_TRUSTED_SIGNING_TENANT_ID: ${{ secrets.AZURE_TRUSTED_SIGNING_TENANT_ID }}
-          AZURE_TRUSTED_SIGNING_SECRET: ${{ secrets.AZURE_TRUSTED_SIGNING_SECRET }}
-          # Sectigo/DigiCert EV + YubiKey fallback (hardware-bound, needs
-          # the self-hosted runner). Neutral names for the same reason as
-          # the macOS job: an empty WIN_CSC_LINK would be read as a path.
-          WIN_CERTIFICATE: ${{ secrets.WIN_CERTIFICATE }}
-          WIN_CERTIFICATE_PWD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -n "$WIN_CERTIFICATE" ]; then
-            export WIN_CSC_LINK="$WIN_CERTIFICATE"
-            export WIN_CSC_KEY_PASSWORD="$WIN_CERTIFICATE_PWD"
-          else
-            echo "::warning::No signing certificate — building UNSIGNED."
-          fi
-          npm run make -- --publish never
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sanctum-desktop-windows
-          path: release/*.exe
-          retention-days: 30
+    # Defined once in build-windows.yml, which the PR check also runs: it
+    # builds (unsigned until WS6), installs, and smoke-tests the installer.
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+      sanctum_ref: ${{ needs.prepare.outputs.sanctum_sha }}
+    secrets: inherit
 
   build-linux:
     needs: prepare
@@ -278,8 +229,7 @@ jobs:
           retention-days: 30
 
   publish:
-    # build-windows is `if: false`; do not wait on a job that never runs.
-    needs: [prepare, build-macos, build-linux]
+    needs: [prepare, build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -308,6 +258,7 @@ jobs:
             echo "  $dest  <-  $(basename "$1")"
           }
           stage 'Sanctum-Desktop-arm64.dmg' dist-artifacts/sanctum-desktop-macos/*.dmg
+          stage 'Sanctum-Desktop-Setup-x64.exe' dist-artifacts/sanctum-desktop-windows/*.exe
           stage 'Sanctum-Desktop-x86_64.AppImage' dist-artifacts/sanctum-desktop-linux/*.AppImage
           stage 'sanctum-desktop-amd64.deb' dist-artifacts/sanctum-desktop-linux/*.deb
 
@@ -332,7 +283,11 @@ jobs:
           > — note there is no `-r`, which fails on macOS 15+ because App
           > Management protects an installed app's contents. Or skip the
           > terminal: **Open Anyway** in System Settings > Privacy & Security.
-          > On Linux, `chmod +x` the AppImage. No Windows build yet.
+          > On Windows (x64), SmartScreen says "Windows protected your PC":
+          > click **More info**, then **Run anyway**. It installs for your
+          > user only, no admin rights needed. Managed work PCs may block
+          > unsigned installers outright.
+          > On Linux, `chmod +x` the AppImage.
           MD
             echo ""
             echo "Backend: sanctum [\`${SANCTUM_SHA:0:12}\`](https://github.com/FilippoTonci/sanctum/commit/$SANCTUM_SHA)"
@@ -344,7 +299,7 @@ jobs:
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           # The tag does not exist yet — this creates it, at the bump
-          # commit, now that both builds have actually produced artifacts.
+          # commit, now that every build has actually produced artifacts.
           target_commitish: ${{ needs.prepare.outputs.sha }}
           name: ${{ needs.prepare.outputs.tag }}
           # Not a draft and not flagged pre-release: both hide the release
@@ -361,6 +316,7 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             dist-artifacts/sanctum-desktop-macos/*.dmg
+            dist-artifacts/sanctum-desktop-windows/*.exe
             dist-artifacts/sanctum-desktop-linux/*.AppImage
             dist-artifacts/sanctum-desktop-linux/*.deb
             moving/*

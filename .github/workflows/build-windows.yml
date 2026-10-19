@@ -1,0 +1,206 @@
+name: Build Windows installer
+
+# The one definition of how the Windows installer is built and checked.
+# release.yml calls it at the bump commit against the pinned backend; it
+# also runs on its own for PRs that touch packaging, and on demand, so what
+# a PR proves is exactly what a release ships. Nobody here runs Windows day
+# to day: the installer a PR run uploads is the one to try in a VM.
+#
+# Signs when a certificate is provisioned, otherwise builds UNSIGNED: the
+# same switch as the macOS job. Either way the installer is then installed
+# on the runner and the installed app is smoke-tested (tests/package) before
+# the artifact is uploaded — a broken installer never reaches `publish`.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'sanctum-desktop commit to build (empty: the triggering ref)'
+        type: string
+        default: ''
+      sanctum_ref:
+        description: 'sanctum backend commit or branch to bundle'
+        type: string
+        default: main
+  # Run directly (not via release.yml), `inputs` is empty or holds only
+  # sanctum_ref: build the triggering ref against sanctum main. ~30 minutes,
+  # hence the path filter.
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-windows.yml'
+      - 'electron-builder.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/**'
+      - 'src/main/**'
+      - 'src/preload/**'
+      - 'tests/package/**'
+      - 'playwright.package.config.ts'
+  workflow_dispatch:
+    inputs:
+      sanctum_ref:
+        description: 'sanctum backend branch or commit to bundle'
+        type: string
+        default: main
+      fresh_installs:
+        description: 'extra silent install/uninstall cycles to run first, no retry (proof runs: 10)'
+        type: number
+        default: 0
+
+# A newer push supersedes a PR run; never cancel a release's build. Under
+# workflow_call this resolves in the caller's context ("Release").
+concurrency:
+  group: build-windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-windows:
+    # GitHub-hosted: nothing here needs a hardware token while the build is
+    # unsigned. An EV certificate on a YubiKey would need a self-hosted
+    # runner; Azure Trusted Signing would not (WS6).
+    runs-on: windows-latest
+    timeout-minutes: 75
+    defaults:
+      run:
+        # Git Bash ships with the Windows runners. build-sidecar.sh detects
+        # MINGW/MSYS and emits sidecar-build/win-x64.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Check out the sanctum backend
+        uses: actions/checkout@v4
+        with:
+          repository: FilippoTonci/sanctum
+          ref: ${{ inputs.sanctum_ref || 'main' }}
+          path: sanctum-src
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Build the Python sidecar
+        run: PYTHON=python SANCTUM_REPO=sanctum-src bash scripts/build-sidecar.sh
+      - name: Build (+ sign once WS6 lands)
+        env:
+          # Azure Trusted Signing — US/Canada entities only. Placeholders
+          # for WS2.7 procurement; nothing reads them yet.
+          AZURE_TRUSTED_SIGNING_CLIENT_ID: ${{ secrets.AZURE_TRUSTED_SIGNING_CLIENT_ID }}
+          AZURE_TRUSTED_SIGNING_TENANT_ID: ${{ secrets.AZURE_TRUSTED_SIGNING_TENANT_ID }}
+          AZURE_TRUSTED_SIGNING_SECRET: ${{ secrets.AZURE_TRUSTED_SIGNING_SECRET }}
+          # Sectigo/DigiCert certificate. Neutral names for the same reason
+          # as the macOS job: an empty WIN_CSC_LINK would be read as a path.
+          WIN_CERTIFICATE: ${{ secrets.WIN_CERTIFICATE }}
+          WIN_CERTIFICATE_PWD: ${{ secrets.WIN_CERTIFICATE_PWD }}
+        # --publish never: release.yml's `publish` job is the single publisher.
+        run: |
+          set -euo pipefail
+          if [ -n "$WIN_CERTIFICATE" ]; then
+            echo "Signing with the Windows code-signing certificate."
+            export WIN_CSC_LINK="$WIN_CERTIFICATE"
+            export WIN_CSC_KEY_PASSWORD="$WIN_CERTIFICATE_PWD"
+          else
+            echo "::warning::No signing certificate — building UNSIGNED."
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          npm run make -- --publish never
+
+      - name: Repeat fresh installs (proof runs only)
+        # Off by default. Run by hand with fresh_installs=10 after touching
+        # the installer toolchain: each cycle installs and uninstalls with no
+        # retry, so an intermittent crash shows up as a count, not as luck.
+        if: inputs.fresh_installs > 0
+        env:
+          CYCLES: ${{ inputs.fresh_installs }}
+        run: |
+          set -euo pipefail
+          installer="$(ls release/*Setup*.exe)"
+          dir="$(cygpath "$LOCALAPPDATA")/Programs/sanctum-desktop"
+          failed=0
+          for i in $(seq 1 "$CYCLES"); do
+            code="$(pwsh -NoProfile -Command "(Start-Process -FilePath '$installer' -ArgumentList '/S' -Wait -PassThru).ExitCode" | tr -d '[:space:]')"
+            if [ "$code" != 0 ] || [ ! -f "$dir/resources/sidecar/sanctum-sidecar.exe" ]; then
+              echo "::error::fresh install $i/$CYCLES failed: exit code $code"
+              failed=$((failed + 1))
+            fi
+            if [ -f "$dir/Uninstall Sanctum Desktop.exe" ]; then
+              # The NSIS uninstaller copies itself to %TEMP% and returns at
+              # once; wait for the install directory to actually go.
+              pwsh -NoProfile -Command "Start-Process -FilePath '$(cygpath -w "$dir/Uninstall Sanctum Desktop.exe")' -ArgumentList '/S' -Wait"
+              for _ in $(seq 1 60); do [ -e "$dir/Sanctum Desktop.exe" ] || break; sleep 2; done
+            fi
+            if [ -e "$dir/Sanctum Desktop.exe" ]; then
+              echo "::error::uninstall after cycle $i left the app behind"
+              exit 1
+            fi
+          done
+          echo "$((CYCLES - failed))/$CYCLES fresh installs succeeded"
+          [ "$failed" -eq 0 ]
+
+      - name: Install it the way a user would
+        id: install
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          installers=(release/*Setup*.exe)
+          if [ "${#installers[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one installer in release/, found ${#installers[@]}: ${installers[*]}"
+            exit 1
+          fi
+          echo "Installing ${installers[0]} ($(du -h "${installers[0]}" | cut -f1))"
+          # One-click per-user NSIS installer: /S is silent, no admin needed,
+          # lands under %LOCALAPPDATA%\Programs. -PassThru for the exit code:
+          # -1073741819 (access violation) is the NSIS 3.0.4.1 System.dll
+          # crash that electron-builder.yml's toolsets.nsis pin is there for.
+          code="$(pwsh -NoProfile -Command "(Start-Process -FilePath '${installers[0]}' -ArgumentList '/S' -Wait -PassThru).ExitCode" | tr -d '[:space:]')"
+          echo "Installer exited with code $code"
+          programs="$(cygpath "$LOCALAPPDATA")/Programs"
+          app="$(find "$programs" -name 'Sanctum Desktop.exe' -print -quit 2>/dev/null || true)"
+          if [ "$code" != 0 ] || [ -z "$app" ] \
+            || [ ! -f "$(dirname "$app")/resources/sidecar/sanctum-sidecar.exe" ]; then
+            echo "::error::install failed (exit code $code): no complete 'Sanctum Desktop' under %LOCALAPPDATA%\\Programs"
+            # Where did it go, if anywhere?
+            echo "--- %LOCALAPPDATA%\\Programs"; ls -la "$programs" || true
+            echo "--- sanctum-desktop dir"; find "$programs" -maxdepth 3 -ipath '*sanctum*' | head -40 || true
+            echo "--- Program Files"; ls "/c/Program Files" | grep -i sanctum || true
+            echo "--- Uninstall registry"
+            pwsh -NoProfile -Command "Get-ChildItem HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall, HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall -ErrorAction SilentlyContinue | Get-ItemProperty | Where-Object DisplayName -like '*Sanctum*' | Format-List DisplayName, InstallLocation, DisplayVersion" || true
+            echo "--- processes"; pwsh -NoProfile -Command "Get-Process | Where-Object { \$_.ProcessName -like '*anctum*' -or \$_.ProcessName -like 'Un_*' } | Format-Table Id, ProcessName, Path" || true
+            exit 1
+          fi
+          echo "Installed at $app"
+          echo "app=$(cygpath -w "$app")" >> "$GITHUB_OUTPUT"
+          echo "sidecar=$(cygpath -w "$(dirname "$app")/resources/sidecar/sanctum-sidecar.exe")" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke-test the installed app
+        env:
+          SANCTUM_INSTALLED_APP: ${{ steps.install.outputs.app }}
+        run: npm run test:package
+
+      - name: Show the installed sidecar's own output
+        # The app swallows the sidecar's stderr; when the smoke test fails,
+        # run the installed binary directly so the traceback is in the log.
+        if: failure() && steps.install.outcome == 'success'
+        env:
+          SIDECAR: ${{ steps.install.outputs.sidecar }}
+        run: |
+          echo 0000000000000000000000000000000000000000000000000000000000000000 \
+            | timeout 240 "$SIDECAR" serve --port 0 --token-stdin || true
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: windows-package-test-results
+          path: test-results/
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sanctum-desktop-windows
+          path: release/*Setup*.exe
+          retention-days: 30
