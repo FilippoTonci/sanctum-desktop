@@ -43,6 +43,10 @@ on:
         description: 'sanctum backend branch or commit to bundle'
         type: string
         default: main
+      fresh_installs:
+        description: 'extra silent install/uninstall cycles to run first, no retry (proof runs: 10)'
+        type: number
+        default: 0
 
 # A newer push supersedes a PR run; never cancel a release's build. Under
 # workflow_call this resolves in the caller's context ("Release").
@@ -106,6 +110,38 @@ jobs:
           fi
           npm run make -- --publish never
 
+      - name: Repeat fresh installs (proof runs only)
+        # Off by default. Run by hand with fresh_installs=10 after touching
+        # the installer toolchain: each cycle installs and uninstalls with no
+        # retry, so an intermittent crash shows up as a count, not as luck.
+        if: inputs.fresh_installs > 0
+        env:
+          CYCLES: ${{ inputs.fresh_installs }}
+        run: |
+          set -euo pipefail
+          installer="$(ls release/*Setup*.exe)"
+          dir="$(cygpath "$LOCALAPPDATA")/Programs/sanctum-desktop"
+          failed=0
+          for i in $(seq 1 "$CYCLES"); do
+            code="$(pwsh -NoProfile -Command "(Start-Process -FilePath '$installer' -ArgumentList '/S' -Wait -PassThru).ExitCode" | tr -d '[:space:]')"
+            if [ "$code" != 0 ] || [ ! -f "$dir/resources/sidecar/sanctum-sidecar.exe" ]; then
+              echo "::error::fresh install $i/$CYCLES failed: exit code $code"
+              failed=$((failed + 1))
+            fi
+            if [ -f "$dir/Uninstall Sanctum Desktop.exe" ]; then
+              # The NSIS uninstaller copies itself to %TEMP% and returns at
+              # once; wait for the install directory to actually go.
+              pwsh -NoProfile -Command "Start-Process -FilePath '$(cygpath -w "$dir/Uninstall Sanctum Desktop.exe")' -ArgumentList '/S' -Wait"
+              for _ in $(seq 1 60); do [ -e "$dir/Sanctum Desktop.exe" ] || break; sleep 2; done
+            fi
+            if [ -e "$dir/Sanctum Desktop.exe" ]; then
+              echo "::error::uninstall after cycle $i left the app behind"
+              exit 1
+            fi
+          done
+          echo "$((CYCLES - failed))/$CYCLES fresh installs succeeded"
+          [ "$failed" -eq 0 ]
+
       - name: Install it the way a user would
         id: install
         run: |
@@ -118,27 +154,16 @@ jobs:
           fi
           echo "Installing ${installers[0]} ($(du -h "${installers[0]}" | cut -f1))"
           # One-click per-user NSIS installer: /S is silent, no admin needed,
-          # lands under %LOCALAPPDATA%\Programs.
-          code="$(pwsh -NoProfile -Command "(Start-Process -FilePath '${installers[0]}' -ArgumentList '/S' -Wait -PassThru).ExitCode")"
-          echo "Installer exited with code ${code//[[:space:]]/}"
-          # -Wait is not enough: the one-click installer can hand its work to
-          # a second copy of itself and exit, which once returned in 3 s with
-          # nothing on disk (a full install takes ~1 min). Done means no
-          # installer process left AND the app plus its sidecar are in place.
+          # lands under %LOCALAPPDATA%\Programs. -PassThru for the exit code:
+          # -1073741819 (access violation) is the NSIS 3.0.4.1 System.dll
+          # crash that electron-builder.yml's toolsets.nsis pin is there for.
+          code="$(pwsh -NoProfile -Command "(Start-Process -FilePath '${installers[0]}' -ArgumentList '/S' -Wait -PassThru).ExitCode" | tr -d '[:space:]')"
+          echo "Installer exited with code $code"
           programs="$(cygpath "$LOCALAPPDATA")/Programs"
-          app=''
-          for _ in $(seq 1 60); do
-            running="$(pwsh -NoProfile -Command "@(Get-Process -Name 'Sanctum Desktop Setup*' -ErrorAction SilentlyContinue).Count")"
-            app="$(find "$programs" -name 'Sanctum Desktop.exe' -print -quit 2>/dev/null || true)"
-            if [ "${running//[[:space:]]/}" = 0 ] && [ -n "$app" ] \
-              && [ -f "$(dirname "$app")/resources/sidecar/sanctum-sidecar.exe" ]; then
-              break
-            fi
-            app=''
-            sleep 5
-          done
-          if [ -z "$app" ]; then
-            echo "::error::installer did not finish within 5 minutes: no complete 'Sanctum Desktop' under %LOCALAPPDATA%\\Programs"
+          app="$(find "$programs" -name 'Sanctum Desktop.exe' -print -quit 2>/dev/null || true)"
+          if [ "$code" != 0 ] || [ -z "$app" ] \
+            || [ ! -f "$(dirname "$app")/resources/sidecar/sanctum-sidecar.exe" ]; then
+            echo "::error::install failed (exit code $code): no complete 'Sanctum Desktop' under %LOCALAPPDATA%\\Programs"
             # Where did it go, if anywhere?
             echo "--- %LOCALAPPDATA%\\Programs"; ls -la "$programs" || true
             echo "--- sanctum-desktop dir"; find "$programs" -maxdepth 3 -ipath '*sanctum*' | head -40 || true

@@ -37,6 +37,12 @@ mac:
   hardenedRuntime: true
   gatekeeperAssess: false
   # WS6: entitlements + notarization wired here.
+# makensis 3.12 instead of the default 3.0.4.1 (2019), whose System.dll
+# plugin intermittently crashes a silent install within seconds (access
+# violation -1073741819, nothing installed; a rerun passes). Seen in our
+# Windows CI and in arul28/ADE#1605. Marked beta by electron-builder.
+toolsets:
+  nsis: '1.2.1'
 win:
   target:
     - target: nsis
