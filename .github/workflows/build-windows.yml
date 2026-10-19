@@ -1,9 +1,10 @@
 name: Build Windows installer
 
 # The one definition of how the Windows installer is built and checked.
-# Called by release.yml (at the bump commit, against the pinned backend)
-# and by windows-installer.yml (on PRs that touch packaging), so what a PR
-# proves is exactly what a release ships.
+# release.yml calls it at the bump commit against the pinned backend; it
+# also runs on its own for PRs that touch packaging, and on demand, so what
+# a PR proves is exactly what a release ships. Nobody here runs Windows day
+# to day: the installer a PR run uploads is the one to try in a VM.
 #
 # Signs when a certificate is provisioned, otherwise builds UNSIGNED: the
 # same switch as the macOS job. Either way the installer is then installed
@@ -21,6 +22,33 @@ on:
         description: 'sanctum backend commit or branch to bundle'
         type: string
         default: main
+  # Run directly (not via release.yml), `inputs` is empty or holds only
+  # sanctum_ref: build the triggering ref against sanctum main. ~30 minutes,
+  # hence the path filter.
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-windows.yml'
+      - 'electron-builder.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/**'
+      - 'src/main/**'
+      - 'src/preload/**'
+      - 'tests/package/**'
+      - 'playwright.package.config.ts'
+  workflow_dispatch:
+    inputs:
+      sanctum_ref:
+        description: 'sanctum backend branch or commit to bundle'
+        type: string
+        default: main
+
+# A newer push supersedes a PR run; never cancel a release's build. Under
+# workflow_call this resolves in the caller's context ("Release").
+concurrency:
+  group: build-windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-windows:
@@ -42,7 +70,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FilippoTonci/sanctum
-          ref: ${{ inputs.sanctum_ref }}
+          ref: ${{ inputs.sanctum_ref || 'main' }}
           path: sanctum-src
       - uses: actions/setup-python@v5
         with:
