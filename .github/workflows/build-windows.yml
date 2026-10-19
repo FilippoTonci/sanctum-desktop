@@ -119,7 +119,8 @@ jobs:
           echo "Installing ${installers[0]} ($(du -h "${installers[0]}" | cut -f1))"
           # One-click per-user NSIS installer: /S is silent, no admin needed,
           # lands under %LOCALAPPDATA%\Programs.
-          pwsh -NoProfile -Command "Start-Process -FilePath '${installers[0]}' -ArgumentList '/S' -Wait"
+          code="$(pwsh -NoProfile -Command "(Start-Process -FilePath '${installers[0]}' -ArgumentList '/S' -Wait -PassThru).ExitCode")"
+          echo "Installer exited with code ${code//[[:space:]]/}"
           # -Wait is not enough: the one-click installer can hand its work to
           # a second copy of itself and exit, which once returned in 3 s with
           # nothing on disk (a full install takes ~1 min). Done means no
@@ -138,6 +139,13 @@ jobs:
           done
           if [ -z "$app" ]; then
             echo "::error::installer did not finish within 5 minutes: no complete 'Sanctum Desktop' under %LOCALAPPDATA%\\Programs"
+            # Where did it go, if anywhere?
+            echo "--- %LOCALAPPDATA%\\Programs"; ls -la "$programs" || true
+            echo "--- sanctum-desktop dir"; find "$programs" -maxdepth 3 -ipath '*sanctum*' | head -40 || true
+            echo "--- Program Files"; ls "/c/Program Files" | grep -i sanctum || true
+            echo "--- Uninstall registry"
+            pwsh -NoProfile -Command "Get-ChildItem HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall, HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall -ErrorAction SilentlyContinue | Get-ItemProperty | Where-Object DisplayName -like '*Sanctum*' | Format-List DisplayName, InstallLocation, DisplayVersion" || true
+            echo "--- processes"; pwsh -NoProfile -Command "Get-Process | Where-Object { \$_.ProcessName -like '*anctum*' -or \$_.ProcessName -like 'Un_*' } | Format-Table Id, ProcessName, Path" || true
             exit 1
           fi
           echo "Installed at $app"
