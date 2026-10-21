@@ -8,7 +8,7 @@ import {
   type ReactElement,
 } from 'react'
 import { clientFromCredentials, type SessionsClient } from './api/sessions'
-import { ApiError, type CreateReviewSessionRequest } from './api/types'
+import { ApiError } from './api/types'
 import { CommandPalette, type Command } from './components/CommandPalette'
 import { CommitPanel } from './components/CommitPanel'
 import { ConfirmDialog } from './components/ConfirmDialog'
@@ -36,6 +36,7 @@ import { decideAllPendingOfType } from './review/bulk'
 import { entityLabel } from './review/entities'
 import { seedFakeDetections } from './review/fake-detections'
 import { previewsForStore, sessionToDetections } from './review/from-session'
+import { sessionRequestFromSettings } from './review/replacement'
 import { runMenuUndo } from './menu-undo'
 import { isInputFocused, useReviewKeyboard } from './review/keyboard'
 import { useMissedSelectionTracker } from './review/selection-tracker'
@@ -60,13 +61,6 @@ type ConfirmState =
   | { kind: 'open'; file: File }
   | { kind: 'resume'; sessionId: string }
   | null
-
-/**
- * The only operator the product uses. The engine still supports others
- * (and the IPC/API code for the mapping store stays in place), but the UI
- * never offers them: every session is created with `replace`.
- */
-const SESSION_OPERATOR: OperatorName = 'replace'
 
 const NARROW_QUERY = '(max-width: 1199px)'
 
@@ -872,26 +866,6 @@ interface RunAnalysisArgs {
   readonly signal: AbortSignal
   readonly onSuccess: (response: Awaited<ReturnType<SessionsClient['createSession']>>) => void
   readonly onError: (err: unknown) => void
-}
-
-/**
- * Build the create-session body from Settings: always the `replace`
- * operator, with the chosen replacement style and entity filter.
- * Exported for tests.
- */
-export function sessionRequestFromSettings(
-  path: string,
-  settings: AppSettings | null | undefined,
-): CreateReviewSessionRequest {
-  const fixed = settings?.replacementStyle === 'fixed'
-  return {
-    input_path: path,
-    default_operator: SESSION_OPERATOR,
-    ...(fixed ? { default_operator_params: { new_value: settings.replacementText } } : {}),
-    ...(settings?.entityTypes !== null && settings?.entityTypes !== undefined
-      ? { entities: settings.entityTypes }
-      : {}),
-  }
 }
 
 async function runAnalysis(args: RunAnalysisArgs): Promise<void> {

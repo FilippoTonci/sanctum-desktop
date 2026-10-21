@@ -182,6 +182,9 @@ view) | `Inspector`.
   finding is decided through its head.
 - `entities.ts` — plain-language names and groupings for the engine's
   entity types (what Settings and the UI show instead of raw tags).
+- `replacement.ts` — maps the Settings replacement style onto the engine
+  operator + params a new review session is created with
+  (`sessionRequestFromSettings`).
 - `leaks.ts` — reads a 422 save refusal and locates each leaked value in
   the reviewable text, for `LeakSheet`.
 - `use-review-surface.ts` — format-agnostic wrap + highlight + click-focus
