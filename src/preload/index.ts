@@ -22,7 +22,8 @@ const MAPPING_STORE_PATH_CHANNEL = 'sanctum:get-mapping-store-path'
 const SETTINGS_GET_CHANNEL = 'sanctum:get-settings'
 const SETTINGS_UPDATE_CHANNEL = 'sanctum:update-settings'
 
-export type ReplacementStyle = 'label' | 'fixed'
+// Keep in sync with ReplacementStyle in src/main/settings.ts.
+export type ReplacementStyle = 'label' | 'fixed' | 'fake' | 'mask' | 'remove'
 export type ThemePreference = 'system' | 'light' | 'dark'
 
 export interface AppSettings {

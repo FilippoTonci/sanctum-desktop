@@ -71,6 +71,7 @@ export function applyEditDecorations(
     let replacement = wrap.querySelector<HTMLElement>(`:scope > .${REPLACEMENT_CLASS}`)
     if (preview === undefined) {
       replacement?.remove()
+      delete wrap.dataset.removed
       continue
     }
     if (replacement === null) {
@@ -81,6 +82,15 @@ export function applyEditDecorations(
     }
     if (replacement.textContent !== preview) {
       replacement.textContent = preview
+    }
+
+    // A removal (empty replacement) on anything but the tail of a linked
+    // finding keeps a thin mark in the canvas so it can still be seen and
+    // clicked. Tails stay invisible: the head carries the finding.
+    if (preview === '' && (detection?.groupIndex ?? 0) === 0) {
+      wrap.dataset.removed = 'true'
+    } else {
+      delete wrap.dataset.removed
     }
   }
 }

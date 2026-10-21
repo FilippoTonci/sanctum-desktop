@@ -71,3 +71,27 @@ describe('Inspector verdict buttons', () => {
     )
   })
 })
+
+describe('Inspector replacement display', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+  afterEach(cleanup)
+
+  it('reads "Removed" when the engine renders the finding as nothing', () => {
+    show('accepted')
+    useReviewStore.getState().setPreviews({ d0: '' })
+    const { getByRole } = render(React.createElement(Inspector))
+    const token = getByRole('button', { name: /Removed/ }).querySelector('.token')
+    expect(token?.className).toContain('token-removed')
+  })
+
+  it('shows a fake-data replacement verbatim', () => {
+    show('accepted')
+    useReviewStore.getState().setPreviews({ d0: 'Michael Jones' })
+    const { getByRole } = render(React.createElement(Inspector))
+    const token = getByRole('button', { name: /Michael Jones/ }).querySelector('.token')
+    expect(token?.textContent).toBe('Michael Jones')
+    expect(token?.className).not.toContain('token-removed')
+  })
+})

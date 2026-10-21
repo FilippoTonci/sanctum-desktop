@@ -27,7 +27,8 @@ export interface SaveDialogResult {
   readonly filePath: string | null
 }
 
-export type ReplacementStyle = 'label' | 'fixed'
+// Keep in sync with ReplacementStyle in src/main/settings.ts.
+export type ReplacementStyle = 'label' | 'fixed' | 'fake' | 'mask' | 'remove'
 export type ThemePreference = 'system' | 'light' | 'dark'
 
 export interface AppSettings {

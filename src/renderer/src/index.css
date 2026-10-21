@@ -481,6 +481,12 @@ button:disabled {
   }
 }
 
+/* A removal ("Remove the text"): the chip names what happens, in italics,
+   rather than showing an empty box. */
+.token-removed {
+  font-style: italic;
+}
+
 .token {
   display: inline-block;
   padding: 0 6px;
@@ -1601,6 +1607,18 @@ button:disabled {
 
 .pdf-text-layer .sanctum-edit[data-status='accepted'] .sanctum-edit-replacement:empty {
   display: block;
+}
+
+/* A finding replaced with nothing ("Remove the text") keeps a thin dark
+   mark where it was, so it can still be seen and clicked; the saved copy
+   has nothing there. A PDF already keeps its cover box (above). */
+.sanctum-edit[data-status='accepted'][data-removed='true']
+  .sanctum-edit-replacement:empty:not(.pdf-text-layer *) {
+  display: inline-block;
+  width: 0.45em;
+  height: 1em;
+  padding: 0;
+  vertical-align: -0.12em;
 }
 
 /* =========================================================================

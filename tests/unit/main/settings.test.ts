@@ -89,6 +89,31 @@ describe('SettingsStore', () => {
     expect('nerBackend' in onDisk).toBe(false)
   })
 
+  it.each(['label', 'fixed', 'fake', 'mask', 'remove'] as const)(
+    'persists the %s replacement style',
+    async (style) => {
+      await new SettingsStore(path).update({ replacementStyle: style })
+      expect(new SettingsStore(path).read().replacementStyle).toBe(style)
+    },
+  )
+
+  it('falls back to the label style for a replacement style this build does not know', async () => {
+    // e.g. written by a newer build, or edited by hand.
+    await writeFile(path, JSON.stringify({ replacementStyle: 'shred', theme: 'dark' }), 'utf8')
+    const loaded = new SettingsStore(path).read()
+    expect(loaded.replacementStyle).toBe('label')
+    expect(loaded.theme).toBe('dark')
+  })
+
+  it('refuses to store an unknown replacement style on update', async () => {
+    const store = new SettingsStore(path)
+    // The IPC handler passes the renderer's patch through untyped.
+    const next = await store.update({ replacementStyle: 'shred' as never })
+    expect(next.replacementStyle).toBe('label')
+    const onDisk = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+    expect(onDisk.replacementStyle).toBe('label')
+  })
+
   it('caches reads so the second call does not re-stat the file', async () => {
     const store = new SettingsStore(path)
     const first = store.read()
@@ -130,6 +155,14 @@ describe('needsRespawn', () => {
         replacementStyle: 'fixed',
       }),
     ).toBe(false)
+  })
+
+  it('is false when only the replacement style changes (it is sent per session)', () => {
+    for (const style of ['fake', 'mask', 'remove'] as const) {
+      expect(needsRespawn(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, replacementStyle: style })).toBe(
+        false,
+      )
+    }
   })
 
   it('is true when an env-backed key changes', () => {

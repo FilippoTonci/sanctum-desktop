@@ -264,3 +264,31 @@ describe('DetectionSidebar linked findings', () => {
     await act(() => Promise.resolve())
   })
 })
+
+describe('sidebar replacement chip', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('reads "Removed" for a redacted finding whose replacement is empty', () => {
+    useReviewStore.getState().setDetections([detection({ id: 'r0', status: 'accepted' })])
+    useReviewStore.getState().setPreviews({ r0: '' })
+    const { getByTestId } = render(React.createElement(DetectionSidebar))
+    const chip = getByTestId('sidebar-replacement')
+    expect(chip.textContent).toBe('Removed')
+    expect(chip.className).toContain('token-removed')
+  })
+
+  it('shows a non-empty replacement as is', () => {
+    useReviewStore.getState().setDetections([detection({ id: 'r1', status: 'accepted' })])
+    useReviewStore.getState().setPreviews({ r1: '**********' })
+    const { getByTestId } = render(React.createElement(DetectionSidebar))
+    const chip = getByTestId('sidebar-replacement')
+    expect(chip.textContent).toBe('**********')
+    expect(chip.className).not.toContain('token-removed')
+  })
+})
