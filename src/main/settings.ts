@@ -17,7 +17,9 @@
  * sidecar's environment (so changing them does not respawn it):
  *
  *   entityTypes        → `entities` on POST /review-sessions (null = all)
- *   replacementStyle   → `default_operator_params` for the replace operator
+ *   replacementStyle   → `default_operator` + `default_operator_params` on
+ *                        POST /review-sessions (the mapping lives in the
+ *                        renderer's review/replacement.ts)
  *   replacementText    → the fixed text used when replacementStyle='fixed'
  *   outputSuffix       → appended to the source name in the save dialog
  *   saveNextToOriginal → seed the save dialog in the source file's folder
@@ -28,7 +30,23 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-export type ReplacementStyle = 'label' | 'fixed'
+/**
+ * How the review session replaces what it finds:
+ *   label  → the entity tag, e.g. <PERSON>          (replace)
+ *   fixed  → replacementText everywhere              (replace + new_value)
+ *   fake   → realistic made-up data of the same kind (hips)
+ *   mask   → every character becomes '*'            (mask)
+ *   remove → the text is deleted                     (redact)
+ */
+export type ReplacementStyle = 'label' | 'fixed' | 'fake' | 'mask' | 'remove'
+
+export const REPLACEMENT_STYLES: readonly ReplacementStyle[] = [
+  'label',
+  'fixed',
+  'fake',
+  'mask',
+  'remove',
+]
 export type ThemePreference = 'system' | 'light' | 'dark'
 
 export interface AppSettings {
@@ -38,7 +56,7 @@ export interface AppSettings {
   readonly defaultOperator: string
   /** Entity types to detect; null means every type the engine supports. */
   readonly entityTypes: readonly string[] | null
-  /** 'label' writes the entity tag (<PERSON>); 'fixed' writes replacementText. */
+  /** How findings are replaced; see ReplacementStyle. */
   readonly replacementStyle: ReplacementStyle
   readonly replacementText: string
   /** Suffix appended to the source file name, e.g. "_anonymized". */
@@ -78,7 +96,7 @@ export class SettingsStore {
       const known = Object.fromEntries(
         Object.entries(parsed).filter(([key]) => key in DEFAULT_SETTINGS),
       ) as Partial<AppSettings>
-      this.cache = { ...DEFAULT_SETTINGS, ...known }
+      this.cache = sanitize({ ...DEFAULT_SETTINGS, ...known })
     } catch {
       // Corrupt settings file: fall back to defaults rather than crashing
       // the app on boot. The user's next save will overwrite.
@@ -88,12 +106,22 @@ export class SettingsStore {
   }
 
   async update(next: Partial<AppSettings>): Promise<AppSettings> {
-    const merged = { ...this.read(), ...next }
+    const merged = sanitize({ ...this.read(), ...next })
     await mkdir(dirname(this.path), { recursive: true })
     writeFileSync(this.path, JSON.stringify(merged, null, 2), { mode: 0o600 })
     this.cache = merged
     return merged
   }
+}
+
+/**
+ * Replace values this build does not understand with the default, so a
+ * settings file written by a newer build (or edited by hand) can't feed
+ * an unknown replacement style into session creation.
+ */
+function sanitize(settings: AppSettings): AppSettings {
+  if (REPLACEMENT_STYLES.includes(settings.replacementStyle)) return settings
+  return { ...settings, replacementStyle: DEFAULT_SETTINGS.replacementStyle }
 }
 
 export function settingsToEnv(settings: AppSettings): Record<string, string> {
