@@ -21,6 +21,15 @@ export interface SessionOperator {
   readonly params?: Readonly<Record<string, unknown>>
 }
 
+/**
+ * How a replacement reads in the inspector and findings list. The engine
+ * renders a removal (`redact`) as the empty string, which would otherwise
+ * show as an empty chip.
+ */
+export function replacementLabel(replacement: string): string {
+  return replacement === '' ? 'Removed' : replacement
+}
+
 /** The marker used when the user leaves the fixed text blank. */
 export const DEFAULT_MARKER = '[REDACTED]'
 

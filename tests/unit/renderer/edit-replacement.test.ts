@@ -102,3 +102,45 @@ describe('applyEditDecorations', () => {
     expect(wrap?.dataset.status).not.toBe('accepted')
   })
 })
+
+describe('applyEditDecorations — removals', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('marks a finding replaced with nothing so it keeps a visible mark', () => {
+    const root = setBody(`<p>${wrapped('a', 'Alice')}</p>`)
+    applyEditDecorations(root, [detection({ id: 'a', status: 'accepted' })], { a: '' })
+    const wrap = root.querySelector<HTMLElement>('.sanctum-edit[data-detection-id="a"]')
+    expect(wrap?.dataset.status).toBe('accepted')
+    expect(wrap?.dataset.removed).toBe('true')
+  })
+
+  it('leaves the tail of a linked finding unmarked', () => {
+    const root = setBody(`<p>${wrapped('a', 'Ali')}${wrapped('b', 'ce')}</p>`)
+    applyEditDecorations(
+      root,
+      [
+        detection({ id: 'a', status: 'accepted', groupId: 'g', groupIndex: 0 }),
+        detection({ id: 'b', status: 'accepted', groupId: 'g', groupIndex: 1 }),
+      ],
+      { a: '', b: '' },
+    )
+    const head = root.querySelector<HTMLElement>('[data-detection-id="a"]')
+    const tail = root.querySelector<HTMLElement>('[data-detection-id="b"]')
+    expect(head?.dataset.removed).toBe('true')
+    expect(tail?.dataset.removed).toBeUndefined()
+  })
+
+  it('clears the mark when the replacement is no longer empty or goes away', () => {
+    const root = setBody(`<p>${wrapped('a', 'Alice')}</p>`)
+    const d = [detection({ id: 'a', status: 'accepted' })]
+    const wrap = root.querySelector<HTMLElement>('[data-detection-id="a"]')
+    applyEditDecorations(root, d, { a: '' })
+    applyEditDecorations(root, d, { a: 'Custom' })
+    expect(wrap?.dataset.removed).toBeUndefined()
+    applyEditDecorations(root, d, { a: '' })
+    applyEditDecorations(root, d, {})
+    expect(wrap?.dataset.removed).toBeUndefined()
+  })
+})

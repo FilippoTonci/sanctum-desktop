@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { countDetections, decideAllPendingOfType, idsOfType } from '../review/bulk'
 import { entityLabel } from '../review/entities'
+import { replacementLabel } from '../review/replacement'
 import { useReviewStore } from '../review/store'
 import { findingText, headsOf, type Detection } from '../review/types'
 import { useReviewActions } from '../review/use-actions'
@@ -151,7 +152,7 @@ function FocusedDetection({
               className="input input-mono"
               aria-labelledby="replacement-label"
               value={draft}
-              placeholder={preview ?? 'Replacement text'}
+              placeholder={preview === undefined || preview === '' ? 'Replacement text' : preview}
               onChange={(e) => {
                 setDraft(e.currentTarget.value)
               }}
@@ -178,7 +179,9 @@ function FocusedDetection({
             }}
             title="Edit replacement (E)"
           >
-            <span className="token">{replacement ?? '—'}</span>
+            <span className={`token${replacement === '' ? ' token-removed' : ''}`}>
+              {replacement === undefined ? '—' : replacementLabel(replacement)}
+            </span>
             <span className="replacement-edit-hint">
               Edit <Kbd keys={['E']} />
             </span>

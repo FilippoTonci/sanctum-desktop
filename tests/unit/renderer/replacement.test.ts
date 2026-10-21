@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MASK_ALL_PARAMS,
+  replacementLabel,
   sessionOperatorFor,
   sessionRequestFromSettings,
 } from '../../../src/renderer/src/review/replacement'
@@ -44,6 +45,13 @@ describe('sessionOperatorFor', () => {
       chars_to_mask: Number.MAX_SAFE_INTEGER,
       from_end: false,
     })
+  })
+})
+
+describe('replacementLabel', () => {
+  it('names an empty replacement as a removal and passes others through', () => {
+    expect(replacementLabel('')).toBe('Removed')
+    expect(replacementLabel('<PERSON>')).toBe('<PERSON>')
   })
 })
 

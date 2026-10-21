@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { countDetections, decideAllPendingOfType } from '../review/bulk'
 import { entityLabel } from '../review/entities'
 import { groupDetectionsBySlide, slideIndexOfSegment } from '../review/pptx-render'
+import { replacementLabel } from '../review/replacement'
 import { useReviewStore } from '../review/store'
 import {
   findingText,
@@ -31,8 +32,9 @@ export interface FocusedControlsState {
  * should render in (the Inspector consumes it). Returns `null` for
  * non-focused rows so callers can skip the controls entirely.
  *
- * Operator fields survive for the engine contract; the UI only ever
- * uses `replace`, so the Inspector reads `editing` and nothing else.
+ * Operator fields survive for the engine contract. The operator is set
+ * per session from Settings (review/replacement.ts), never per finding,
+ * so the Inspector reads `editing` and nothing else.
  */
 export function pickFocusedControlsState(
   detection: Detection,
@@ -49,6 +51,18 @@ export function pickFocusedControlsState(
     pseudonymizeLocked: effectiveOperator === 'pseudonymize' && !mappingUnlocked,
     defaultOperator,
   }
+}
+
+/** A decided row's replacement chip; a removal reads "Removed", not an empty chip. */
+function SidebarReplacement({ text }: { readonly text: string }): ReactElement {
+  return (
+    <span
+      className={`detection-row-token${text === '' ? ' token-removed' : ''}`}
+      data-testid="sidebar-replacement"
+    >
+      {replacementLabel(text)}
+    </span>
+  )
 }
 
 export type ReplacementVariant = 'firm' | 'faint' | 'muted'
@@ -319,12 +333,9 @@ export function DetectionSidebar({
                               </span>
                             ) : null}
                             {variant === 'firm' ? (
-                              <span
-                                className="detection-row-token"
-                                data-testid="sidebar-replacement"
-                              >
-                                {d.customReplacement ?? previews[d.id]}
-                              </span>
+                              <SidebarReplacement
+                                text={d.customReplacement ?? previews[d.id] ?? ''}
+                              />
                             ) : null}
                             <span className="visually-hidden">{STATUS_LABEL[d.status]}</span>
                           </button>

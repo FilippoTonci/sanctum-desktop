@@ -262,6 +262,7 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 ### Replacement methods _(in review)_
 
 - [ ] Settings → Replacement text offers realistic fake data (`hips`), masking (`mask`) and removal (`redact`) alongside the entity tag and fixed marker
+- [ ] A removed finding reads "Removed" in the inspector and findings list, and keeps a thin mark in the document so it can still be clicked
 
 ### WS6 — Polish, signing, release
 
