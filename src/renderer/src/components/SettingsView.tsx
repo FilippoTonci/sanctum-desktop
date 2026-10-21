@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { ALL_ENTITY_TYPES, ENTITY_GROUPS, entityLabel } from '../review/entities'
-import type { AppSettings, SanctumStatus, ThemePreference } from '../sanctum'
+import { DEFAULT_MARKER } from '../review/replacement'
+import type { AppSettings, ReplacementStyle, SanctumStatus, ThemePreference } from '../sanctum'
 import { suggestedOutputName } from './CommitPanel'
 import { Icon, Kbd } from './Icon'
 import { REVIEW_SHORTCUTS } from './Inspector'
@@ -477,6 +478,82 @@ function EntitiesSection({
 
 /* -------------------------------------------------------------- Replacement */
 
+/** The sample sentence's three findings: what they are, and their entity tag. */
+const SAMPLE_FINDINGS: readonly { readonly original: string; readonly tag: string }[] = [
+  { original: 'Jane Doe', tag: 'PERSON' },
+  { original: 'Acme Ltd', tag: 'ORGANIZATION' },
+  { original: '12 March 2024', tag: 'DATE_TIME' },
+]
+
+/** Illustrative made-up values; the engine picks its own for each document. */
+const SAMPLE_FAKES: Readonly<Record<string, string>> = {
+  PERSON: 'Michael Jones',
+  ORGANIZATION: 'Rivera Group',
+  DATE_TIME: '2006-04-28',
+}
+
+/**
+ * What the Settings sample shows for one finding under `style`. Only an
+ * illustration of each method's shape: real replacements come from the
+ * engine. Exported for tests.
+ */
+export function sampleReplacement(
+  style: ReplacementStyle,
+  finding: { readonly original: string; readonly tag: string },
+  marker: string,
+): string {
+  switch (style) {
+    case 'label':
+      return `<${finding.tag}>`
+    case 'fixed':
+      return marker.trim() === '' ? DEFAULT_MARKER : marker
+    case 'fake':
+      return SAMPLE_FAKES[finding.tag] ?? finding.original
+    case 'mask':
+      return '*'.repeat(finding.original.length)
+    case 'remove':
+      return ''
+  }
+}
+
+const REPLACEMENT_CHOICES: readonly {
+  readonly style: ReplacementStyle
+  readonly title: string
+  readonly meta: string
+  readonly body: string
+}[] = [
+  {
+    style: 'label',
+    title: 'Say what was removed',
+    meta: '<PERSON>',
+    body: 'Each item becomes its type, so the reader can still follow who did what.',
+  },
+  {
+    style: 'fixed',
+    title: 'Same text everywhere',
+    meta: DEFAULT_MARKER,
+    body: 'Every item becomes the same marker. Reveals the least about the original.',
+  },
+  {
+    style: 'fake',
+    title: 'Realistic fake data',
+    meta: 'Michael Jones',
+    body: 'Each item becomes made-up data of the same kind, so the copy reads naturally. Readers may not notice it was anonymised.',
+  },
+  {
+    style: 'mask',
+    title: 'Mask every character',
+    meta: '********',
+    body: 'Each character becomes *, keeping the layout. The length of the original still shows.',
+  },
+  {
+    style: 'remove',
+    title: 'Remove the text',
+    meta: 'nothing',
+    body: 'Each item is deleted outright. The sentence around it may read awkwardly.',
+  },
+]
+
 function ReplacementSection({
   settings,
   onChange,
@@ -489,36 +566,36 @@ function ReplacementSection({
     setText(settings.replacementText)
   }, [settings.replacementText])
 
-  const fixed = settings.replacementStyle === 'fixed'
-  const sample = (tag: string): string => (fixed ? text || '[REDACTED]' : `<${tag}>`)
+  const style = settings.replacementStyle
+  const sample = (index: number): ReactNode => {
+    const finding = SAMPLE_FINDINGS[index]
+    if (finding === undefined) return null
+    const value = sampleReplacement(style, finding, text)
+    // Removal leaves nothing behind: show the gap, not an empty chip.
+    return value === '' ? null : <span className="token">{value}</span>
+  }
 
   return (
     <section>
       <SectionHeader
         title="Replacement text"
-        lede="What goes in place of each redacted item. You can still change any single replacement while reviewing."
+        lede="What goes in place of each redacted item in the documents you open from now on. You can still change any single replacement while reviewing."
       />
       <div className="choice-cards" role="radiogroup" aria-label="Replacement style">
-        <ChoiceCard
-          checked={!fixed}
-          onSelect={() => {
-            void onChange({ replacementStyle: 'label' })
-          }}
-          title="Say what was removed"
-          meta="<PERSON>"
-          body="Each item becomes its type, so the reader can still follow who did what."
-        />
-        <ChoiceCard
-          checked={fixed}
-          onSelect={() => {
-            void onChange({ replacementStyle: 'fixed' })
-          }}
-          title="Same text everywhere"
-          meta={settings.replacementText}
-          body="Every item becomes the same marker. Reveals the least about the original."
-        />
+        {REPLACEMENT_CHOICES.map((c) => (
+          <ChoiceCard
+            key={c.style}
+            checked={style === c.style}
+            onSelect={() => {
+              void onChange({ replacementStyle: c.style })
+            }}
+            title={c.title}
+            meta={c.style === 'fixed' ? settings.replacementText : c.meta}
+            body={c.body}
+          />
+        ))}
       </div>
-      {fixed ? (
+      {style === 'fixed' ? (
         <div className="setting-group">
           <Row label="Marker text" htmlFor="replacement-text">
             <input
@@ -531,7 +608,7 @@ function ReplacementSection({
                 setText(e.currentTarget.value)
               }}
               onBlur={() => {
-                const next = text.trim() === '' ? '[REDACTED]' : text.trim()
+                const next = text.trim() === '' ? DEFAULT_MARKER : text.trim()
                 setText(next)
                 if (next !== settings.replacementText) void onChange({ replacementText: next })
               }}
@@ -539,12 +616,13 @@ function ReplacementSection({
           </Row>
         </div>
       ) : null}
-      <figure className="sample">
-        <figcaption className="setting-hint">Preview</figcaption>
+      <figure className="sample" data-testid="replacement-sample">
+        <figcaption className="setting-hint">
+          {style === 'fake' ? 'Preview (example values)' : 'Preview'}
+        </figcaption>
         <p className="sample-text">
-          This Agreement is made between <span className="token">{sample('PERSON')}</span>, on
-          behalf of <span className="token">{sample('ORGANIZATION')}</span>, and dated{' '}
-          <span className="token">{sample('DATE_TIME')}</span>.
+          This Agreement is made between {sample(0)}, on behalf of {sample(1)}, and dated{' '}
+          {sample(2)}.
         </p>
       </figure>
     </section>

@@ -74,7 +74,7 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 ### 🧠 Powered by the Sanctum Engine
 
 - One bundled NER model: **GLiNER-PII** (`knowledgator/gliner-pii-base-v1.0`, Apache-2.0, ~200 MB ONNX, no PyTorch), plus Presidio's pattern recognizers and document-wide name propagation. It ships inside the app; nothing is downloaded.
-- The app creates every session with the `replace` operator (entity-tag placeholders, editable per finding). The engine also supports `hips`, `redact`, `mask`, `encrypt` and `pseudonymize` and an encrypted mapping store; the studio UI does not expose them.
+- Settings → Replacement text picks how a new session replaces what it finds: the entity tag (`replace`, e.g. `<PERSON>`), one fixed marker (`replace` with your text), realistic fake data (`hips`), every character masked (`mask`), or the text removed (`redact`). Any single finding can still be given its own literal replacement while reviewing. The engine's `encrypt` and `pseudonymize` operators and its encrypted mapping store are not exposed in the UI.
 
 ---
 
@@ -258,6 +258,10 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 - [ ] One bundled NER model (GLiNER-PII, ~200 MB ONNX, no PyTorch) replaces the Standard / Professional choice; misses drop from 101 to 21 of 487 entities on the [sanctum-research](https://github.com/FilippoTonci/sanctum-research) hard corpus
 - [ ] Settings: the recognition-model choice is gone; "ID number" joins the ID types
 - [ ] No download path left in the app
+
+### Replacement methods _(in review)_
+
+- [ ] Settings → Replacement text offers realistic fake data (`hips`), masking (`mask`) and removal (`redact`) alongside the entity tag and fixed marker
 
 ### WS6 — Polish, signing, release
 
