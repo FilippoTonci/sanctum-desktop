@@ -147,24 +147,19 @@ describe.skipIf(skip)('replacement methods live', () => {
     expect(existsSync(await redactAllAndSave(s))).toBe(true)
   }, 120_000)
 
-  // Known engine defect (sanctum anonymizer/operators/hips.py): Presidio
-  // builds a fresh HipsOperator per finding and its __init__ reseeds Faker
-  // with 42, so every PERSON becomes the same name. When the engine fixes
-  // this, `it.fails` turns red: switch it to `it`.
-  it.fails(
-    'fake: distinct people get distinct fake names',
-    async () => {
-      const s = await open('fake')
-      const people = new Map<string, string>()
-      for (const p of s.proposals.filter(isHead)) {
-        if (p.entity_type !== 'PERSON') continue
-        people.set(originalOf(p), s.previews[p.detection_id] ?? '')
-      }
-      expect(people.size).toBeGreaterThan(1)
-      expect(new Set(people.values()).size).toBe(people.size)
-    },
-    120_000,
-  )
+  // Guards FilippoTonci/sanctum#50: HIPS fakes come from the session's
+  // secret salt plus the original, so each person keeps their own fake.
+  // Before that fix every PERSON in a document got the same name.
+  it('fake: distinct people get distinct fake names', async () => {
+    const s = await open('fake')
+    const people = new Map<string, string>()
+    for (const p of s.proposals.filter(isHead)) {
+      if (p.entity_type !== 'PERSON') continue
+      people.set(originalOf(p), s.previews[p.detection_id] ?? '')
+    }
+    expect(people.size).toBeGreaterThan(1)
+    expect(new Set(people.values()).size).toBe(people.size)
+  }, 120_000)
 
   it('mask: one * per character of the whole finding', async () => {
     const s = await open('mask')
