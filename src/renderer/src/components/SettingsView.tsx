@@ -509,10 +509,6 @@ export function sampleReplacement(
       return marker.trim() === '' ? DEFAULT_MARKER : marker
     case 'fake':
       return SAMPLE_FAKES[finding.tag] ?? finding.original
-    case 'mask':
-      return '*'.repeat(finding.original.length)
-    case 'remove':
-      return ''
   }
 }
 
@@ -539,18 +535,6 @@ const REPLACEMENT_CHOICES: readonly {
     title: 'Realistic fake data',
     meta: 'Michael Jones',
     body: 'Each item becomes made-up data of the same kind, so the copy reads naturally. Readers may not notice it was anonymised.',
-  },
-  {
-    style: 'mask',
-    title: 'Mask every character',
-    meta: '********',
-    body: 'Each character becomes *, keeping the layout. The length of the original still shows.',
-  },
-  {
-    style: 'remove',
-    title: 'Remove the text',
-    meta: 'nothing',
-    body: 'Each item is deleted outright. The sentence around it may read awkwardly.',
   },
 ]
 

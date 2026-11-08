@@ -5,8 +5,6 @@
  *   label  → replace                 "<PERSON>"
  *   fixed  → replace + new_value     "[REDACTED]" (the user's marker)
  *   fake   → hips                    made-up data of the same kind
- *   mask   → mask, every character   "**********"
- *   remove → redact                  ""
  *
  * The engine renders every preview and the saved copy from this one
  * choice; the renderer never computes a replacement itself.
@@ -21,28 +19,8 @@ export interface SessionOperator {
   readonly params?: Readonly<Record<string, unknown>>
 }
 
-/**
- * How a replacement reads in the inspector and findings list. The engine
- * renders a removal (`redact`) as the empty string, which would otherwise
- * show as an empty chip.
- */
-export function replacementLabel(replacement: string): string {
-  return replacement === '' ? 'Removed' : replacement
-}
-
 /** The marker used when the user leaves the fixed text blank. */
 export const DEFAULT_MARKER = '[REDACTED]'
-
-/**
- * Mask every character. Presidio's `mask` hides `min(len, chars_to_mask)`
- * characters, so a cap any finite length could exceed would leave the
- * tail of a long hand-marked span in clear text. JSON-safe and a Python int.
- */
-export const MASK_ALL_PARAMS: Readonly<Record<string, unknown>> = {
-  masking_char: '*',
-  chars_to_mask: Number.MAX_SAFE_INTEGER,
-  from_end: false,
-}
 
 export function sessionOperatorFor(
   style: ReplacementStyle,
@@ -58,10 +36,6 @@ export function sessionOperatorFor(
       }
     case 'fake':
       return { operator: 'hips' }
-    case 'mask':
-      return { operator: 'mask', params: MASK_ALL_PARAMS }
-    case 'remove':
-      return { operator: 'redact' }
   }
 }
 

@@ -35,18 +35,10 @@ import { dirname } from 'node:path'
  *   label  → the entity tag, e.g. <PERSON>          (replace)
  *   fixed  → replacementText everywhere              (replace + new_value)
  *   fake   → realistic made-up data of the same kind (hips)
- *   mask   → every character becomes '*'            (mask)
- *   remove → the text is deleted                     (redact)
  */
-export type ReplacementStyle = 'label' | 'fixed' | 'fake' | 'mask' | 'remove'
+export type ReplacementStyle = 'label' | 'fixed' | 'fake'
 
-export const REPLACEMENT_STYLES: readonly ReplacementStyle[] = [
-  'label',
-  'fixed',
-  'fake',
-  'mask',
-  'remove',
-]
+export const REPLACEMENT_STYLES: readonly ReplacementStyle[] = ['label', 'fixed', 'fake']
 export type ThemePreference = 'system' | 'light' | 'dark'
 
 export interface AppSettings {

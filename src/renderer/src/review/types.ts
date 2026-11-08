@@ -13,19 +13,16 @@
 export type DetectionStatus = 'pending' | 'accepted' | 'rejected'
 
 /**
- * Anonymization operator names — mirrors the backend's
- * `BUILTIN_OPERATOR_NAMES` (sanctum/anonymizer/operators.py). The UI
+ * Anonymization operator names the app can meet in a session. The UI
  * never invokes these directly; the reviewer's choice is shipped as a
  * string field of the commit payload and the backend's anonymizer
  * resolves it.
  */
-export type OperatorName = 'hips' | 'replace' | 'redact' | 'mask' | 'encrypt' | 'pseudonymize'
+export type OperatorName = 'hips' | 'replace' | 'encrypt' | 'pseudonymize'
 
 export const OPERATOR_NAMES: readonly OperatorName[] = [
   'hips',
   'replace',
-  'redact',
-  'mask',
   'encrypt',
   'pseudonymize',
 ]

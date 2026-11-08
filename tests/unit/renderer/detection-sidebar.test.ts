@@ -52,7 +52,7 @@ describe('pickFocusedControlsState', () => {
 
   it('returns the read-mode shape for the focused row when not editing', () => {
     const state = pickFocusedControlsState(
-      detection({ id: 'd0', operator: 'mask' }),
+      detection({ id: 'd0', operator: 'hips' }),
       'd0',
       null,
       'replace',
@@ -60,7 +60,7 @@ describe('pickFocusedControlsState', () => {
     )
     expect(state).not.toBeNull()
     expect(state!.editing).toBe(false)
-    expect(state!.effectiveOperator).toBe('mask')
+    expect(state!.effectiveOperator).toBe('hips')
     expect(state!.pseudonymizeLocked).toBe(false)
     expect(state!.defaultOperator).toBe('replace')
   })
@@ -70,11 +70,11 @@ describe('pickFocusedControlsState', () => {
       detection({ id: 'd0', operator: undefined }),
       'd0',
       null,
-      'redact',
+      'hips',
       true,
     )
-    expect(state!.effectiveOperator).toBe('redact')
-    expect(state!.defaultOperator).toBe('redact')
+    expect(state!.effectiveOperator).toBe('hips')
+    expect(state!.defaultOperator).toBe('hips')
   })
 
   it('flips into edit mode when editingReplacementId matches', () => {
@@ -262,33 +262,5 @@ describe('DetectionSidebar linked findings', () => {
     await userEvent.click(rows[0]!)
     expect(useReviewStore.getState().focusedId).toBe('a')
     await act(() => Promise.resolve())
-  })
-})
-
-describe('sidebar replacement chip', () => {
-  beforeEach(() => {
-    useReviewStore.getState().clear()
-  })
-
-  afterEach(() => {
-    cleanup()
-  })
-
-  it('reads "Removed" for a redacted finding whose replacement is empty', () => {
-    useReviewStore.getState().setDetections([detection({ id: 'r0', status: 'accepted' })])
-    useReviewStore.getState().setPreviews({ r0: '' })
-    const { getByTestId } = render(React.createElement(DetectionSidebar))
-    const chip = getByTestId('sidebar-replacement')
-    expect(chip.textContent).toBe('Removed')
-    expect(chip.className).toContain('token-removed')
-  })
-
-  it('shows a non-empty replacement as is', () => {
-    useReviewStore.getState().setDetections([detection({ id: 'r1', status: 'accepted' })])
-    useReviewStore.getState().setPreviews({ r1: '**********' })
-    const { getByTestId } = render(React.createElement(DetectionSidebar))
-    const chip = getByTestId('sidebar-replacement')
-    expect(chip.textContent).toBe('**********')
-    expect(chip.className).not.toContain('token-removed')
   })
 })

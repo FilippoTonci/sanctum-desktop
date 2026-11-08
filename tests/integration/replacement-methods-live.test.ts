@@ -31,16 +31,8 @@ const skip =
 /** What the app sends per style (review/replacement.ts). */
 const OPERATOR_FOR = {
   label: { default_operator: 'replace' },
+  fixed: { default_operator: 'replace', default_operator_params: { new_value: '[REDACTED]' } },
   fake: { default_operator: 'hips' },
-  mask: {
-    default_operator: 'mask',
-    default_operator_params: {
-      masking_char: '*',
-      chars_to_mask: Number.MAX_SAFE_INTEGER,
-      from_end: false,
-    },
-  },
-  remove: { default_operator: 'redact' },
 } as const
 
 interface Proposal {
@@ -161,19 +153,11 @@ describe.skipIf(skip)('replacement methods live', () => {
     expect(new Set(people.values()).size).toBe(people.size)
   }, 120_000)
 
-  it('mask: one * per character of the whole finding', async () => {
-    const s = await open('mask')
-    expect(s.default_operator).toBe('mask')
+  it('fixed: the same marker everywhere', async () => {
+    const s = await open('fixed')
     for (const p of s.proposals.filter(isHead)) {
-      expect(s.previews[p.detection_id]).toBe('*'.repeat(originalOf(p).length))
+      expect(s.previews[p.detection_id]).toBe('[REDACTED]')
     }
-    expect(existsSync(await redactAllAndSave(s))).toBe(true)
-  }, 120_000)
-
-  it('remove: empty replacements, and the save check passes', async () => {
-    const s = await open('remove')
-    expect(s.default_operator).toBe('redact')
-    for (const p of s.proposals) expect(s.previews[p.detection_id]).toBe('')
     expect(existsSync(await redactAllAndSave(s))).toBe(true)
   }, 120_000)
 })
