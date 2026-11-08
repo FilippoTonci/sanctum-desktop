@@ -74,7 +74,7 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 ### 🧠 Powered by the Sanctum Engine
 
 - One bundled NER model: **GLiNER-PII** (`knowledgator/gliner-pii-base-v1.0`, Apache-2.0, ~200 MB ONNX, no PyTorch), plus Presidio's pattern recognizers and document-wide name propagation. It ships inside the app; nothing is downloaded.
-- Settings → Replacement text picks how a new session replaces what it finds: the entity tag (`replace`, e.g. `<PERSON>`), one fixed marker (`replace` with your text), or realistic fake data (`hips`). Any single finding can still be given its own literal replacement while reviewing. The engine's `encrypt` and `pseudonymize` operators and its encrypted mapping store are not exposed in the UI.
+- Settings → Replacement text picks how a new session replaces what it finds: the entity tag (`replace`, e.g. `<PERSON>`), one fixed marker (`replace` with your text), or realistic fake data (`hips`). With a document open, Settings also offers to switch that document to the chosen method, keeping your decisions. Any single finding can still be given its own literal replacement while reviewing. The engine's `encrypt` and `pseudonymize` operators and its encrypted mapping store are not exposed in the UI.
 
 ---
 
@@ -262,6 +262,7 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 ### Replacement methods _(in review)_
 
 - [ ] Settings → Replacement text offers realistic fake data (`hips`) alongside the entity tag and fixed marker
+- [ ] With a document open, Settings → Replacement text offers to switch it to the chosen method; decisions and typed replacements are kept
 
 ### WS6 — Polish, signing, release
 

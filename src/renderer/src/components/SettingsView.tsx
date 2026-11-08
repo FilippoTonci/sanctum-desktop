@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { ALL_ENTITY_TYPES, ENTITY_GROUPS, entityLabel } from '../review/entities'
-import { DEFAULT_MARKER } from '../review/replacement'
+import {
+  DEFAULT_MARKER,
+  describeMethod,
+  sessionMatchesSettings,
+  sessionOperatorFor,
+  type SessionMethod,
+  type SessionOperator,
+} from '../review/replacement'
 import type { AppSettings, ReplacementStyle, SanctumStatus, ThemePreference } from '../sanctum'
 import { suggestedOutputName } from './CommitPanel'
 import { Icon, Kbd } from './Icon'
@@ -56,8 +63,22 @@ export const SENSITIVITY_PRESETS: readonly {
   },
 ]
 
+/**
+ * The document open behind Settings, if it can still change method: lets
+ * Replacement text offer to apply a new choice to it, not only to the
+ * documents opened next.
+ */
+export interface OpenDocument {
+  readonly name: string
+  readonly method: SessionMethod
+  /** Switch the open document to `next`; rejects with the engine's message. */
+  readonly applyMethod: (next: SessionOperator) => Promise<void>
+}
+
 interface SettingsViewProps {
   readonly settings: AppSettings | null
+  /** Null when no document is open, or it is already saved. */
+  readonly openDocument?: OpenDocument | null
   readonly status: SanctumStatus
   readonly section: SettingsSection
   readonly onSectionChange: (section: SettingsSection) => void
@@ -73,6 +94,7 @@ interface SettingsViewProps {
  */
 export function SettingsView({
   settings,
+  openDocument = null,
   status,
   section,
   onSectionChange,
@@ -115,7 +137,13 @@ export function SettingsView({
         {settings === null ? (
           <p className="panel-empty">Loading settings…</p>
         ) : (
-          <SectionBody section={section} settings={settings} status={status} onChange={onChange} />
+          <SectionBody
+            section={section}
+            settings={settings}
+            openDocument={openDocument}
+            status={status}
+            onChange={onChange}
+          />
         )}
       </div>
     </div>
@@ -125,18 +153,27 @@ export function SettingsView({
 interface SectionBodyProps {
   readonly section: SettingsSection
   readonly settings: AppSettings
+  readonly openDocument: OpenDocument | null
   readonly status: SanctumStatus
   readonly onChange: (patch: Partial<AppSettings>) => Promise<void>
 }
 
-function SectionBody({ section, settings, status, onChange }: SectionBodyProps): ReactElement {
+function SectionBody({
+  section,
+  settings,
+  openDocument,
+  status,
+  onChange,
+}: SectionBodyProps): ReactElement {
   switch (section) {
     case 'detection':
       return <DetectionSection settings={settings} status={status} onChange={onChange} />
     case 'entities':
       return <EntitiesSection settings={settings} onChange={onChange} />
     case 'replacement':
-      return <ReplacementSection settings={settings} onChange={onChange} />
+      return (
+        <ReplacementSection settings={settings} openDocument={openDocument} onChange={onChange} />
+      )
     case 'saving':
       return <SavingSection settings={settings} onChange={onChange} />
     case 'appearance':
@@ -540,9 +577,11 @@ const REPLACEMENT_CHOICES: readonly {
 
 function ReplacementSection({
   settings,
+  openDocument,
   onChange,
 }: {
   readonly settings: AppSettings
+  readonly openDocument: OpenDocument | null
   readonly onChange: (patch: Partial<AppSettings>) => Promise<void>
 }): ReactElement {
   const [text, setText] = useState(settings.replacementText)
@@ -554,9 +593,7 @@ function ReplacementSection({
   const sample = (index: number): ReactNode => {
     const finding = SAMPLE_FINDINGS[index]
     if (finding === undefined) return null
-    const value = sampleReplacement(style, finding, text)
-    // Removal leaves nothing behind: show the gap, not an empty chip.
-    return value === '' ? null : <span className="token">{value}</span>
+    return <span className="token">{sampleReplacement(style, finding, text)}</span>
   }
 
   return (
@@ -609,7 +646,80 @@ function ReplacementSection({
           {sample(2)}.
         </p>
       </figure>
+      {openDocument !== null ? (
+        <OpenDocumentMethodBar openDocument={openDocument} settings={settings} />
+      ) : null}
     </section>
+  )
+}
+
+/**
+ * Shown under Replacement text while a document is open. If the open
+ * document uses another method than the one chosen above, offers to switch
+ * it; decisions are kept, only the generated replacements change.
+ */
+function OpenDocumentMethodBar({
+  openDocument,
+  settings,
+}: {
+  readonly openDocument: OpenDocument
+  readonly settings: AppSettings
+}): ReactElement {
+  const [applying, setApplying] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const matches = sessionMatchesSettings(openDocument.method, settings)
+  const chosen = sessionOperatorFor(settings.replacementStyle, settings.replacementText)
+
+  useEffect(() => {
+    setError(null)
+  }, [settings.replacementStyle, settings.replacementText])
+
+  const apply = (): void => {
+    setApplying(true)
+    setError(null)
+    openDocument
+      .applyMethod(chosen)
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => {
+        setApplying(false)
+      })
+  }
+
+  return (
+    <div
+      className={`apply-bar${matches ? '' : ' is-dirty'}`}
+      data-testid="open-document-method"
+      aria-live="polite"
+    >
+      <p className="setting-hint">
+        {matches ? (
+          <>
+            The open document, <strong>{openDocument.name}</strong>, uses{' '}
+            {describeMethod(openDocument.method)}.
+          </>
+        ) : (
+          <>
+            The open document, <strong>{openDocument.name}</strong>, still uses{' '}
+            {describeMethod(openDocument.method)}. Applying keeps your decisions and changes only
+            the replacements.
+          </>
+        )}
+      </p>
+      {error !== null ? (
+        <p className="field-error" role="alert">
+          Could not apply: {error}
+        </p>
+      ) : null}
+      {matches ? null : (
+        <div className="apply-bar-actions">
+          <button type="button" className="btn btn-primary" disabled={applying} onClick={apply}>
+            {applying ? 'Applying…' : 'Apply to open document'}
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -100,6 +100,12 @@ export interface CreateReviewSessionRequest {
   readonly score_threshold?: number | null
 }
 
+/** Body for `PATCH /review-sessions/{id}`: switch an open session's method. */
+export interface PatchReviewSessionRequest {
+  readonly default_operator: string
+  readonly default_operator_params?: Record<string, unknown> | null
+}
+
 export interface PatchProposalDecisionRequest {
   readonly status: ProposalDecisionStatus
   readonly operator?: string | null

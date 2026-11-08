@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  describeMethod,
+  sessionMatchesSettings,
   sessionOperatorFor,
   sessionRequestFromSettings,
 } from '../../../src/renderer/src/review/replacement'
@@ -81,5 +83,45 @@ describe('sessionRequestFromSettings', () => {
       entityTypes: ['PERSON', 'EMAIL_ADDRESS'],
     })
     expect(req.entities).toEqual(['PERSON', 'EMAIL_ADDRESS'])
+  })
+})
+
+describe('sessionMatchesSettings', () => {
+  const label = { replacementStyle: 'label', replacementText: '[REDACTED]' } as const
+  const fixed = { replacementStyle: 'fixed', replacementText: '[SEALED]' } as const
+  const fake = { replacementStyle: 'fake', replacementText: '[REDACTED]' } as const
+
+  it('matches each style against the operator it creates sessions with', () => {
+    expect(sessionMatchesSettings({ operator: 'replace', params: {} }, label)).toBe(true)
+    expect(
+      sessionMatchesSettings({ operator: 'replace', params: { new_value: '[SEALED]' } }, fixed),
+    ).toBe(true)
+    expect(sessionMatchesSettings({ operator: 'hips', params: {} }, fake)).toBe(true)
+  })
+
+  it('tells methods apart', () => {
+    expect(sessionMatchesSettings({ operator: 'replace', params: {} }, fake)).toBe(false)
+    expect(sessionMatchesSettings({ operator: 'hips', params: {} }, label)).toBe(false)
+    // A marker session is not a label session, and a different marker differs.
+    expect(
+      sessionMatchesSettings({ operator: 'replace', params: { new_value: '[SEALED]' } }, label),
+    ).toBe(false)
+    expect(
+      sessionMatchesSettings({ operator: 'replace', params: { new_value: '[OLD]' } }, fixed),
+    ).toBe(false)
+    expect(sessionMatchesSettings({ operator: 'encrypt', params: {} }, label)).toBe(false)
+  })
+})
+
+describe('describeMethod', () => {
+  it('names each method in words', () => {
+    expect(describeMethod({ operator: 'replace', params: {} })).toBe('entity tags such as <PERSON>')
+    expect(describeMethod({ operator: 'replace', params: { new_value: '[X]' } })).toBe(
+      'the marker [X]',
+    )
+    expect(describeMethod({ operator: 'hips', params: {} })).toBe('realistic fake data')
+    expect(describeMethod({ operator: 'encrypt', params: {} })).toBe(
+      'a method Settings does not offer',
+    )
   })
 })

@@ -184,7 +184,9 @@ view) | `Inspector`.
   entity types (what Settings and the UI show instead of raw tags).
 - `replacement.ts` — maps the Settings replacement style onto the engine
   operator + params a new review session is created with
-  (`sessionRequestFromSettings`).
+  (`sessionRequestFromSettings`), and compares an open session's method
+  with Settings so Replacement text can offer to switch it
+  (`sessionMatchesSettings`, `PATCH /review-sessions/{id}`).
 - `leaks.ts` — reads a 422 save refusal and locates each leaked value in
   the reviewable text, for `LeakSheet`.
 - `use-review-surface.ts` — format-agnostic wrap + highlight + click-focus

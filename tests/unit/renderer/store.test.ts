@@ -613,3 +613,14 @@ describe('findings overlay', () => {
     expect(useReviewStore.getState().findingsOverlayOpen).toBe(false)
   })
 })
+
+describe('setDefaultOperator', () => {
+  it('stores the operator with its params, and no params by default', () => {
+    useReviewStore.getState().setDefaultOperator('replace', { new_value: '[X]' })
+    expect(useReviewStore.getState().defaultOperator).toBe('replace')
+    expect(useReviewStore.getState().defaultOperatorParams).toEqual({ new_value: '[X]' })
+    useReviewStore.getState().setDefaultOperator('hips')
+    expect(useReviewStore.getState().defaultOperator).toBe('hips')
+    expect(useReviewStore.getState().defaultOperatorParams).toEqual({})
+  })
+})

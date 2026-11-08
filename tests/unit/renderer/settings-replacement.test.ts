@@ -1,8 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import React from 'react'
-import { sampleReplacement, SettingsView } from '../../../src/renderer/src/components/SettingsView'
+import {
+  sampleReplacement,
+  SettingsView,
+  type OpenDocument,
+} from '../../../src/renderer/src/components/SettingsView'
 import type { AppSettings, ReplacementStyle } from '../../../src/renderer/src/sanctum'
 
 const SETTINGS: AppSettings = {
@@ -19,10 +23,13 @@ const SETTINGS: AppSettings = {
 function renderSection(
   style: ReplacementStyle,
   onChange = vi.fn(() => Promise.resolve()),
+  openDocument: OpenDocument | null = null,
+  replacementText = SETTINGS.replacementText,
 ): ReturnType<typeof render> {
   return render(
     React.createElement(SettingsView, {
-      settings: { ...SETTINGS, replacementStyle: style },
+      settings: { ...SETTINGS, replacementStyle: style, replacementText },
+      openDocument,
       status: { state: 'idle' },
       section: 'replacement',
       onSectionChange: vi.fn(),
@@ -82,5 +89,93 @@ describe('sampleReplacement', () => {
     expect(sampleReplacement('fixed', person, '[X]')).toBe('[X]')
     expect(sampleReplacement('fixed', person, '  ')).toBe('[REDACTED]')
     expect(sampleReplacement('fake', person, '')).toBe('Michael Jones')
+  })
+})
+
+describe('Settings → Replacement text with a document open', () => {
+  afterEach(cleanup)
+
+  const doc = (
+    operator: string,
+    params: Record<string, unknown> = {},
+    applyMethod: OpenDocument['applyMethod'] = vi.fn(() => Promise.resolve()),
+  ): OpenDocument => ({ name: 'nda.docx', method: { operator, params }, applyMethod })
+
+  it('says nothing about an open document when there is none', () => {
+    expect(renderSection('fake').queryByTestId('open-document-method')).toBeNull()
+  })
+
+  it('confirms the open document already uses the chosen method', () => {
+    const { getByTestId, queryByRole } = renderSection('fake', undefined, doc('hips'))
+    expect(getByTestId('open-document-method').textContent).toContain(
+      'The open document, nda.docx, uses realistic fake data.',
+    )
+    expect(queryByRole('button', { name: 'Apply to open document' })).toBeNull()
+  })
+
+  it('offers to switch an open document that uses another method', () => {
+    const { getByTestId, getByRole } = renderSection('fake', undefined, doc('replace'))
+    expect(getByTestId('open-document-method').textContent).toContain(
+      'still uses entity tags such as <PERSON>. Applying keeps your decisions',
+    )
+    expect(getByRole('button', { name: 'Apply to open document' })).toBeTruthy()
+  })
+
+  it('treats another marker as another method', () => {
+    const { getByRole } = renderSection(
+      'fixed',
+      undefined,
+      doc('replace', { new_value: '[OLD]' }),
+      '[NEW]',
+    )
+    expect(getByRole('button', { name: 'Apply to open document' })).toBeTruthy()
+  })
+
+  it.each([
+    ['fake', '[REDACTED]', { operator: 'hips' }],
+    ['label', '[REDACTED]', { operator: 'replace' }],
+    ['fixed', '[NEW]', { operator: 'replace', params: { new_value: '[NEW]' } }],
+  ] as const)('applies the %s method to the open document', (style, text, expected) => {
+    const applyMethod = vi.fn(() => Promise.resolve())
+    const open = doc(style === 'fake' ? 'replace' : 'hips', {}, applyMethod)
+    const { getByRole } = renderSection(style, undefined, open, text)
+    fireEvent.click(getByRole('button', { name: 'Apply to open document' }))
+    expect(applyMethod).toHaveBeenCalledWith(expected)
+  })
+
+  it('shows progress while applying and prevents a second click', async () => {
+    let finish = (): void => undefined
+    const applyMethod = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+    )
+    const { getByRole } = renderSection('fake', undefined, doc('replace', {}, applyMethod))
+    fireEvent.click(getByRole('button', { name: 'Apply to open document' }))
+    const busy = getByRole('button', { name: 'Applying…' })
+    expect((busy as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(busy)
+    expect(applyMethod).toHaveBeenCalledTimes(1)
+    finish()
+    await waitFor(() => {
+      expect(getByRole('button', { name: 'Apply to open document' })).toBeTruthy()
+    })
+  })
+
+  it('shows why applying failed and lets the user retry', async () => {
+    const applyMethod = vi
+      .fn<OpenDocument['applyMethod']>()
+      .mockRejectedValueOnce(new Error('session is committed'))
+      .mockResolvedValueOnce(undefined)
+    const { getByRole, findByRole } = renderSection(
+      'fake',
+      undefined,
+      doc('replace', {}, applyMethod),
+    )
+    fireEvent.click(getByRole('button', { name: 'Apply to open document' }))
+    expect((await findByRole('alert')).textContent).toBe('Could not apply: session is committed')
+    fireEvent.click(getByRole('button', { name: 'Apply to open document' }))
+    expect(applyMethod).toHaveBeenCalledTimes(2)
   })
 })

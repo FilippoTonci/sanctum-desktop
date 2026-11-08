@@ -28,7 +28,12 @@ import { PdfView, PdfZoomControl } from './components/PdfView'
 import { PptxView } from './components/PptxView'
 import { RecentSessions } from './components/RecentSessions'
 import { ReviewToolbar } from './components/ReviewToolbar'
-import { SETTINGS_SECTIONS, SettingsView, type SettingsSection } from './components/SettingsView'
+import {
+  SETTINGS_SECTIONS,
+  SettingsView,
+  type OpenDocument,
+  type SettingsSection,
+} from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
 import { Splash } from './components/Splash'
 import { TypedError } from './components/TypedError'
@@ -36,7 +41,7 @@ import { decideAllPendingOfType } from './review/bulk'
 import { entityLabel } from './review/entities'
 import { seedFakeDetections } from './review/fake-detections'
 import { previewsForStore, sessionToDetections } from './review/from-session'
-import { sessionRequestFromSettings } from './review/replacement'
+import { sessionRequestFromSettings, type SessionOperator } from './review/replacement'
 import { runMenuUndo } from './menu-undo'
 import { isInputFocused, useReviewKeyboard } from './review/keyboard'
 import { useMissedSelectionTracker } from './review/selection-tracker'
@@ -178,6 +183,50 @@ export function App(): ReactElement {
     setSettings(next)
   }, [])
 
+  // Settings → Replacement text can switch the open document to the chosen
+  // method (PATCH /review-sessions/{id}); decisions are kept, previews redrawn.
+  const sessionOperator = useReviewStore((s) => s.defaultOperator)
+  const sessionOperatorParams = useReviewStore((s) => s.defaultOperatorParams)
+  const saved = useReviewStore((s) => s.commitResult !== null)
+  const applyMethodToOpenDocument = useCallback(
+    async (next: SessionOperator): Promise<void> => {
+      const id = useReviewStore.getState().sessionId
+      if (sessionsClient === null || id === null) {
+        throw new Error('the detection engine is not ready')
+      }
+      const response = await sessionsClient.setSessionOperator(id, {
+        default_operator: next.operator,
+        ...(next.params !== undefined ? { default_operator_params: { ...next.params } } : {}),
+      })
+      // The document may have been closed or swapped while the call ran.
+      if (useReviewStore.getState().sessionId !== id) return
+      if (isOperatorName(response.default_operator)) {
+        setDefaultOperator(response.default_operator, response.default_operator_params)
+      }
+      setPreviews(previewsForStore(response))
+    },
+    [sessionsClient, setDefaultOperator, setPreviews],
+  )
+  const openDocument = useMemo<OpenDocument | null>(
+    () =>
+      doc !== null && sessionId !== null && sessionsClient !== null && !saved
+        ? {
+            name: doc.name,
+            method: { operator: sessionOperator, params: sessionOperatorParams },
+            applyMethod: applyMethodToOpenDocument,
+          }
+        : null,
+    [
+      doc,
+      sessionId,
+      sessionsClient,
+      saved,
+      sessionOperator,
+      sessionOperatorParams,
+      applyMethodToOpenDocument,
+    ],
+  )
+
   /** Close the current document, discarding an uncommitted review. */
   const closeDocument = useCallback(() => {
     // If the session is open and the user closes without committing,
@@ -300,7 +349,7 @@ export function App(): ReactElement {
       onSuccess: (response) => {
         setSessionId(response.id)
         if (isOperatorName(response.default_operator)) {
-          setDefaultOperator(response.default_operator)
+          setDefaultOperator(response.default_operator, response.default_operator_params)
         }
         setStoreDetections(sessionToDetections(response))
         setPreviews(previewsForStore(response))
@@ -351,7 +400,7 @@ export function App(): ReactElement {
           clearStore()
           setSessionId(resumeSessionId)
           if (isOperatorName(session.default_operator)) {
-            setDefaultOperator(session.default_operator)
+            setDefaultOperator(session.default_operator, session.default_operator_params)
           }
           setStoreDetections(sessionToDetections(session))
           setPreviews(previewsForStore(session))
@@ -796,6 +845,7 @@ export function App(): ReactElement {
         {view === 'settings' ? (
           <SettingsView
             settings={settings}
+            openDocument={openDocument}
             status={status}
             section={settingsSection}
             onSectionChange={setSettingsSection}

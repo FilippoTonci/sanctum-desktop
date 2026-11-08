@@ -415,3 +415,30 @@ describe('createSessionsClient.getLayout', () => {
     await expect(client.getLayout('s')).rejects.toBeInstanceOf(ApiError)
   })
 })
+
+describe('createSessionsClient.setSessionOperator', () => {
+  it('PATCHes the session with the new method and returns the session', async () => {
+    const fetchImpl = vi.fn((input: Request | string | URL, init?: RequestInit) => {
+      expect(urlOf(input)).toBe('http://127.0.0.1:9000/review-sessions/s%201')
+      expect(init?.method).toBe('PATCH')
+      const headers = init?.headers as Record<string, string>
+      expect(headers.Authorization).toBe('Bearer t')
+      expect(headers['Content-Type']).toBe('application/json')
+      expect(JSON.parse(init?.body as string)).toEqual({ default_operator: 'hips' })
+      return Promise.resolve(jsonResponse(200, { id: 's 1', default_operator: 'hips' }))
+    })
+    const client = createSessionsClient({ baseUrl: 'http://127.0.0.1:9000', token: 't', fetchImpl })
+    const out = await client.setSessionOperator('s 1', { default_operator: 'hips' })
+    expect(out).toMatchObject({ id: 's 1', default_operator: 'hips' })
+  })
+
+  it('surfaces a 409 for a saved session as ApiError', async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(jsonResponse(409, { error: 'session is committed' })),
+    )
+    const client = createSessionsClient({ baseUrl: 'http://127.0.0.1:9000', token: 't', fetchImpl })
+    await expect(
+      client.setSessionOperator('s', { default_operator: 'hips' }),
+    ).rejects.toMatchObject({ status: 409, message: 'session is committed' })
+  })
+})
