@@ -74,10 +74,10 @@ will be sent back regardless of how clean the diff is.
 
 1. **Airgap.** No runtime network calls. The sidecar's environment sets
    `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`. PDF.js and its worker
-   are bundled, never fetched. The renderer has a
-   `webRequest` filter blocking everything except `127.0.0.1`. The one
-   exception is the user-confirmed model-download flow (WS3 substep 6),
-   which fetches from a Sanctum-owned CDN.
+   are bundled, never fetched. The NER model ships inside the app; there
+   is no download path, and none may be added. The renderer's
+   Content-Security-Policy limits its connections to itself and
+   `127.0.0.1`.
 2. **Renderer is paint-only.** The Electron renderer never mutates the
    document (`.docx`, `.pptx`, `.pdf`) locally. It renders, captures decisions, and posts them to the
    backend; the backend writes the output file.
@@ -88,10 +88,10 @@ will be sent back regardless of how clean the diff is.
    `sandbox: true` in every `BrowserWindow`. ASAR integrity on. No `eval`.
 5. **No telemetry.** Crash reports may land in Phase 4 as opt-in
    local-only (no upload). Not before.
-6. **Signed installers before any distribution.** No unsigned `.dmg` /
-   `.msi` / `.AppImage` ever ships to a user, including pre-release
-   channels. Locally built unsigned artifacts are expected and fine —
-   they just never leave your machine.
+6. **Unsigned builds go to testers only.** Releases stay unsigned
+   pre-releases for developers and testers until signing lands (WS6), and
+   their notes carry the unsigned-build warning (see `RELEASE.md`). Don't
+   present an unsigned build as ready for general use.
 7. **The installer always contains its sidecar.** `scripts/before-pack.cjs`
    enforces this; don't route around it. A packaging change that makes the
    sidecar optional is the one bug that ships silently.
