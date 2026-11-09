@@ -79,6 +79,8 @@ export interface ReviewState {
   readonly undoStack: readonly UndoEntry[]
   readonly pendingMissedSelection: PendingMissedSelection | null
   readonly defaultOperator: OperatorName
+  /** Params of the session's default operator, e.g. `{ new_value }` for a marker. */
+  readonly defaultOperatorParams: Readonly<Record<string, unknown>>
   readonly commitPanelOpen: boolean
   /** Narrow windows: the findings list shown as an overlay panel. */
   readonly findingsOverlayOpen: boolean
@@ -193,7 +195,7 @@ export interface ReviewState {
 
   setOperator: (id: string, operator: OperatorName) => void
   setCustomReplacement: (id: string, replacement: string | null) => void
-  setDefaultOperator: (operator: OperatorName) => void
+  setDefaultOperator: (operator: OperatorName, params?: Readonly<Record<string, unknown>>) => void
   startEditingReplacement: (id: string | null) => void
   readonly editingReplacementId: string | null
 
@@ -236,6 +238,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   undoStack: [],
   pendingMissedSelection: null,
   defaultOperator: 'replace',
+  defaultOperatorParams: {},
   commitPanelOpen: false,
   findingsOverlayOpen: false,
   editingReplacementId: null,
@@ -551,8 +554,8 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     })
   },
 
-  setDefaultOperator: (operator) => {
-    set({ defaultOperator: operator })
+  setDefaultOperator: (operator, params = {}) => {
+    set({ defaultOperator: operator, defaultOperatorParams: { ...params } })
   },
 
   startEditingReplacement: (id) => {

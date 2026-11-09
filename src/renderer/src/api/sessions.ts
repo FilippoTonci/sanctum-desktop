@@ -27,6 +27,7 @@ import {
   type CreateReviewSessionRequest,
   type DecisionWithPreviewResponse,
   type PatchProposalDecisionRequest,
+  type PatchReviewSessionRequest,
   type ReviewSessionLayout,
   type ReviewSessionListResponse,
   type ReviewSessionResponse,
@@ -39,6 +40,16 @@ export interface SessionsClient {
     signal?: AbortSignal,
   ): Promise<ReviewSessionResponse>
   getSession(id: string, signal?: AbortSignal): Promise<ReviewSessionResponse>
+  /**
+   * Switch an open session to another replacement method. Decisions are
+   * kept; the response carries the previews under the new method.
+   * Throws ApiError(409) once the session is saved or abandoned.
+   */
+  setSessionOperator(
+    id: string,
+    body: PatchReviewSessionRequest,
+    signal?: AbortSignal,
+  ): Promise<ReviewSessionResponse>
   /**
    * Fetch the original input bytes pinned for an OPEN session. The
    * desktop's "resume from Recent Sessions" flow feeds the returned
@@ -165,6 +176,16 @@ export function createSessionsClient(opts: ClientOptions): SessionsClient {
         signal,
       })
       return (await handle(response)) as ReviewSessionLayout
+    },
+
+    async setSessionOperator(id, body, signal) {
+      const response = await fetchImpl(url(`/review-sessions/${encodeURIComponent(id)}`), {
+        method: 'PATCH',
+        headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal,
+      })
+      return (await handle(response)) as ReviewSessionResponse
     },
 
     async patchDecision(sessionId, proposalId, body, signal) {

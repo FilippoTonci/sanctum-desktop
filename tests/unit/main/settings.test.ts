@@ -29,12 +29,12 @@ describe('SettingsStore', () => {
 
   it('persists updates and re-reads them on a fresh store', async () => {
     const store = new SettingsStore(path)
-    await store.update({ defaultOperator: 'mask', scoreThreshold: 0.6 })
+    await store.update({ defaultOperator: 'hips', scoreThreshold: 0.6 })
 
     const fresh = new SettingsStore(path)
     expect(fresh.read()).toEqual({
       ...DEFAULT_SETTINGS,
-      defaultOperator: 'mask',
+      defaultOperator: 'hips',
       scoreThreshold: 0.6,
     })
   })
@@ -55,11 +55,11 @@ describe('SettingsStore', () => {
 
   it('merges partial updates without dropping unspecified fields', async () => {
     const store = new SettingsStore(path)
-    await store.update({ defaultOperator: 'mask' })
+    await store.update({ defaultOperator: 'hips' })
     await store.update({ scoreThreshold: 0.8 })
     expect(store.read()).toEqual({
       ...DEFAULT_SETTINGS,
-      defaultOperator: 'mask',
+      defaultOperator: 'hips',
       scoreThreshold: 0.8,
     })
   })
@@ -89,6 +89,31 @@ describe('SettingsStore', () => {
     expect('nerBackend' in onDisk).toBe(false)
   })
 
+  it.each(['label', 'fixed', 'fake'] as const)(
+    'persists the %s replacement style',
+    async (style) => {
+      await new SettingsStore(path).update({ replacementStyle: style })
+      expect(new SettingsStore(path).read().replacementStyle).toBe(style)
+    },
+  )
+
+  it('falls back to the label style for a replacement style this build does not know', async () => {
+    // e.g. written by a newer build, or edited by hand.
+    await writeFile(path, JSON.stringify({ replacementStyle: 'shred', theme: 'dark' }), 'utf8')
+    const loaded = new SettingsStore(path).read()
+    expect(loaded.replacementStyle).toBe('label')
+    expect(loaded.theme).toBe('dark')
+  })
+
+  it('refuses to store an unknown replacement style on update', async () => {
+    const store = new SettingsStore(path)
+    // The IPC handler passes the renderer's patch through untyped.
+    const next = await store.update({ replacementStyle: 'shred' as never })
+    expect(next.replacementStyle).toBe('label')
+    const onDisk = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+    expect(onDisk.replacementStyle).toBe('label')
+  })
+
   it('caches reads so the second call does not re-stat the file', async () => {
     const store = new SettingsStore(path)
     const first = store.read()
@@ -104,11 +129,11 @@ describe('settingsToEnv', () => {
       settingsToEnv({
         ...DEFAULT_SETTINGS,
         scoreThreshold: 0.6,
-        defaultOperator: 'mask',
+        defaultOperator: 'hips',
       }),
     ).toEqual({
       SANCTUM_ANALYZER__DEFAULT_SCORE_THRESHOLD: '0.6',
-      SANCTUM_ANONYMIZER__DEFAULT_OPERATOR: 'mask',
+      SANCTUM_ANONYMIZER__DEFAULT_OPERATOR: 'hips',
     })
   })
 
@@ -132,8 +157,16 @@ describe('needsRespawn', () => {
     ).toBe(false)
   })
 
+  it('is false when only the replacement style changes (it is sent per session)', () => {
+    for (const style of ['fixed', 'fake'] as const) {
+      expect(needsRespawn(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, replacementStyle: style })).toBe(
+        false,
+      )
+    }
+  })
+
   it('is true when an env-backed key changes', () => {
-    expect(needsRespawn(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, defaultOperator: 'mask' })).toBe(
+    expect(needsRespawn(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, defaultOperator: 'hips' })).toBe(
       true,
     )
     expect(needsRespawn(DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, scoreThreshold: 0.5 })).toBe(true)

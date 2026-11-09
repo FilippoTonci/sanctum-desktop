@@ -52,7 +52,7 @@ describe('pickFocusedControlsState', () => {
 
   it('returns the read-mode shape for the focused row when not editing', () => {
     const state = pickFocusedControlsState(
-      detection({ id: 'd0', operator: 'mask' }),
+      detection({ id: 'd0', operator: 'hips' }),
       'd0',
       null,
       'replace',
@@ -60,7 +60,7 @@ describe('pickFocusedControlsState', () => {
     )
     expect(state).not.toBeNull()
     expect(state!.editing).toBe(false)
-    expect(state!.effectiveOperator).toBe('mask')
+    expect(state!.effectiveOperator).toBe('hips')
     expect(state!.pseudonymizeLocked).toBe(false)
     expect(state!.defaultOperator).toBe('replace')
   })
@@ -70,11 +70,11 @@ describe('pickFocusedControlsState', () => {
       detection({ id: 'd0', operator: undefined }),
       'd0',
       null,
-      'redact',
+      'hips',
       true,
     )
-    expect(state!.effectiveOperator).toBe('redact')
-    expect(state!.defaultOperator).toBe('redact')
+    expect(state!.effectiveOperator).toBe('hips')
+    expect(state!.defaultOperator).toBe('hips')
   })
 
   it('flips into edit mode when editingReplacementId matches', () => {

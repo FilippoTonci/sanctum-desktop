@@ -31,8 +31,9 @@ export interface FocusedControlsState {
  * should render in (the Inspector consumes it). Returns `null` for
  * non-focused rows so callers can skip the controls entirely.
  *
- * Operator fields survive for the engine contract; the UI only ever
- * uses `replace`, so the Inspector reads `editing` and nothing else.
+ * Operator fields survive for the engine contract. The operator is set
+ * per session from Settings (review/replacement.ts), never per finding,
+ * so the Inspector reads `editing` and nothing else.
  */
 export function pickFocusedControlsState(
   detection: Detection,

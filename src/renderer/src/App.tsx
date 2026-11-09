@@ -8,7 +8,7 @@ import {
   type ReactElement,
 } from 'react'
 import { clientFromCredentials, type SessionsClient } from './api/sessions'
-import { ApiError, type CreateReviewSessionRequest } from './api/types'
+import { ApiError } from './api/types'
 import { CommandPalette, type Command } from './components/CommandPalette'
 import { CommitPanel } from './components/CommitPanel'
 import { ConfirmDialog } from './components/ConfirmDialog'
@@ -28,7 +28,12 @@ import { PdfView, PdfZoomControl } from './components/PdfView'
 import { PptxView } from './components/PptxView'
 import { RecentSessions } from './components/RecentSessions'
 import { ReviewToolbar } from './components/ReviewToolbar'
-import { SETTINGS_SECTIONS, SettingsView, type SettingsSection } from './components/SettingsView'
+import {
+  SETTINGS_SECTIONS,
+  SettingsView,
+  type OpenDocument,
+  type SettingsSection,
+} from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
 import { Splash } from './components/Splash'
 import { TypedError } from './components/TypedError'
@@ -36,6 +41,7 @@ import { decideAllPendingOfType } from './review/bulk'
 import { entityLabel } from './review/entities'
 import { seedFakeDetections } from './review/fake-detections'
 import { previewsForStore, sessionToDetections } from './review/from-session'
+import { sessionRequestFromSettings, type SessionOperator } from './review/replacement'
 import { runMenuUndo } from './menu-undo'
 import { isInputFocused, useReviewKeyboard } from './review/keyboard'
 import { useMissedSelectionTracker } from './review/selection-tracker'
@@ -60,13 +66,6 @@ type ConfirmState =
   | { kind: 'open'; file: File }
   | { kind: 'resume'; sessionId: string }
   | null
-
-/**
- * The only operator the product uses. The engine still supports others
- * (and the IPC/API code for the mapping store stays in place), but the UI
- * never offers them: every session is created with `replace`.
- */
-const SESSION_OPERATOR: OperatorName = 'replace'
 
 const NARROW_QUERY = '(max-width: 1199px)'
 
@@ -183,6 +182,50 @@ export function App(): ReactElement {
     if (next === null || next === undefined) throw new Error('Settings unavailable in this build')
     setSettings(next)
   }, [])
+
+  // Settings → Replacement text can switch the open document to the chosen
+  // method (PATCH /review-sessions/{id}); decisions are kept, previews redrawn.
+  const sessionOperator = useReviewStore((s) => s.defaultOperator)
+  const sessionOperatorParams = useReviewStore((s) => s.defaultOperatorParams)
+  const saved = useReviewStore((s) => s.commitResult !== null)
+  const applyMethodToOpenDocument = useCallback(
+    async (next: SessionOperator): Promise<void> => {
+      const id = useReviewStore.getState().sessionId
+      if (sessionsClient === null || id === null) {
+        throw new Error('the detection engine is not ready')
+      }
+      const response = await sessionsClient.setSessionOperator(id, {
+        default_operator: next.operator,
+        ...(next.params !== undefined ? { default_operator_params: { ...next.params } } : {}),
+      })
+      // The document may have been closed or swapped while the call ran.
+      if (useReviewStore.getState().sessionId !== id) return
+      if (isOperatorName(response.default_operator)) {
+        setDefaultOperator(response.default_operator, response.default_operator_params)
+      }
+      setPreviews(previewsForStore(response))
+    },
+    [sessionsClient, setDefaultOperator, setPreviews],
+  )
+  const openDocument = useMemo<OpenDocument | null>(
+    () =>
+      doc !== null && sessionId !== null && sessionsClient !== null && !saved
+        ? {
+            name: doc.name,
+            method: { operator: sessionOperator, params: sessionOperatorParams },
+            applyMethod: applyMethodToOpenDocument,
+          }
+        : null,
+    [
+      doc,
+      sessionId,
+      sessionsClient,
+      saved,
+      sessionOperator,
+      sessionOperatorParams,
+      applyMethodToOpenDocument,
+    ],
+  )
 
   /** Close the current document, discarding an uncommitted review. */
   const closeDocument = useCallback(() => {
@@ -306,7 +349,7 @@ export function App(): ReactElement {
       onSuccess: (response) => {
         setSessionId(response.id)
         if (isOperatorName(response.default_operator)) {
-          setDefaultOperator(response.default_operator)
+          setDefaultOperator(response.default_operator, response.default_operator_params)
         }
         setStoreDetections(sessionToDetections(response))
         setPreviews(previewsForStore(response))
@@ -357,7 +400,7 @@ export function App(): ReactElement {
           clearStore()
           setSessionId(resumeSessionId)
           if (isOperatorName(session.default_operator)) {
-            setDefaultOperator(session.default_operator)
+            setDefaultOperator(session.default_operator, session.default_operator_params)
           }
           setStoreDetections(sessionToDetections(session))
           setPreviews(previewsForStore(session))
@@ -802,6 +845,7 @@ export function App(): ReactElement {
         {view === 'settings' ? (
           <SettingsView
             settings={settings}
+            openDocument={openDocument}
             status={status}
             section={settingsSection}
             onSectionChange={setSettingsSection}
@@ -872,26 +916,6 @@ interface RunAnalysisArgs {
   readonly signal: AbortSignal
   readonly onSuccess: (response: Awaited<ReturnType<SessionsClient['createSession']>>) => void
   readonly onError: (err: unknown) => void
-}
-
-/**
- * Build the create-session body from Settings: always the `replace`
- * operator, with the chosen replacement style and entity filter.
- * Exported for tests.
- */
-export function sessionRequestFromSettings(
-  path: string,
-  settings: AppSettings | null | undefined,
-): CreateReviewSessionRequest {
-  const fixed = settings?.replacementStyle === 'fixed'
-  return {
-    input_path: path,
-    default_operator: SESSION_OPERATOR,
-    ...(fixed ? { default_operator_params: { new_value: settings.replacementText } } : {}),
-    ...(settings?.entityTypes !== null && settings?.entityTypes !== undefined
-      ? { entities: settings.entityTypes }
-      : {}),
-  }
 }
 
 async function runAnalysis(args: RunAnalysisArgs): Promise<void> {

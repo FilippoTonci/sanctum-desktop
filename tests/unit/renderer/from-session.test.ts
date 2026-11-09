@@ -79,7 +79,7 @@ describe('sessionToDetections', () => {
           },
         ],
         decisions: [
-          { kind: 'proposal', proposal_id: 'det-1', status: 'accept', operator: 'mask' },
+          { kind: 'proposal', proposal_id: 'det-1', status: 'accept', operator: 'hips' },
           {
             kind: 'proposal',
             proposal_id: 'det-2',
@@ -90,7 +90,7 @@ describe('sessionToDetections', () => {
       }),
     )
     expect(out[0]?.status).toBe('accepted')
-    expect(out[0]?.operator).toBe('mask')
+    expect(out[0]?.operator).toBe('hips')
     expect(out[1]?.status).toBe('rejected')
   })
 

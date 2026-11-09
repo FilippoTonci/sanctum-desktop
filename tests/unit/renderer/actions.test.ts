@@ -26,6 +26,7 @@ function fakeClient(overrides: Partial<SessionsClient> = {}): SessionsClient {
     createSession: noop,
     getSession: noop,
     getSessionInput: noop,
+    setSessionOperator: noop,
     getLayout: noop,
     patchDecision: noop,
     addUserAdded: noop,
@@ -50,7 +51,7 @@ describe('syncedActions.accept', () => {
   it('optimistically flips status, then PATCHes with current operator + replacement', async () => {
     useReviewStore
       .getState()
-      .setDetections([makeDetection('det-1', { operator: 'mask', customReplacement: '[name]' })])
+      .setDetections([makeDetection('det-1', { operator: 'hips', customReplacement: '[name]' })])
     const patchDecision = vi.fn(() => Promise.resolve({ decision: {} as never, preview: '' }))
     const actions = syncedActions({
       client: fakeClient({ patchDecision }),
@@ -63,7 +64,7 @@ describe('syncedActions.accept', () => {
 
     expect(patchDecision).toHaveBeenCalledWith('sess-1', 'det-1', {
       status: 'accept',
-      operator: 'mask',
+      operator: 'hips',
       custom_replacement: '[name]',
     })
   })
@@ -174,11 +175,11 @@ describe('syncedActions.setOperator', () => {
       sessionId: 'sess-1',
     })
 
-    actions.setOperator('det-1', 'mask')
+    actions.setOperator('det-1', 'hips')
     await flushMicrotasks()
 
     expect(patchDecision).not.toHaveBeenCalled()
-    expect(useReviewStore.getState().detections[0]?.operator).toBe('mask')
+    expect(useReviewStore.getState().detections[0]?.operator).toBe('hips')
   })
 
   it('PATCHes when status is accepted, preserving the verdict', async () => {
@@ -189,13 +190,13 @@ describe('syncedActions.setOperator', () => {
       sessionId: 'sess-1',
     })
 
-    actions.setOperator('det-1', 'mask')
+    actions.setOperator('det-1', 'hips')
     await flushMicrotasks()
 
     expect(patchDecision).toHaveBeenCalledWith(
       'sess-1',
       'det-1',
-      expect.objectContaining({ status: 'accept', operator: 'mask' }),
+      expect.objectContaining({ status: 'accept', operator: 'hips' }),
     )
   })
 })

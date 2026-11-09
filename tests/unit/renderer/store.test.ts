@@ -195,8 +195,8 @@ describe('useReviewStore', () => {
 
   it('setOperator overrides the default for one detection only', () => {
     useReviewStore.getState().setDetections([makeDetection('a'), makeDetection('b')])
-    useReviewStore.getState().setOperator('a', 'mask')
-    expect(useReviewStore.getState().detections[0]?.operator).toBe('mask')
+    useReviewStore.getState().setOperator('a', 'hips')
+    expect(useReviewStore.getState().detections[0]?.operator).toBe('hips')
     expect(useReviewStore.getState().detections[1]?.operator).toBeUndefined()
   })
 
@@ -215,7 +215,7 @@ describe('useReviewStore', () => {
         makeDetection('a', { status: 'accepted' }),
         makeDetection('b', { status: 'rejected' }),
       ])
-    useReviewStore.getState().setOperator('a', 'mask')
+    useReviewStore.getState().setOperator('a', 'hips')
     useReviewStore.getState().setCustomReplacement('a', '[name]')
     useReviewStore.getState().addMissed({
       locator: { segmentId: 'body/p1/r0', start: 0, end: 4 },
@@ -229,7 +229,7 @@ describe('useReviewStore', () => {
 
     const proposed = payload.decisions.find((d) => d.id === 'a')
     expect(proposed?.source).toBe('proposed')
-    expect(proposed?.operator).toBe('mask')
+    expect(proposed?.operator).toBe('hips')
     expect(proposed?.customReplacement).toBe('[name]')
 
     const userAdded = payload.decisions.find((d) => d.id.startsWith('user:'))
@@ -611,5 +611,16 @@ describe('findings overlay', () => {
     useReviewStore.getState().setFindingsOverlayOpen(true)
     useReviewStore.getState().clear()
     expect(useReviewStore.getState().findingsOverlayOpen).toBe(false)
+  })
+})
+
+describe('setDefaultOperator', () => {
+  it('stores the operator with its params, and no params by default', () => {
+    useReviewStore.getState().setDefaultOperator('replace', { new_value: '[X]' })
+    expect(useReviewStore.getState().defaultOperator).toBe('replace')
+    expect(useReviewStore.getState().defaultOperatorParams).toEqual({ new_value: '[X]' })
+    useReviewStore.getState().setDefaultOperator('hips')
+    expect(useReviewStore.getState().defaultOperator).toBe('hips')
+    expect(useReviewStore.getState().defaultOperatorParams).toEqual({})
   })
 })

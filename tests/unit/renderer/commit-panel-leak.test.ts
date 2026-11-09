@@ -43,6 +43,7 @@ function fakeClient(overrides: Partial<SessionsClient>): SessionsClient {
     createSession: noop,
     getSession: () => Promise.resolve(session()),
     getSessionInput: noop,
+    setSessionOperator: noop,
     getLayout: noop,
     patchDecision: noop,
     addUserAdded: noop,
