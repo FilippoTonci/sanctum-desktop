@@ -177,7 +177,7 @@ export interface ReviewSessionResponse {
   readonly status: SessionStatus
   readonly created_at: string
   readonly committed_at: string | null
-  /** Per-detection-id preview text (slice 4 renders this as ghost text). */
+  /** Replacement text per detection id (and per user-added id), as the engine renders it. */
   readonly previews: Record<string, string>
 }
 

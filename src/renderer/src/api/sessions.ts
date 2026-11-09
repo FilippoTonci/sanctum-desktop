@@ -10,7 +10,7 @@
  *
  * - Network failures and 5xx → throw `ApiError` with the parsed body.
  * - 4xx → throw `ApiError` so callers can `instanceof` and route to
- *   the matching error component (slice 8).
+ *   the matching error component (`TypedError`, `LeakSheet`).
  * - 2xx → return the typed body verbatim.
  *
  * No automatic retries. Cold-start session creation (POST) can take

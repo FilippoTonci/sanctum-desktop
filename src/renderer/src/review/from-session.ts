@@ -22,10 +22,8 @@
  *                          accept by definition; see UserAddedDecision
  *                          docstring in sanctum/core/models.py)
  *
- * Custom replacement and operator overrides are not surfaced here yet —
- * slice 3 (decision sync) lifts them onto the Detection so the
- * tooltip's existing operator-picker / replacement-editor can read
- * the server-of-record state.
+ * A decision's custom replacement and operator override are carried onto
+ * the Detection, so the inspector shows the engine's record.
  */
 
 import type { ReviewSessionResponse, ProposalDecision, UserAddedDecision } from '../api/types'
