@@ -37,10 +37,8 @@ export interface MissedSpan {
 }
 
 /**
- * The shape that lands in the commit panel. Mirrors what the slice 8 /
- * WS5 wiring will POST to `/review-sessions/{id}/commit` once the
- * server-owned ReviewSession contract lands. Each entry is one decision
- * the backend's anonymizer will execute.
+ * The shape that lands in the commit panel: one entry per decision the
+ * engine's anonymizer will execute at `/review-sessions/{id}/commit`.
  */
 export interface CommitDecision {
   readonly id: string
@@ -67,11 +65,9 @@ export interface CommitPayload {
  * with selectors so an accept/reject on one detection re-renders only
  * the rows that actually changed.
  *
- * Shape mirrors what the slice 8 / WS5 wiring will read out of the
- * server-owned ReviewSession: a list with stable ids, plus per-id
- * status overrides. For now the list is seeded by `seedFakeDetections`
- * (slice 4); when the real /review-sessions API lands the same actions
- * (`setDetections`, `setStatus`, `setFocused`) survive the swap.
+ * The list is seeded from the engine's review session
+ * (`review/from-session.ts`), or by `seedFakeDetections` when the app
+ * runs without an engine (plain-browser preview).
  */
 export interface ReviewState {
   readonly detections: readonly Detection[]

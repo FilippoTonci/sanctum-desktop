@@ -121,7 +121,7 @@ export interface SyncedActionsContext {
  * their head: one request carries the head's id, the engine records the
  * verdict on every piece, and the store mirrors that on every piece.
  *
- * Out-of-scope edges (documented for slice 5+):
+ * Known edges:
  *
  * - User-added decisions don't have a backend PATCH endpoint.
  *   Accept on a user-added is a no-op (it's already "accepted" by

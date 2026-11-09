@@ -233,9 +233,9 @@ ipcMain.handle(
  *    headers, so the browser blocks the follow-up POST. We inject the
  *    allow headers on inbound responses from the sidecar.
  *
- * Bearer-token auth still gates every request; the airgap webRequest
- * filter (when it lands in WS6) will still cap destinations at
- * 127.0.0.1. Production bypasses both of these entirely.
+ * Bearer-token auth still gates every request, and the renderer's CSP
+ * still limits connections to 127.0.0.1. Production bypasses both of
+ * these shims entirely.
  */
 function installDevCorsShim(): void {
   if (process.env.ELECTRON_DEV !== '1') return

@@ -1,32 +1,25 @@
-<div align="center">
-
-<br/>
-
-<img src="https://img.shields.io/badge/version-0.0.1--prealpha-blue?style=for-the-badge" alt="Version"/>
-<img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License"/>
-<img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=for-the-badge" alt="Platform"/>
-<img src="https://img.shields.io/badge/electron-latest-47848F?style=for-the-badge&logo=electron" alt="Electron"/>
-<img src="https://img.shields.io/badge/react-19-61DAFB?style=for-the-badge&logo=react" alt="React"/>
-<img src="https://img.shields.io/badge/typescript-5.x-3178C6?style=for-the-badge&logo=typescript" alt="TypeScript"/>
-<img src="https://img.shields.io/badge/status-pre--alpha-orange?style=for-the-badge" alt="Status"/>
-
 # Sanctum Desktop
 
-<img src="img/SanctumLogo.png" alt="Sanctum" width="280"/>
+![Sanctum](img/SanctumLogo-360.png)
 
-### _The downloadable desktop app for Sanctum — local-first document anonymization._
+[![CI](https://github.com/FilippoTonci/sanctum-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/FilippoTonci/sanctum-desktop/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/FilippoTonci/sanctum-desktop?include_prereleases)](https://github.com/FilippoTonci/sanctum-desktop/releases)
+[![Platforms: macOS, Windows, Linux](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](https://github.com/FilippoTonci/sanctum-desktop/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**Drag in a document. Review the detections. Export a clean copy. All on your machine.**
+**Download**: [sanctum.me.uk](https://sanctum.me.uk) ·
+**Releases**: [GitHub](https://github.com/FilippoTonci/sanctum-desktop/releases) ·
+**Engine**: [sanctum](https://github.com/FilippoTonci/sanctum) ·
+**Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md) ·
+**Feedback**: [feedback@sanctum.me.uk](mailto:feedback@sanctum.me.uk)
+
+**The desktop app for Sanctum: local-first document anonymization.** Drag in a document, review the detections, export a clean copy. All on your machine.
 
 Sanctum Desktop is the end-user GUI for [Sanctum](https://github.com/FilippoTonci/sanctum) — a local-first, air-gapped PII anonymization engine for legal and consulting professionals. This repository ships the Electron shell: an installable desktop app (signing lands in WS6) that spawns the Sanctum Python backend as a loopback-only sidecar and drives it through a keyboard-first review workflow.
-
-**[Download at sanctum.me.uk](https://sanctum.me.uk)** · [Send feedback](mailto:feedback@sanctum.me.uk)
 
 [Getting Started](#-getting-started) · [How It Works](#-how-it-works) · [Architecture](#-architecture) · [Roadmap](#-roadmap) · [Contributing](#-contributing)
 
 ---
-
-</div>
 
 ## 📌 Why a Separate Repo
 
@@ -60,8 +53,8 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 
 - **Loopback-only backend.** The Electron main process spawns the Python sidecar on `127.0.0.1`, generates a random bearer token, and pipes it over stdin. The token never touches disk, never appears in `ps auxf`.
 - **Zero network calls at runtime.** `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` are set in the sidecar's environment so a missing model fails fast instead of silently downloading.
-- **`webRequest` filter** blocks any network destination other than `127.0.0.1` — a belt for the airgap suspenders.
-- **Signed installers before any release.** Signing and notarization are WS6 work and not done yet; the builds you can make today are unsigned, local-only, and explicitly not distributable.
+- **Renderer limited to loopback.** The renderer's Content-Security-Policy only lets it connect to itself and `127.0.0.1`. A main-process `webRequest` filter is planned before the first signed release (see Security Posture).
+- **Unsigned builds for testers only.** Releases are unsigned pre-releases for developers and testers, and say so; signing and notarization are WS6 work.
 
 ### 📄 Fidelity-Preserving Renderer
 
@@ -122,7 +115,7 @@ The renderer's wire types (`src/renderer/src/api/types.ts`) are hand-written tod
 
 ## 🚀 Getting Started
 
-> **Status:** Workstreams 1–5 of Phase 3 are shipped — backend contract hardening (`sanctum`), Electron scaffold, sidecar integration, the `.docx` review surface, and the full session workflow UI — plus the studio redesign and `.pptx` / `.pdf` review (0.2.0-rc.1). Packaged unsigned builds run end-to-end on Linux and macOS (Apple Silicon); the unsigned Windows (x64) installer is built, installed and smoke-tested in CI, and ships with the next release. WS6 (signing, notarization, release pipeline) is the next major milestone — no signed installers yet.
+> **Status:** Workstreams 1–5 of Phase 3 are shipped — backend contract hardening (`sanctum`), Electron scaffold, sidecar integration, the `.docx` review surface, and the full session workflow UI — plus the studio redesign and `.pptx` / `.pdf` review (0.2.0-rc.1). Unsigned builds for macOS (Apple Silicon), Windows (x64) and Linux ship with every release since 0.4.0-rc; the Windows installer is built, installed and smoke-tested in CI. WS6 (signing, notarization, release pipeline) is the next major milestone — no signed installers yet.
 
 **Just want to use it?** Download the app from **[sanctum.me.uk](https://sanctum.me.uk)**. The rest of this section is for developers building from source.
 
@@ -270,7 +263,7 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 - [ ] Accessibility audit (WCAG AA, screen-reader labels, focus management)
 - [ ] Diagnostic bundle export (no automated upload)
 - [ ] Verify `/health`'s `sanctum_commit` + `openapi_digest` against the pinned backend at startup, and fail fast on a mismatch
-- [x] Download site distributing the unsigned builds to developers and testers (deliberately ahead of signing — see WS6 substep 9 and open decision 3 in the plan) — live at [sanctum.me.uk](https://sanctum.me.uk)
+- [x] Download site distributing the unsigned builds to developers and testers (deliberately ahead of signing) — live at [sanctum.me.uk](https://sanctum.me.uk)
 - [ ] macOS signing + notarization (Apple Developer ID)
 - [ ] Unsigned Windows (x64) installer in releases and on the download site, installed and smoke-tested in CI before it publishes
 - [ ] Windows signing (Azure Trusted Signing or Sectigo/DigiCert EV + YubiKey)
@@ -310,14 +303,14 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 Before the first signed release ships, the following must be green:
 
 - Electron fuses reviewed — Node integration off, sandbox on, ASAR integrity on, `contextIsolation` enforced.
-- CSP on the renderer: `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'` (the `unsafe-inline` allowance is for `docx-preview`'s inline styles).
+- CSP on the renderer: `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:*; script-src 'self'` (the `unsafe-inline` allowance is for `docx-preview`'s inline styles). In place today.
 - `shell.openExternal` is scheme-allowlisted.
-- `webRequest` filter blocks every destination other than `127.0.0.1`.
+- A main-process `webRequest` filter blocks every destination other than `127.0.0.1`. Not built yet.
 - No telemetry or analytics at any point.
 - The bearer token is never written to disk or appears in logs.
 - The mapping-store passphrase (when that engine feature is used) lives in memory only for the duration of the unlock action, then cleared.
 
-See [`sanctum/resources/presidio-architecture.md`](https://github.com/FilippoTonci/sanctum/blob/main/resources/presidio-architecture.md) for the engine-side network-call audit.
+The engine's side of the airgap (no runtime downloads, the bundled model only read from disk) is described in [`sanctum/ARCHITECTURE.md`](https://github.com/FilippoTonci/sanctum/blob/main/ARCHITECTURE.md).
 
 ---
 

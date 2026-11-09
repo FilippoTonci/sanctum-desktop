@@ -2,12 +2,14 @@
  * Maps backend segment anchors onto the rendered docx-preview DOM.
  *
  * The Python adapter assigns each docx run a stable id (see
- * `sanctum/sanctum/documents/docx_adapter.py`) and the WS4-1 patch
- * mirrors that id onto each rendered <span> as `data-segment-id`.
+ * `sanctum/sanctum/documents/docx_adapter.py`) and the docx-preview patch
+ * (`patches/docx-preview+0.3.7.patch`) mirrors that id onto each rendered
+ * <span> as `data-segment-id`. Body paragraphs and tables only: header and
+ * footer runs (`hf/...`) aren't tagged, so findings there can't be shown.
  * Detections arrive from the backend as (segmentId, start, end) tuples
  * referenced against the segment's plain-text content; this module
- * resolves those tuples into DOM Ranges suitable for CSS Custom
- * Highlight registries (slice 4) and the tooltip / sidebar (slice 5).
+ * resolves those tuples into DOM Ranges for the highlights, the canvas
+ * wraps and the findings list.
  */
 
 export interface SegmentLocator {
