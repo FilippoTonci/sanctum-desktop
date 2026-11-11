@@ -49,7 +49,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        # ubuntu-24.04, not ubuntu-latest: latest moved to 26.04, which the
+        # pinned Playwright cannot install Chromium's system deps for.
+        os: [macos-latest, windows-latest, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
