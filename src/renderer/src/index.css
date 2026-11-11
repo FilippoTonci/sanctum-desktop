@@ -1022,11 +1022,13 @@ button:disabled {
   border-bottom: 1px solid var(--border);
 }
 
+/* No min-width: 0 here: the box may shrink only as far as the icon and
+   size, so the name ellipsises instead of the size sliding under the
+   progress bar. */
 .toolbar-doc {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
   flex: 0 1 auto;
 }
 
@@ -1048,20 +1050,23 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* Never narrower than its content (the track's minimum plus the label),
+   so "12 of 23 reviewed" can't run under the undo button; the track is
+   what gives way when space is short. */
 .progress {
   display: flex;
   align-items: center;
   gap: 10px;
   flex: 1 1 auto;
-  min-width: 120px;
   justify-content: center;
 }
 
 .progress-track {
   display: flex;
   width: 160px;
+  min-width: 40px;
   height: 4px;
-  flex: none;
+  flex: 0 1 auto;
   border-radius: 2px;
   background: var(--surface-3);
   overflow: hidden;
