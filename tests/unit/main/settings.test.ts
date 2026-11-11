@@ -144,6 +144,31 @@ describe('settingsToEnv', () => {
   })
 })
 
+describe('settingsToEnv model threshold (#59)', () => {
+  it('lowers the name model threshold below Balanced (Thorough)', () => {
+    expect(settingsToEnv({ ...DEFAULT_SETTINGS, scoreThreshold: 0.25 })).toMatchObject({
+      SANCTUM_NLP__NER_THRESHOLD: '0.1',
+    })
+  })
+
+  it('leaves the engine default at Balanced and above', () => {
+    for (const scoreThreshold of [0.35, 0.5]) {
+      expect(settingsToEnv({ ...DEFAULT_SETTINGS, scoreThreshold })).not.toHaveProperty(
+        'SANCTUM_NLP__NER_THRESHOLD',
+      )
+    }
+  })
+
+  it('respawns when moving back from Thorough to Balanced', () => {
+    expect(
+      needsRespawn(
+        { ...DEFAULT_SETTINGS, scoreThreshold: 0.25 },
+        { ...DEFAULT_SETTINGS, scoreThreshold: 0.35 },
+      ),
+    ).toBe(true)
+  })
+})
+
 describe('needsRespawn', () => {
   it('is false for renderer-only preferences', () => {
     expect(

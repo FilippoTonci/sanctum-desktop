@@ -10,7 +10,8 @@
  *
  * Settings map onto Sanctum's pydantic-settings env-var convention:
  *
- *   scoreThreshold     → SANCTUM_ANALYZER__DEFAULT_SCORE_THRESHOLD
+ *   scoreThreshold     → SANCTUM_ANALYZER__DEFAULT_SCORE_THRESHOLD, and below
+ *                        Balanced also SANCTUM_NLP__NER_THRESHOLD (see below)
  *   defaultOperator    → SANCTUM_ANONYMIZER__DEFAULT_OPERATOR
  *
  * The remaining keys are renderer-side preferences. They never reach the
@@ -116,10 +117,27 @@ function sanitize(settings: AppSettings): AppSettings {
   return { ...settings, replacementStyle: DEFAULT_SETTINGS.replacementStyle }
 }
 
+/** The Balanced preset; below it the name model looks harder too. */
+const BALANCED_THRESHOLD = 0.35
+/**
+ * The bundled name model only reports hits above its own threshold (0.2 in
+ * the engine), and the engine lifts those onto >= 0.35, so lowering the
+ * analyzer cut-off alone can't surface anything new from the model:
+ * Thorough found exactly what Balanced did (#59). Below Balanced, lower
+ * the model's threshold as well. On the sanctum-research hard corpus at
+ * 0.25: model 0.2 misses 18 of 487 (78 false alarms), 0.15 misses 11
+ * (122), 0.1 misses 3 (203). Thorough is opt-in and a leak costs more
+ * than a false alarm, so it takes 0.1.
+ */
+const THOROUGH_NER_THRESHOLD = '0.1'
+
 export function settingsToEnv(settings: AppSettings): Record<string, string> {
   return {
     SANCTUM_ANALYZER__DEFAULT_SCORE_THRESHOLD: settings.scoreThreshold.toString(),
     SANCTUM_ANONYMIZER__DEFAULT_OPERATOR: settings.defaultOperator,
+    ...(settings.scoreThreshold < BALANCED_THRESHOLD
+      ? { SANCTUM_NLP__NER_THRESHOLD: THOROUGH_NER_THRESHOLD }
+      : {}),
   }
 }
 
@@ -131,5 +149,5 @@ export function settingsToEnv(settings: AppSettings): Record<string, string> {
 export function needsRespawn(prev: AppSettings, next: AppSettings): boolean {
   const a = settingsToEnv(prev)
   const b = settingsToEnv(next)
-  return Object.keys(b).some((k) => a[k] !== b[k])
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].some((k) => a[k] !== b[k])
 }
