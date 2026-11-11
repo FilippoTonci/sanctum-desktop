@@ -37,7 +37,7 @@ import {
 import { Sidebar } from './components/Sidebar'
 import { Splash } from './components/Splash'
 import { TypedError } from './components/TypedError'
-import { decideAllPendingOfType } from './review/bulk'
+import { decideAllPending, decideAllPendingOfType } from './review/bulk'
 import { entityLabel } from './review/entities'
 import { seedFakeDetections } from './review/fake-detections'
 import { previewsForStore, sessionToDetections } from './review/from-session'
@@ -590,6 +590,18 @@ export function App(): ReactElement {
       )
       // Findings, not pieces: a linked finding counts once, by its head.
       const heads = headsOf(detections)
+      const pendingAll = heads.filter((d) => d.status === 'pending').length
+      if (pendingAll > 0) {
+        list.push({
+          id: 'redact-all',
+          group: REVIEW,
+          title: `Redact everything still to review (${String(pendingAll)})`,
+          keywords: 'accept bulk all document',
+          run: () => {
+            decideAllPending(store().detections, 'accept', reviewActions)
+          },
+        })
+      }
       const types = [...new Set(heads.map((d) => d.entityType))]
       for (const t of types) {
         const pending = heads.filter((d) => d.entityType === t && d.status === 'pending')
