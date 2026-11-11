@@ -281,20 +281,19 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 
 ## 🧰 Tech Stack
 
-| Layer       | Technology                                                                                                 |
-| ----------- | ---------------------------------------------------------------------------------------------------------- |
-| Shell       | Electron (latest stable)                                                                                   |
-| Build       | [`electron-vite`](https://electron-vite.org/) + `electron-builder`                                         |
-| UI          | React 19 + TypeScript                                                                                      |
-| State       | Zustand                                                                                                    |
-| Renderer    | `docx-preview`, `PptxView` (DOM from `/layout`), `pdfjs-dist` 6.3.289 + CSS Custom Highlight API           |
-| Floating UI | `@floating-ui/react`                                                                                       |
-| Wire types  | Hand-written in `src/renderer/src/api/types.ts`, mirroring the pinned `schema/openapi.json`                |
-| i18n        | _Not wired yet_ — `react-i18next` is a WS6 item                                                            |
-| Unit tests  | Vitest                                                                                                     |
-| E2E tests   | `@playwright/test` with Electron launch                                                                    |
-| Linters     | ESLint (`@typescript-eslint`, `react-hooks`, `jsx-a11y`) + Prettier                                        |
-| Backend     | Python sidecar (packaged from [`sanctum`](https://github.com/FilippoTonci/sanctum) via PyInstaller onedir) |
+| Layer      | Technology                                                                                                 |
+| ---------- | ---------------------------------------------------------------------------------------------------------- |
+| Shell      | Electron (latest stable)                                                                                   |
+| Build      | [`electron-vite`](https://electron-vite.org/) + `electron-builder`                                         |
+| UI         | React 19 + TypeScript                                                                                      |
+| State      | Zustand                                                                                                    |
+| Renderer   | `docx-preview`, `PptxView` (DOM from `/layout`), `pdfjs-dist` 6.3.289 + CSS Custom Highlight API           |
+| Wire types | Hand-written in `src/renderer/src/api/types.ts`, mirroring the pinned `schema/openapi.json`                |
+| i18n       | _Not wired yet_ — `react-i18next` is a WS6 item                                                            |
+| Unit tests | Vitest                                                                                                     |
+| E2E tests  | `@playwright/test` with Electron launch                                                                    |
+| Linters    | ESLint (`@typescript-eslint`, `react-hooks`, `jsx-a11y`) + Prettier                                        |
+| Backend    | Python sidecar (packaged from [`sanctum`](https://github.com/FilippoTonci/sanctum) via PyInstaller onedir) |
 
 ---
 
