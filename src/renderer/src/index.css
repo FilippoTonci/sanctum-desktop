@@ -1022,13 +1022,15 @@ button:disabled {
   border-bottom: 1px solid var(--border);
 }
 
-/* No min-width: 0 here: the box may shrink only as far as the icon and
-   size, so the name ellipsises instead of the size sliding under the
-   progress bar. */
+/* The name is what gives way: it ellipsises while the icon and size keep
+   their width, and the box clips rather than letting the size slide
+   under the progress bar. */
 .toolbar-doc {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  overflow: hidden;
   flex: 0 1 auto;
 }
 
@@ -1044,6 +1046,7 @@ button:disabled {
 }
 
 .toolbar-doc-size {
+  flex: none;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-3);
@@ -1057,16 +1060,17 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 1 1 auto;
+  /* Shrinks well before the file name does (down to its content). */
+  flex: 1 10 auto;
   justify-content: center;
 }
 
 .progress-track {
   display: flex;
-  width: 160px;
   min-width: 40px;
   height: 4px;
-  flex: 0 1 auto;
+  /* A basis, not a width: a fixed width would also be its minimum. */
+  flex: 0 1 160px;
   border-radius: 2px;
   background: var(--surface-3);
   overflow: hidden;
@@ -1114,7 +1118,7 @@ button:disabled {
 
 @media (max-width: 1199px) {
   .progress-track {
-    width: 88px;
+    flex-basis: 88px;
   }
   .toolbar-doc-size {
     display: none;
@@ -1424,7 +1428,7 @@ button:disabled {
 }
 
 .toolbar:has(.toolbar-extra) .progress-track {
-  width: 88px;
+  flex-basis: 88px;
 }
 
 /* Below this width the bar cannot hold the zoom control and the track
