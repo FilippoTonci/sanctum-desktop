@@ -54,6 +54,8 @@ linux:
     - deb
   category: Office
   # WS6: GPG signing wired here.
-publish:
-  provider: github
-  releaseType: draft
+# No publish provider: releases upload their files from release.yml with
+# --publish never, and a provider here only makes electron-builder bundle
+# an app-update.yml pointing at GitHub. Nothing reads it (the app has no
+# auto-updater), but it reads like one to anyone auditing the offline app.
+publish: null
