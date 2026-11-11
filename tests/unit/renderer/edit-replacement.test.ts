@@ -102,3 +102,60 @@ describe('applyEditDecorations', () => {
     expect(wrap?.dataset.status).not.toBe('accepted')
   })
 })
+
+describe('PDF tokens fit their box (sanctum#59)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  const fake = (proto: object, prop: string, value: number): (() => void) => {
+    const original = Object.getOwnPropertyDescriptor(proto, prop)
+    Object.defineProperty(proto, prop, { configurable: true, get: () => value })
+    return () => {
+      if (original) Object.defineProperty(proto, prop, original)
+    }
+  }
+
+  it('shrinks a token wider than the original span instead of cutting it off', () => {
+    const root = setBody(`<div class="pdf-text-layer">${wrapped('a', 'LLP')}</div>`)
+    const restore = [
+      fake(HTMLElement.prototype, 'scrollWidth', 120),
+      fake(HTMLElement.prototype, 'clientWidth', 60),
+    ]
+    try {
+      applyEditDecorations(root, [detection({ id: 'a', status: 'accepted' })], {
+        a: '<ORGANIZATION>',
+      })
+    } finally {
+      restore.forEach((r) => {
+        r()
+      })
+    }
+    const el = root.querySelector<HTMLElement>('.sanctum-edit-replacement')!
+    expect(el.style.getPropertyValue('--fit')).toBe('0.5')
+  })
+
+  it('never shrinks below the minimum, and leaves fitting tokens and docx alone', () => {
+    const root = setBody(
+      `<div class="pdf-text-layer">${wrapped('a', 'L')}</div><p>${wrapped('b', 'LLP')}</p>`,
+    )
+    const restore = [
+      fake(HTMLElement.prototype, 'scrollWidth', 400),
+      fake(HTMLElement.prototype, 'clientWidth', 40),
+    ]
+    try {
+      applyEditDecorations(
+        root,
+        [detection({ id: 'a', status: 'accepted' }), detection({ id: 'b', status: 'accepted' })],
+        { a: '<ORGANIZATION>', b: '<ORGANIZATION>' },
+      )
+    } finally {
+      restore.forEach((r) => {
+        r()
+      })
+    }
+    const [a, b] = root.querySelectorAll<HTMLElement>('.sanctum-edit-replacement')
+    expect(a!.style.getPropertyValue('--fit')).toBe('0.45')
+    expect(b!.style.getPropertyValue('--fit')).toBe('')
+  })
+})
