@@ -270,9 +270,12 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
 
   setDetections: (detections) => {
     const sorted = sortByDocumentOrder(detections, get().segmentOrder)
+    // Land on the first finding still to review: a resumed session at
+    // 12 of 23 should not open on a row that is already decided (#62).
+    const heads = headsOf(sorted)
     set({
       detections: sorted,
-      focusedId: headsOf(sorted)[0]?.id ?? null,
+      focusedId: (heads.find((d) => d.status === 'pending') ?? heads[0])?.id ?? null,
       undoStack: [],
       pendingMissedSelection: null,
       commitPanelOpen: false,

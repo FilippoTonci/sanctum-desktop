@@ -27,6 +27,27 @@ describe('useReviewStore', () => {
     expect(useReviewStore.getState().focusedId).toBe('a')
   })
 
+  it('setDetections focuses the first finding still to review (#62)', () => {
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('a', { status: 'accepted' }),
+        makeDetection('b', { status: 'rejected' }),
+        makeDetection('c'),
+      ])
+    expect(useReviewStore.getState().focusedId).toBe('c')
+  })
+
+  it('setDetections falls back to the first finding when all are decided', () => {
+    useReviewStore
+      .getState()
+      .setDetections([
+        makeDetection('a', { status: 'accepted' }),
+        makeDetection('b', { status: 'accepted' }),
+      ])
+    expect(useReviewStore.getState().focusedId).toBe('a')
+  })
+
   it('setDetections clears focus when the list is empty', () => {
     useReviewStore.getState().setDetections([makeDetection('a')])
     useReviewStore.getState().setDetections([])
