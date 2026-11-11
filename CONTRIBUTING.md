@@ -56,7 +56,7 @@ one-off scripts are kept out of the repo.
   `sanctum` checkout, so CI does **not** run it. Run it locally when you
   touch `src/main/`.
 - `npm run build` cross-platform on `macos-latest`, `windows-latest`,
-  `ubuntu-latest`.
+  `ubuntu-24.04`.
 - `npm run test:package` drives an installed app at
   `SANCTUM_INSTALLED_APP` against its real bundled backend. The
   **Build Windows installer** workflow runs it after building and silently

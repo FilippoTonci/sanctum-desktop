@@ -234,7 +234,7 @@ ls "release/mac-arm64/Sanctum Desktop.app/Contents/Resources/sidecar"
 The `.AppImage` relies on FUSE, which is unavailable on WSL2 —
 launching it there errors with `dlopen(): error loading libfuse.so.2`.
 Run `release/linux-unpacked/sanctum-desktop` directly instead. CI's
-`ubuntu-latest` runner is the AppImage's real validation environment.
+`ubuntu-24.04` runner is the AppImage's real validation environment.
 
 ## Where to look before duplicating work
 

@@ -324,4 +324,4 @@ tests/
   `electron-builder.yml` and `.github/workflows/release.yml` together.
 - **AppImage doesn't run on WSL2.** FUSE isn't available; use
   `release/linux-unpacked/sanctum-desktop` for local end-to-end testing.
-  CI's `ubuntu-latest` runner is the AppImage's actual validation environment.
+  CI's `ubuntu-24.04` runner is the AppImage's actual validation environment.
