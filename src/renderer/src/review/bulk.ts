@@ -30,7 +30,31 @@ export function decideAllPendingOfType(
   verdict: 'accept' | 'reject',
   actions: ReviewActions,
 ): number {
-  const ids = idsOfType(detections, entityType, 'pending')
+  return decide(idsOfType(detections, entityType, 'pending'), verdict, actions)
+}
+
+/**
+ * The document-level "Redact all": one verdict for every still-pending
+ * finding, whatever its type. Like the per-type action it leaves decided
+ * rows alone (keep the false alarms first, then redact the rest) and
+ * records one undo entry per row. Returns how many rows changed.
+ */
+export function decideAllPending(
+  detections: readonly Detection[],
+  verdict: 'accept' | 'reject',
+  actions: ReviewActions,
+): number {
+  const ids = headsOf(detections)
+    .filter((d) => d.status === 'pending')
+    .map((d) => d.id)
+  return decide(ids, verdict, actions)
+}
+
+function decide(
+  ids: readonly string[],
+  verdict: 'accept' | 'reject',
+  actions: ReviewActions,
+): number {
   for (const id of ids) {
     if (verdict === 'accept') actions.accept(id)
     else actions.reject(id)

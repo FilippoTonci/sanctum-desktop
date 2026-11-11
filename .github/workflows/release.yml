@@ -191,7 +191,9 @@ jobs:
 
   build-linux:
     needs: prepare
-    runs-on: ubuntu-latest
+    # Pinned: the AppImage/deb inherit this runner's glibc (see below), and
+    # ubuntu-latest is now 26.04, which would lock out 24.04 / 22.04 users.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -210,8 +212,8 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      # The AppImage inherits this runner's glibc as its floor: built on
-      # ubuntu-latest it will not start on materially older distros.
+      # The AppImage inherits this runner's glibc as its floor: it will not
+      # start on distros older than the runner.
       - name: Build the Python sidecar
         run: PYTHON=python SANCTUM_REPO=sanctum-src bash scripts/build-sidecar.sh
       - name: Build + GPG sign (WS6)

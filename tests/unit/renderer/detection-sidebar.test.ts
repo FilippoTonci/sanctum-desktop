@@ -264,3 +264,48 @@ describe('DetectionSidebar linked findings', () => {
     await act(() => Promise.resolve())
   })
 })
+
+describe('document-level Redact all (#64)', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('redacts every pending finding across types and leaves decided ones alone', async () => {
+    useReviewStore.setState({
+      detections: [
+        detection({ id: 'p1', entityType: 'PERSON' }),
+        detection({ id: 'o1', entityType: 'ORGANIZATION', segmentId: 'body/p1/r0' }),
+        detection({
+          id: 'k1',
+          entityType: 'ORGANIZATION',
+          status: 'rejected',
+          segmentId: 'body/p2/r0',
+        }),
+        detection({
+          id: 'a1',
+          entityType: 'DATE_TIME',
+          status: 'accepted',
+          segmentId: 'body/p3/r0',
+        }),
+      ],
+    })
+    const { getByRole } = render(React.createElement(DetectionSidebar))
+    await userEvent.click(getByRole('button', { name: /Redact all 2 to review/i }))
+    const { useReviewActions } = await import('../../../src/renderer/src/review/use-actions')
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const { accept, reject } = useReviewActions()
+    expect(vi.mocked(accept).mock.calls.map((c) => c[0])).toEqual(['p1', 'o1'])
+    expect(vi.mocked(reject)).not.toHaveBeenCalled()
+  })
+
+  it('is hidden when nothing is left to review', () => {
+    useReviewStore.setState({ detections: [detection({ id: 'a1', status: 'accepted' })] })
+    const { queryByRole } = render(React.createElement(DetectionSidebar))
+    expect(queryByRole('button', { name: /Redact all/i })).toBeNull()
+  })
+})

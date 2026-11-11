@@ -45,7 +45,7 @@ The two repos communicate through exactly one contract: the OpenAPI spec publish
 ### 🖱️ Drag-and-Drop Review
 
 - **Drop a `.docx`, `.pptx` or `.pdf`** onto the window (or use ⌘O) and the app spawns the Sanctum engine, analyses the file, and opens a review surface in seconds.
-- **A three-pane studio.** A sidebar lists every finding (one row per finding — pieces of a linked finding share a row), the canvas shows the document with every detected span painted in place via the CSS Custom Highlight API, and an inspector on the right shows the focused finding, its verdict buttons and the bulk actions for its type. A narrow window collapses the sidebar to a rail; the findings list then opens as an overlay from the toolbar.
+- **A three-pane studio.** A sidebar lists every finding (one row per finding — pieces of a linked finding share a row), the canvas shows the document with every detected span painted in place via the CSS Custom Highlight API, and an inspector on the right shows the focused finding, its verdict buttons and the bulk actions for its type. A **Redact all** button above the list (also in ⌘K) redacts everything still to review in one go, leaving the findings you kept alone. A narrow window collapses the sidebar to a rail; the findings list then opens as an overlay from the toolbar.
 - **Keyboard-first navigation** — step through detections with `↓` / `↑` (or `Tab` / `Shift+Tab`), `Enter` to accept, `Delete` / `Backspace` to reject — both auto-advance to the next pending detection so a long document reviews in one continuous flow. `Shift+A` / `Shift+R` redact or keep every pending finding of the focused type. `e` edits the replacement, `m` marks a missed span. `⌘K` opens a command palette for everything else.
 - **Save check.** After writing the copy the engine re-reads it. If a value you redacted still appears elsewhere it refuses the save (HTTP 422) and the app shows a sheet listing each leaked value and where it sits, with "Redact these too" to add them and retry. Places you chose to keep are flagged, and values the app can't reach (a footnote, text box or chart) are called out so you can fix the original.
 
@@ -281,20 +281,19 @@ Clicking a detection in the document focuses it too — on the highlighted text 
 
 ## 🧰 Tech Stack
 
-| Layer       | Technology                                                                                                 |
-| ----------- | ---------------------------------------------------------------------------------------------------------- |
-| Shell       | Electron (latest stable)                                                                                   |
-| Build       | [`electron-vite`](https://electron-vite.org/) + `electron-builder`                                         |
-| UI          | React 19 + TypeScript                                                                                      |
-| State       | Zustand                                                                                                    |
-| Renderer    | `docx-preview`, `PptxView` (DOM from `/layout`), `pdfjs-dist` 6.3.289 + CSS Custom Highlight API           |
-| Floating UI | `@floating-ui/react`                                                                                       |
-| Wire types  | Hand-written in `src/renderer/src/api/types.ts`, mirroring the pinned `schema/openapi.json`                |
-| i18n        | _Not wired yet_ — `react-i18next` is a WS6 item                                                            |
-| Unit tests  | Vitest                                                                                                     |
-| E2E tests   | `@playwright/test` with Electron launch                                                                    |
-| Linters     | ESLint (`@typescript-eslint`, `react-hooks`, `jsx-a11y`) + Prettier                                        |
-| Backend     | Python sidecar (packaged from [`sanctum`](https://github.com/FilippoTonci/sanctum) via PyInstaller onedir) |
+| Layer      | Technology                                                                                                 |
+| ---------- | ---------------------------------------------------------------------------------------------------------- |
+| Shell      | Electron (latest stable)                                                                                   |
+| Build      | [`electron-vite`](https://electron-vite.org/) + `electron-builder`                                         |
+| UI         | React 19 + TypeScript                                                                                      |
+| State      | Zustand                                                                                                    |
+| Renderer   | `docx-preview`, `PptxView` (DOM from `/layout`), `pdfjs-dist` 6.3.289 + CSS Custom Highlight API           |
+| Wire types | Hand-written in `src/renderer/src/api/types.ts`, mirroring the pinned `schema/openapi.json`                |
+| i18n       | _Not wired yet_ — `react-i18next` is a WS6 item                                                            |
+| Unit tests | Vitest                                                                                                     |
+| E2E tests  | `@playwright/test` with Electron launch                                                                    |
+| Linters    | ESLint (`@typescript-eslint`, `react-hooks`, `jsx-a11y`) + Prettier                                        |
+| Backend    | Python sidecar (packaged from [`sanctum`](https://github.com/FilippoTonci/sanctum) via PyInstaller onedir) |
 
 ---
 

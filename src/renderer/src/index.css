@@ -763,6 +763,14 @@ button:disabled {
   border-top: 1px solid var(--border);
 }
 
+/* Document-level "Redact all N to review", above the filter. */
+.detections-redact-all {
+  display: flex;
+  justify-content: center;
+  width: calc(100% - 16px);
+  margin: 0 8px 8px;
+}
+
 .detection-groups {
   padding: 0 8px;
 }
@@ -1014,11 +1022,15 @@ button:disabled {
   border-bottom: 1px solid var(--border);
 }
 
+/* The name is what gives way: it ellipsises while the icon and size keep
+   their width, and the box clips rather than letting the size slide
+   under the progress bar. */
 .toolbar-doc {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  overflow: hidden;
   flex: 0 1 auto;
 }
 
@@ -1034,26 +1046,31 @@ button:disabled {
 }
 
 .toolbar-doc-size {
+  flex: none;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-3);
   white-space: nowrap;
 }
 
+/* Never narrower than its content (the track's minimum plus the label),
+   so "12 of 23 reviewed" can't run under the undo button; the track is
+   what gives way when space is short. */
 .progress {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 1 1 auto;
-  min-width: 120px;
+  /* Shrinks well before the file name does (down to its content). */
+  flex: 1 10 auto;
   justify-content: center;
 }
 
 .progress-track {
   display: flex;
-  width: 160px;
+  min-width: 40px;
   height: 4px;
-  flex: none;
+  /* A basis, not a width: a fixed width would also be its minimum. */
+  flex: 0 1 160px;
   border-radius: 2px;
   background: var(--surface-3);
   overflow: hidden;
@@ -1101,7 +1118,7 @@ button:disabled {
 
 @media (max-width: 1199px) {
   .progress-track {
-    width: 88px;
+    flex-basis: 88px;
   }
   .toolbar-doc-size {
     display: none;
@@ -1411,7 +1428,7 @@ button:disabled {
 }
 
 .toolbar:has(.toolbar-extra) .progress-track {
-  width: 88px;
+  flex-basis: 88px;
 }
 
 /* Below this width the bar cannot hold the zoom control and the track
@@ -1519,14 +1536,14 @@ button:disabled {
   display: block;
   box-sizing: border-box;
   /* Exactly the original's box: a longer token must not cover the kept
-     text next to it, so it is clipped instead (the Inspector and the
-     findings list show it in full). */
+     text next to it, so EditReplacement shrinks it to fit (--fit), and
+     only clips what still overflows at the minimum size. */
   width: 100%;
   height: 100%;
   padding: 0 0.2em;
   overflow: hidden;
   border-radius: 2px;
-  font-size: 0.72em;
+  font-size: calc(0.72em * var(--fit, 1));
   line-height: calc(var(--pdf-scale) * var(--h) * 1px);
   white-space: nowrap;
   text-overflow: clip;

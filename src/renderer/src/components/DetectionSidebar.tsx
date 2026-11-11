@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { countDetections, decideAllPendingOfType } from '../review/bulk'
+import { countDetections, decideAllPending, decideAllPendingOfType } from '../review/bulk'
 import { entityLabel } from '../review/entities'
 import { groupDetectionsBySlide, slideIndexOfSegment } from '../review/pptx-render'
 import { useReviewStore } from '../review/store'
@@ -221,6 +221,19 @@ export function DetectionSidebar({
           Mark missed PII
         </button>
       </header>
+
+      {counts.pending > 0 && (
+        <button
+          type="button"
+          className="btn btn-secondary btn-xs detections-redact-all"
+          onClick={() => {
+            decideAllPending(detections, 'accept', actions)
+          }}
+          title="Redact every finding still to review. Findings you already kept stay kept."
+        >
+          Redact all {String(counts.pending)} to review
+        </button>
+      )}
 
       <div className="segmented segmented-sm" role="radiogroup" aria-label="Filter detections">
         {FILTERS.map((f) => {

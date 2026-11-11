@@ -82,5 +82,25 @@ export function applyEditDecorations(
     if (replacement.textContent !== preview) {
       replacement.textContent = preview
     }
+    if (wrap.dataset.status === 'accepted' && wrap.closest('.pdf-text-layer') !== null) {
+      fitToBox(replacement)
+    }
+  }
+}
+
+/** Never shrink a PDF token below this share of its normal size. */
+const MIN_FIT = 0.45
+
+/**
+ * A PDF token is laid over the original span and may not spill onto the
+ * kept text beside it. A longer token ("<ORGANIZATION>" over "LLP") used
+ * to be cut off mid-word ("<ORGANIZATI"); shrink its font to fit instead,
+ * as the saved PDF does. `--fit` is a ratio, so it holds at every zoom.
+ */
+function fitToBox(el: HTMLElement): void {
+  el.style.removeProperty('--fit')
+  const { scrollWidth, clientWidth } = el
+  if (clientWidth > 0 && scrollWidth > clientWidth) {
+    el.style.setProperty('--fit', String(Math.max(clientWidth / scrollWidth, MIN_FIT)))
   }
 }

@@ -226,7 +226,11 @@ function FocusedDetection({
 
       <section className="inspector-section">
         <div className="field-head">
-          <span className="field-label">Every {label} in this document</span>
+          <span className="field-label">
+            {detection.entityType === 'USER_ADDED'
+              ? 'Everything you marked in this document'
+              : `Every ${label} in this document`}
+          </span>
           <span className="field-note mono">
             {String(sameType.length - sameTypePending.length)}/{String(sameType.length)} reviewed
           </span>

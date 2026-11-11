@@ -71,3 +71,38 @@ describe('Inspector verdict buttons', () => {
     )
   })
 })
+
+describe('Inspector group heading (#61)', () => {
+  beforeEach(() => {
+    useReviewStore.getState().clear()
+  })
+  afterEach(cleanup)
+
+  const focus = (entityType: string): void => {
+    useReviewStore.getState().setDetections([
+      {
+        id: 'd0',
+        segmentId: 'body/p0/r0',
+        start: 0,
+        end: 5,
+        text: 'x',
+        entityType,
+        status: 'pending',
+      },
+    ])
+    useReviewStore.getState().setFocused('d0')
+  }
+
+  it('names the type for detected findings', () => {
+    focus('PERSON')
+    const { container } = render(React.createElement(Inspector))
+    expect(container.textContent).toContain('Every Person in this document')
+  })
+
+  it('reads naturally for text the reviewer marked', () => {
+    focus('USER_ADDED')
+    const { container } = render(React.createElement(Inspector))
+    expect(container.textContent).toContain('Everything you marked in this document')
+    expect(container.textContent).not.toContain('Every Marked by you')
+  })
+})

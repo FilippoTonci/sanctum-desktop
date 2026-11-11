@@ -81,12 +81,6 @@ export function membersOf(detections: readonly Detection[], id: string): Detecti
   return detections.filter((d) => d.groupId === target.groupId)
 }
 
-/** Whether `detection` is the head of its finding (always true when ungrouped). */
-export function isHead(detections: readonly Detection[], detection: Detection): boolean {
-  if (detection.groupId === undefined) return true
-  return headOf(detections, detection.id)?.id === detection.id
-}
-
 /** One detection per finding — the heads — in list order. */
 export function headsOf(detections: readonly Detection[]): Detection[] {
   const heads = new Map<string, Detection>()
