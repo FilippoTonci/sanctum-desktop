@@ -59,7 +59,10 @@ export const SENSITIVITY_PRESETS: readonly {
     id: 'strict',
     label: 'Precise',
     hint: 'Flags only confident matches. Check for misses.',
-    threshold: 0.5,
+    // 0.4, not 0.5: on real text 0.5 missed a quarter of contract parties
+    // (CUAD) and over a third of names in news (CoNLL-2003); 0.4 still
+    // halves Balanced's false alarms.
+    threshold: 0.4,
   },
 ]
 
