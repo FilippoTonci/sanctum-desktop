@@ -3,6 +3,7 @@ import { countDetections } from '../review/bulk'
 import { useReviewStore } from '../review/store'
 import { formatBytes } from './DocxView'
 import { Icon, Kbd } from './Icon'
+import { shortcut } from '../shortcuts'
 
 interface ReviewToolbarProps {
   readonly fileName: string
@@ -102,7 +103,7 @@ export function ReviewToolbar({
           onClick={onUndo}
           disabled={!canUndo}
           aria-label="Undo"
-          title="Undo last decision (⌘Z)"
+          title={`Undo last decision (${shortcut('⌘Z')})`}
         >
           <Icon name="undo" />
         </button>
@@ -121,7 +122,7 @@ export function ReviewToolbar({
           onClick={openCommit}
           title={
             done
-              ? 'Save a redacted copy (⌘S)'
+              ? `Save a redacted copy (${shortcut('⌘S')})`
               : `${String(counts.pending)} still to review before saving`
           }
         >

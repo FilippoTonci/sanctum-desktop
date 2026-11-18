@@ -177,7 +177,7 @@ On macOS prefix `npm run make` with `CSC_IDENTITY_AUTO_DISCOVERY=false` so elect
 | `Esc`                  | Clear focus                                      |
 | `Ctrl/Cmd + Enter`     | Open the commit panel                            |
 
-Menu bar (native accelerators, forwarded to the renderer): `⌘O` open, `⌘W` close the document, `⌘S` save the redacted copy, `⌘,` Settings, `⌘K` command palette, `⌘\` toggle sidebar, `⌘Z` undo the last decision (or a text field's own undo while one has focus), `⇧⌘Z` redo in text fields. Settings → Keyboard lists the same bindings in the app.
+Menu bar (native accelerators, forwarded to the renderer): `⌘O` open, `⌘W` close the document, `⌘S` save the redacted copy, `⌘,` Settings, `⌘K` command palette, `⌘\` toggle sidebar, `⌘Z` undo the last decision (or a text field's own undo while one has focus), `⇧⌘Z` redo in text fields. Settings → Keyboard lists the same bindings in the app. On Windows and Linux every `⌘` is `Ctrl`, and the app shows the keys that way (`Ctrl+S`, `Shift A`, `Backspace`).
 
 After Accept or Reject, focus jumps to the next still-pending detection — keep your hands on the home row and a long document reviews in one continuous flow. Bare-key shortcuts are suspended while an input is focused. `Tab` / `Shift+Tab` only step through detections when no other element holds focus, so native focus traversal in the sidebar / modals keeps working.
 
