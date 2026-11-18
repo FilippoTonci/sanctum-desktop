@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react'
+import { keyLabel } from '../shortcuts'
 
 /**
  * Minimal inline icon set (1.5px strokes on a 16px grid). Inline SVG so
@@ -58,7 +59,7 @@ export function Kbd({ keys }: { readonly keys: readonly string[] }): ReactElemen
     <span className="kbd-group" aria-hidden="true">
       {keys.map((k) => (
         <kbd key={k} className="kbd">
-          {k}
+          {keyLabel(k)}
         </kbd>
       ))}
     </span>

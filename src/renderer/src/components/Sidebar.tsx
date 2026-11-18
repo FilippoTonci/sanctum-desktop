@@ -3,6 +3,7 @@ import type { SanctumStatus } from '../sanctum'
 import { Icon, Kbd } from './Icon'
 import { SanctumEmblem } from './SanctumEmblem'
 import { engineLabel } from './Splash'
+import { shortcut } from '../shortcuts'
 
 interface SidebarProps {
   readonly collapsed: boolean
@@ -42,7 +43,7 @@ export function Sidebar({
           className="btn btn-icon btn-ghost sidebar-toggle"
           onClick={onToggle}
           aria-label={collapsed ? 'Show sidebar' : 'Hide sidebar'}
-          title={`${collapsed ? 'Show' : 'Hide'} sidebar (⌘\\)`}
+          title={`${collapsed ? 'Show' : 'Hide'} sidebar (${shortcut('⌘\\')})`}
         >
           <Icon name="sidebar" />
         </button>
@@ -53,7 +54,7 @@ export function Sidebar({
           type="button"
           className="sidebar-action"
           onClick={onOpen}
-          title="Open document (⌘O)"
+          title={`Open document (${shortcut('⌘O')})`}
         >
           <Icon name="plus" />
           <span className="sidebar-label">Open document</span>
@@ -63,7 +64,7 @@ export function Sidebar({
           type="button"
           className="sidebar-action"
           onClick={onPalette}
-          title="Command palette (⌘K)"
+          title={`Command palette (${shortcut('⌘K')})`}
         >
           <Icon name="search" />
           <span className="sidebar-label">Commands</span>
@@ -78,7 +79,7 @@ export function Sidebar({
           type="button"
           className={`sidebar-action${settingsActive ? ' is-active' : ''}`}
           onClick={onSettings}
-          title="Settings (⌘,)"
+          title={`Settings (${shortcut('⌘,')})`}
         >
           <Icon name="settings" />
           <span className="sidebar-label">Settings</span>
